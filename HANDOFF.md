@@ -71,16 +71,32 @@ numbers (see "Design principles" below).
 - **MongoDB** via `lib/mongodb.ts` → `lib/collections.ts` (typed collection getters: `Campaigns`,
   `Leads`, `Communities`, `Hypotheses`, `Findings`). No ORM.
 - **Anthropic (Claude)** via `lib/anthropic.ts`'s `getAnthropic()` — lazy singleton, throws a clear
-  error if `ANTHROPIC_API_KEY` is missing, but only when actually called (not at module load), so
-  it's always inside a route's own try/catch. Model is always `claude-opus-5` per the skill
-  defaults; don't downgrade. Three call sites: `/api/analyze-site` (onboarding buyer-persona
-  analysis), `lib/generateCampaignSeed.ts` (the real lead/community/hypothesis generation, called
-  from `/api/onboarding/finalize`), `/api/leads/[id]/draft` (on-demand "Rewrite with AI").
+  error if `ANTHROPIC_API_KEY` is missing (and a clear one if the key contains a header-unsafe
+  character, e.g. a stray bullet from a bad copy-paste), but only when actually called (not at
+  module load), so it's always inside a route's own try/catch. Model is always `claude-opus-5` per
+  the skill defaults; don't downgrade. Three call sites: `/api/analyze-site` (onboarding
+  buyer-persona analysis — now with the `web_search_20260209` server tool enabled, so Claude
+  verifies what the company actually does and checks 2-3 competitors before proposing buyers,
+  instead of guessing from scraped page text alone; also instructed to favor broader, more
+  inclusive buyer definitions over an overly narrow single-niche guess), `lib/generateCampaignSeed.ts`
+  (also `web_search`-enabled — this is now a **real search**, not invented data: it actually looks
+  for real Reddit/Slack/Discord/forum/job-board posts matching the buyer personas and only returns
+  leads/communities it can back with a real quote and, where possible, a real URL stored on
+  `LeadDoc.sourceUrl` and rendered as a link on Today. It can legitimately return fewer leads than
+  before, or zero, if nothing real is found — `finalizeOnboarding` in `lib/seed.ts` skips the
+  `insertMany` call entirely when an array is empty rather than blindly padding a quota, since an
+  empty array throws on `insertMany`), `/api/leads/[id]/draft` (on-demand "Rewrite with AI").
+  Real search takes meaningfully longer than the old invent-a-response call — `onboarding/finalize`'s
+  `maxDuration` is 180s accordingly (still gated by Fluid Compute on Vercel, see below).
 - **Gmail sending** via `lib/gmail.ts`, using the signed-in user's own Google OAuth refresh token
   (stored by the Mongo adapter in the `accounts` collection) — real send, not a stub. Only fires
   when a lead has a real email on file; most AI-generated leads (sourced from anonymous social
   posts) legitimately don't, and approving those just marks them approved with an honest note
-  instead of pretending to send.
+  instead of pretending to send. Gmail is intentionally **not disconnectable** anywhere in the UI —
+  `lib/data.ts`'s `CHANNELS` array marks `gmail` `required: true` (both Step4Channels in onboarding
+  and the Settings channel list render it as a static, non-clickable "on" toggle), and Settings'
+  "Sending inbox" card explicitly says so. Don't add a disconnect control for it — without Gmail
+  connected, Kylani has nowhere to send from, so this is deliberate, not an oversight.
 - **Stripe Connect** (OAuth, not API keys pasted by the user) for real revenue numbers on the Map
   page — `lib/stripe.ts`, `/api/stripe/{connect,callback,summary,disconnect}`. Shows an honest
   "connect Stripe for real numbers" empty state otherwise, never a fabricated revenue figure.
