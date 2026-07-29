@@ -130,6 +130,17 @@ numbers (see "Design principles" below).
   user manually deploys (via Vercel CLI from their own machine, or drag-and-drop, though the latter
   creates a new project each time — CLI with `vercel link` is the better path for repeat updates).
 
+## Deployment
+
+The Vercel project was originally created via drag-and-drop zip upload, which is **not** connected
+to Git — pushes to this repo did nothing until the user connected the project to
+`deaconb28-lang/kylanithree` under Settings → Git (or Settings → Environments → Production →
+Branch Tracking, depending on dashboard version), with **Production Branch** set to
+`claude/kylanithree-data-organization-v7j15s` (not `main` — `main` only has a placeholder README;
+all real app code lives on this branch, which was never merged). Once connected correctly, every
+push to this branch should trigger a Vercel deploy automatically. If a push lands here and nothing
+deploys, re-check that Production Branch setting first before assuming a code problem.
+
 ## Environment variables
 
 Not included in any zip export (`.env.local` is gitignored and deliberately excluded). The user has
