@@ -3,6 +3,7 @@ import { ObjectId } from "mongodb";
 import { z } from "zod";
 import { zodOutputFormat } from "@anthropic-ai/sdk/helpers/zod";
 import { getAnthropic } from "@/lib/anthropic";
+import { toUserError } from "@/lib/apiError";
 import { requireCampaign } from "@/lib/apiAuth";
 import { Leads } from "@/lib/collections";
 
@@ -67,7 +68,11 @@ export async function POST(req: Request, ctx: { params: Promise<{ id: string }> 
 
     return NextResponse.json(analysis.parsed_output);
   } catch (err) {
-    const message = err instanceof Error ? err.message : "Rewrite failed.";
+    const message = toUserError(
+      "leads/draft",
+      err,
+      "Couldn't rewrite that draft right now. Try again in a bit — if it keeps happening, email deacon@kylani.app.",
+    );
     return NextResponse.json({ error: message }, { status: 500 });
   }
 }

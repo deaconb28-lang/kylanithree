@@ -4,6 +4,7 @@ import { auth } from "@/auth";
 import { requireCampaign } from "@/lib/apiAuth";
 import { Campaigns, Leads } from "@/lib/collections";
 import { sendGmail } from "@/lib/gmail";
+import { toUserError } from "@/lib/apiError";
 
 export async function PATCH(req: NextRequest, ctx: { params: Promise<{ id: string }> }) {
   const result = await requireCampaign();
@@ -34,7 +35,11 @@ export async function PATCH(req: NextRequest, ctx: { params: Promise<{ id: strin
         });
         allowed.status = "sent";
       } catch (err) {
-        sendError = err instanceof Error ? err.message : "Gmail send failed.";
+        sendError = toUserError(
+          "leads/send",
+          err,
+          "Couldn't send that automatically. The draft is saved above — copy it and send it yourself, or reconnect Google from Settings and try again.",
+        );
       }
     } else {
       sendNote = `No email on file for ${lead?.name ?? "this lead"} — nothing was sent automatically. Copy the draft above and reach out via ${lead?.source ?? "their source"} yourself.`;

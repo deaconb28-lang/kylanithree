@@ -43,11 +43,17 @@ numbers (see "Design principles" below).
    account's UI (Step6Complete's "104 buyers", Map's "12 suppressed" banner, Queue's ops/warehouse
    filters wired to Dockside-specific hypothesis keys) has been generalized or made honest — don't
    reintroduce hardcoded product-specific numbers into shared UI.
-2. **No silent fallback when Claude/Mongo calls fail.** Every route that calls Claude or Mongo
-   wraps the call in try/catch and returns the real error message as JSON. The frontend (onboarding
-   Step2Reading, DashboardShell's finalize step) shows that real error with a Retry button instead
-   of silently substituting fake data. If you add a new Claude-backed feature, follow this pattern
-   — never add a hardcoded fallback dataset as an error handler.
+2. **No silent fallback when Claude/Mongo calls fail — but never show the customer the raw
+   exception either.** Every route that calls Claude or Mongo wraps the call in try/catch. Real
+   failures still surface (a Retry button in Step2Reading and DashboardShell's finalize step,
+   never a silent switch to fake data) — but the JSON error a route returns is always a short,
+   non-technical, contextual message written for a founder using the product, never `err.message`
+   directly. Internal detail (a missing env var, an invalid API key, a Mongo timeout) is ours to
+   fix, not something a customer can act on or should have to read. Use `toUserError(context, err,
+   fallback)` from `lib/apiError.ts` in every catch block: it `console.error`s the full technical
+   detail (visible in hosting logs) and returns the fallback string. If you add a new Claude- or
+   Mongo-backed feature, follow this pattern — never return `err.message` to the client, and never
+   add a hardcoded fallback dataset as an error handler either.
 3. **Be honest about what isn't wired up yet.** E.g. Map's "Suppressed" tab shows "Nobody
    suppressed yet" rather than a fake count, because there's no real suppression-tracking system
    built. If a feature is UI-only with no backend behind it, either build the backend or make the
@@ -175,9 +181,10 @@ potentially exposed; suggest rotation if that's a concern.
 ## Where to look first for common tasks
 
 - Add a new AI-backed feature → follow the pattern in `app/api/leads/[id]/draft/route.ts`: lazy
-  `getAnthropic()`, whole handler in try/catch, JSON error response, zod + `zodOutputFormat` for
-  structured output, tight "HARD LIMIT" wording in field descriptions (Claude ignores soft
-  guidance like "keep it brief" but respects explicit numeric caps).
+  `getAnthropic()`, whole handler in try/catch, `toUserError()` from `lib/apiError.ts` for a
+  customer-safe JSON error response, zod + `zodOutputFormat` for structured output, tight "HARD
+  LIMIT" wording in field descriptions (Claude ignores soft guidance like "keep it brief" but
+  respects explicit numeric caps).
 - Add a new dashboard page → wrap in `<DashboardShell active="...">`, fetch via `requireCampaign()`
   in the API route (auto-seeds Dockside demo only if truly no campaign exists yet — see the race
   note above).

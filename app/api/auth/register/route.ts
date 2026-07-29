@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import bcrypt from "bcryptjs";
 import { getDb } from "@/lib/mongodb";
+import { toUserError } from "@/lib/apiError";
 
 export async function POST(req: NextRequest) {
   try {
@@ -33,9 +34,11 @@ export async function POST(req: NextRequest) {
 
     return NextResponse.json({ ok: true });
   } catch (err) {
-    // Surface the real cause (e.g. "MONGODB_URI is not set...") instead of a bare 500 with no
-    // body, which shows up client-side as an opaque "Something went wrong."
-    const message = err instanceof Error ? err.message : "Couldn't create that account.";
+    const message = toUserError(
+      "auth/register",
+      err,
+      "Couldn't create that account right now. Try again in a bit — if it keeps happening, email deacon@kylani.app.",
+    );
     return NextResponse.json({ error: message }, { status: 500 });
   }
 }

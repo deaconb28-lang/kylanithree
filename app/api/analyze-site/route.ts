@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { zodOutputFormat } from "@anthropic-ai/sdk/helpers/zod";
 import { getAnthropic } from "@/lib/anthropic";
+import { toUserError } from "@/lib/apiError";
 
 // This route combines an external site fetch with a Claude call, which can
 // exceed the platform's default serverless function timeout (10s on Vercel
@@ -107,9 +108,11 @@ export async function POST(req: NextRequest) {
 
     return NextResponse.json(analysis.parsed_output);
   } catch (err) {
-    // Surface the real cause (e.g. a missing ANTHROPIC_API_KEY) instead of letting an uncaught
-    // exception fall through as an opaque non-JSON 500 the client can't read a message from.
-    const message = err instanceof Error ? err.message : "Analysis failed.";
+    const message = toUserError(
+      "analyze-site",
+      err,
+      "Couldn't read that site right now. Try again in a bit — if it keeps happening, email deacon@kylani.app.",
+    );
     return NextResponse.json({ error: message }, { status: 500 });
   }
 }
