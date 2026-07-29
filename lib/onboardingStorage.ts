@@ -1,8 +1,11 @@
+import type { ProductCategory } from "./productCategories";
+
 export type OnboardingResult = {
   url: string;
   whatYouSell: string;
   buyers: { name: string; desc: string }[];
   channels: Record<string, boolean>;
+  category?: ProductCategory;
 };
 
 const KEY = "kylani_onboarding";

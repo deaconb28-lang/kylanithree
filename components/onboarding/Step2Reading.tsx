@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import OnboardingChrome from "./OnboardingChrome";
 import type { SiteAnalysis } from "../../lib/types";
+import type { ProductCategory } from "../../lib/productCategories";
 
 const ITEMS = [
   { text: "Read the site — pages, pricing, and the changelog", secs: "11s" },
@@ -14,10 +15,12 @@ const ITEMS = [
 export default function Step2Reading({
   url,
   note,
+  category,
   onDone,
 }: {
   url: string;
   note: string;
+  category: ProductCategory;
   onDone: (analysis: SiteAnalysis) => void;
 }) {
   const [done, setDone] = useState(0);
@@ -33,7 +36,7 @@ export default function Step2Reading({
     fetch("/api/analyze-site", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ url, note }),
+      body: JSON.stringify({ url, note, category }),
     })
       .then((res) => res.json().then((data) => ({ ok: res.ok, data })))
       .then(({ ok, data }) => {

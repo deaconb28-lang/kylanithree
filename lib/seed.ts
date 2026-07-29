@@ -26,6 +26,7 @@ export type OnboardingAnswers = {
   whatYouSell: string;
   buyers: { name: string; desc: string }[];
   channels: Record<string, boolean>;
+  category?: string;
 };
 
 export async function finalizeOnboarding(userId: string, onboarding: OnboardingAnswers) {

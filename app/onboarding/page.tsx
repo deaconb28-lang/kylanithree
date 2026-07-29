@@ -9,6 +9,7 @@ import Step4Channels from "../../components/onboarding/Step4Channels";
 import Step5Search from "../../components/onboarding/Step5Search";
 import Step6Complete from "../../components/onboarding/Step6Complete";
 import type { SiteAnalysis } from "../../lib/types";
+import type { ProductCategory } from "../../lib/productCategories";
 import { saveOnboardingResult } from "../../lib/onboardingStorage";
 
 function OnboardingInner() {
@@ -18,6 +19,7 @@ function OnboardingInner() {
   const [step, setStep] = useState(prefilledUrl ? 2 : 1);
   const [url, setUrl] = useState(prefilledUrl || "dockside.app");
   const [note, setNote] = useState("");
+  const [category, setCategory] = useState<ProductCategory>("app");
   const [analysis, setAnalysis] = useState<SiteAnalysis | null>(null);
   const [whatYouSell, setWhatYouSell] = useState("");
   const [buyers, setBuyers] = useState<{ name: string; desc: string }[]>([]);
@@ -26,9 +28,10 @@ function OnboardingInner() {
     case 1:
       return (
         <Step1Url
-          onSubmit={(submittedUrl, submittedNote) => {
+          onSubmit={(submittedUrl, submittedNote, submittedCategory) => {
             setUrl(submittedUrl);
             setNote(submittedNote);
+            setCategory(submittedCategory);
             setStep(2);
           }}
         />
@@ -38,6 +41,7 @@ function OnboardingInner() {
         <Step2Reading
           url={url}
           note={note}
+          category={category}
           onDone={(result) => {
             setAnalysis(result);
             setStep(3);
@@ -59,7 +63,7 @@ function OnboardingInner() {
       return (
         <Step4Channels
           onDone={(channels) => {
-            saveOnboardingResult({ url, whatYouSell, buyers, channels });
+            saveOnboardingResult({ url, whatYouSell, buyers, channels, category });
             setStep(5);
           }}
         />

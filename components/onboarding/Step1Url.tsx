@@ -2,15 +2,17 @@
 
 import { useState } from "react";
 import OnboardingChrome from "./OnboardingChrome";
+import { PRODUCT_CATEGORIES, type ProductCategory } from "../../lib/productCategories";
 
 export default function Step1Url({
   onSubmit,
 }: {
-  onSubmit: (url: string, note: string) => void;
+  onSubmit: (url: string, note: string, category: ProductCategory) => void;
 }) {
   const [url, setUrl] = useState("");
   const [note, setNote] = useState("");
   const [showNote, setShowNote] = useState(false);
+  const [category, setCategory] = useState<ProductCategory>("app");
 
   return (
     <OnboardingChrome>
@@ -24,10 +26,33 @@ export default function Step1Url({
         <form
           onSubmit={(e) => {
             e.preventDefault();
-            if (url.trim()) onSubmit(url.trim(), note.trim());
+            if (url.trim()) onSubmit(url.trim(), note.trim(), category);
           }}
           style={{ display: "flex", flexDirection: "column", gap: 14, width: "100%", maxWidth: 620 }}
         >
+          <span style={{ fontSize: 13, color: "var(--muted)" }}>What kind of product is it?</span>
+          <div style={{ display: "flex", flexWrap: "wrap", gap: 8, justifyContent: "center" }}>
+            {PRODUCT_CATEGORIES.map((c) => (
+              <button
+                key={c.key}
+                type="button"
+                onClick={() => setCategory(c.key)}
+                className={category === c.key ? "" : "ky-btn-outline"}
+                style={{
+                  padding: "8px 16px",
+                  fontSize: 13.5,
+                  fontWeight: 600,
+                  borderRadius: 999,
+                  border: category === c.key ? "1.5px solid var(--ember)" : undefined,
+                  background: category === c.key ? "var(--ember-tint)" : "transparent",
+                  color: category === c.key ? "var(--ember)" : "var(--muted-strong)",
+                  cursor: "pointer",
+                }}
+              >
+                {c.label}
+              </button>
+            ))}
+          </div>
           <div
             style={{
               display: "flex",

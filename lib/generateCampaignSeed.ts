@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { zodOutputFormat } from "@anthropic-ai/sdk/helpers/zod";
 import { getAnthropic } from "./anthropic";
+import { categoryGuidance } from "./productCategories";
 
 const SeedLeadSchema = z.object({
   name: z
@@ -70,6 +71,7 @@ export async function generateCampaignSeed(input: {
   whatYouSell: string;
   buyers: { name: string; desc: string }[];
   channels: Record<string, boolean>;
+  category?: string;
 }): Promise<GeneratedSeed> {
   const enabledChannels = Object.entries(input.channels)
     .filter(([, on]) => on)
@@ -91,7 +93,8 @@ export async function generateCampaignSeed(input: {
       "You're working under a tight time budget: run at most a handful of well-chosen searches (aim for 4-6, never more " +
       "than 8) rather than exhaustively covering every platform — pick the 1-2 most promising channels first and stop " +
       "once you have enough real results, instead of searching every enabled channel one by one. " +
-      "Every field has a hard length limit in its description — those are strict maximums, not suggestions. " +
+      categoryGuidance(input.category) +
+      " Every field has a hard length limit in its description — those are strict maximums, not suggestions. " +
       "Write like sparse UI copy, not a report: short, punchy, no run-on sentences or sub-clauses.",
     messages: [
       {

@@ -3,6 +3,7 @@ import { z } from "zod";
 import { zodOutputFormat } from "@anthropic-ai/sdk/helpers/zod";
 import { getAnthropic } from "@/lib/anthropic";
 import { toUserError } from "@/lib/apiError";
+import { categoryGuidance } from "@/lib/productCategories";
 
 // This route combines an external site fetch with a Claude call, which can
 // exceed the platform's default serverless function timeout (10s on Vercel
@@ -23,7 +24,11 @@ const AnalysisSchema = z.object({
           .describe(
             "Exactly ONE sentence, hard limit 140 characters: what they own and why they'd feel this problem. Do not add a second sentence about confidence — that belongs in `tag`, not here.",
           ),
-        where: z.string().describe("Company type and size range only, under 8 words, e.g. 'Third-party logistics, 20–200 people'."),
+        where: z
+          .string()
+          .describe(
+            "Context for this buyer, under 8 words: company type and size range for a B2B buyer (e.g. 'Third-party logistics, 20–200 people'), or a lifestyle/demographic descriptor for an individual consumer (e.g. 'Urban renters, cooks 3+ times a week').",
+          ),
       }),
     )
     .min(2)
@@ -53,7 +58,7 @@ function normalizeUrl(raw: string): string {
 // Intentionally unauthenticated: onboarding runs before sign-in, so this
 // route can't gate on a session yet.
 export async function POST(req: NextRequest) {
-  const { url, note } = await req.json();
+  const { url, note, category } = await req.json();
   if (!url || typeof url !== "string") {
     return NextResponse.json({ error: "A URL is required." }, { status: 400 });
   }
@@ -89,7 +94,9 @@ export async function POST(req: NextRequest) {
         "niche. Be concrete and specific, not generic — prefer named job titles over vague roles, just not artificially " +
         "narrow ones. Order buyers most-likely-to-buy first, and give exactly the top one the tag 'Most likely' (null " +
         "for the rest). You're working under a tight time budget — run a handful of targeted searches (aim for 3-4, " +
-        "never more than 6), not an exhaustive investigation. Every field has a hard length limit in its description — " +
+        "never more than 6), not an exhaustive investigation. " +
+        categoryGuidance(category) +
+        " Every field has a hard length limit in its description — " +
         "treat those as strict maximums, not suggestions. Write like sparse UI copy, not a report: short, punchy, no " +
         "run-on sentences.",
       messages: [
