@@ -32,17 +32,36 @@ export default function FindingsPage() {
   const [communities, setCommunities] = useState<Community[] | null>(null);
   const [stats, setStats] = useState<CampaignStats | null>(null);
   const [promoting, setPromoting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [attempt, setAttempt] = useState(0);
 
   useEffect(() => {
-    fetch("/api/findings")
-      .then((r) => r.json())
-      .then((data: { findings: Finding[]; stats: CampaignStats }) => {
-        setFindings(data.findings);
-        setStats(data.stats);
+    let cancelled = false;
+
+    const loadJson = (url: string) =>
+      fetch(url).then((r) => r.json().then((data) => ({ ok: r.ok, data })));
+
+    Promise.all([loadJson("/api/findings"), loadJson("/api/hypotheses"), loadJson("/api/communities")])
+      .then(([findingsRes, hypothesesRes, communitiesRes]) => {
+        if (cancelled) return;
+        const failed = [findingsRes, hypothesesRes, communitiesRes].find((r) => !r.ok);
+        if (failed) {
+          setError(failed.data.error ?? "Couldn't load this page.");
+          return;
+        }
+        setFindings(findingsRes.data.findings);
+        setStats(findingsRes.data.stats);
+        setHypotheses(hypothesesRes.data);
+        setCommunities(communitiesRes.data);
+      })
+      .catch(() => {
+        if (!cancelled) setError("Couldn't reach the server.");
       });
-    fetch("/api/hypotheses").then((r) => r.json()).then(setHypotheses);
-    fetch("/api/communities").then((r) => r.json()).then(setCommunities);
-  }, []);
+
+    return () => {
+      cancelled = true;
+    };
+  }, [attempt]);
 
   // A "finding" here only exists once at least two hypotheses have a real numeric reply rate —
   // until then there's nothing to compare, so the promote CTA and its headline stay hidden rather
@@ -81,6 +100,27 @@ export default function FindingsPage() {
     setHypotheses(updated);
     setPromoting(false);
   };
+
+  if (error) {
+    return (
+      <DashboardShell active="findings" bottom={sidebarBottom}>
+        <div style={{ padding: "36px 5vw", display: "flex", flexDirection: "column", alignItems: "flex-start", gap: 14 }}>
+          <span style={{ fontFamily: "var(--font-outfit)", fontWeight: 700, fontSize: 18 }}>Couldn&apos;t load Findings.</span>
+          <span style={{ fontSize: 14.5, color: "var(--muted)" }}>{error}</span>
+          <button
+            className="ky-btn-ember"
+            onClick={() => {
+              setError(null);
+              setAttempt((a) => a + 1);
+            }}
+            style={{ padding: "11px 20px", fontSize: 14.5, border: "none" }}
+          >
+            Try again
+          </button>
+        </div>
+      </DashboardShell>
+    );
+  }
 
   if (!findings || !hypotheses || !communities || !stats) {
     return (
