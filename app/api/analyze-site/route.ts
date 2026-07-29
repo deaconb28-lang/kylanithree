@@ -75,13 +75,21 @@ export async function POST(req: NextRequest) {
     const analysis = await getAnthropic().messages.parse({
       model: "claude-opus-5",
       max_tokens: 4000,
-      thinking: { type: "disabled" },
+      thinking: { type: "adaptive" },
+      tools: [{ type: "web_search_20260209", name: "web_search", max_uses: 6 }],
       system:
         "You are Kylani, a lead-gen assistant that reads a company's site and works out who buys their product. " +
-        "Be concrete and specific, not generic. Prefer named job titles over vague roles. " +
-        "Order buyers most-likely-to-buy first, and give exactly the top one the tag 'Most likely' (null for the rest). " +
-        "Every field has a hard length limit in its description — treat those as strict maximums, not suggestions. " +
-        "Write like sparse UI copy, not a report: short, punchy, no run-on sentences.",
+        "The scraped page text can be thin, marketing-fluffed, or missing — use the web_search tool to verify what the " +
+        "company actually sells and confirm you're describing the real product, not guessing from a tagline. Also search " +
+        "for 2-3 competitors or comparable products in the same space: look at who THEY sell to and how broadly they " +
+        "position their market. Use that to sanity-check your buyer list — most real products sell to a wider range of " +
+        "company types and sizes than a single narrow reading of the homepage suggests. Do not narrow the buyer " +
+        "definition (company size, vertical, team type) further than the evidence actually supports; default to the " +
+        "broader, more inclusive framing unless the site or a competitor's positioning explicitly targets one narrow " +
+        "niche. Be concrete and specific, not generic — prefer named job titles over vague roles, just not artificially " +
+        "narrow ones. Order buyers most-likely-to-buy first, and give exactly the top one the tag 'Most likely' (null " +
+        "for the rest). Every field has a hard length limit in its description — treat those as strict maximums, not " +
+        "suggestions. Write like sparse UI copy, not a report: short, punchy, no run-on sentences.",
       messages: [
         {
           role: "user",
@@ -90,14 +98,14 @@ export async function POST(req: NextRequest) {
             note ? `Founder's notes: ${note}` : null,
             pageText
               ? `Page text (may be partial/truncated):\n${pageText}`
-              : "The page could not be fetched — infer from the URL and any notes alone, and say so implicitly by keeping guesses conservative.",
+              : "The page could not be fetched — search the web for this URL/company before falling back to inferring from the URL and any notes alone.",
           ]
             .filter(Boolean)
             .join("\n\n"),
         },
       ],
       output_config: {
-        effort: "low",
+        effort: "medium",
         format: zodOutputFormat(AnalysisSchema),
       },
     });
