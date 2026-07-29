@@ -1,3 +1,4 @@
+import Link from "next/link";
 import KylaniLogo from "../icons/KylaniLogo";
 
 export default function ClosingFooter() {
@@ -46,10 +47,12 @@ export default function ClosingFooter() {
           <span>Kylani · your first sales hire</span>
         </div>
         <div style={{ display: "flex", gap: 26, flexWrap: "wrap" }}>
-          <span>Privacy</span>
-          <span>Sending policy</span>
-          <span>Suppression requests</span>
-          <span>hello@kylani.com</span>
+          <Link href="/about" className="ky-link">About</Link>
+          <Link href="/privacy" className="ky-link">Privacy</Link>
+          <Link href="/terms" className="ky-link">Terms</Link>
+          <Link href="/terms#sending-policy" className="ky-link">Sending policy</Link>
+          <Link href="/privacy#suppression" className="ky-link">Suppression requests</Link>
+          <Link href="/contact" className="ky-link">Contact</Link>
         </div>
       </div>
     </div>

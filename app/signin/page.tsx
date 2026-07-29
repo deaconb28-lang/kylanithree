@@ -158,7 +158,8 @@ function SignInInner() {
         </span>
 
         <span style={{ fontSize: 12.5, color: "var(--muted)", textAlign: "center" }}>
-          By continuing you agree to Kylani&apos;s sending policy and suppression rules.
+          By continuing you agree to Kylani&apos;s{" "}
+          <a href="/terms#sending-policy">sending policy and suppression rules</a>.
         </span>
       </div>
     </div>
