@@ -1,14 +1,23 @@
 import { MongoClient } from "mongodb";
 
-const uri = process.env.MONGODB_URI || "mongodb://localhost:27017/kylani";
-
 declare global {
   // eslint-disable-next-line no-var
   var _mongoClientPromise: Promise<MongoClient> | undefined;
 }
 
 function createClientPromise(): Promise<MongoClient> {
-  const client = new MongoClient(uri);
+  // A rejected promise, not a thrown error — this runs at module load (imported eagerly by
+  // auth.ts for the adapter), and throwing synchronously here would crash every route that
+  // touches auth with an opaque, uncatchable 500. Rejecting instead means the failure only
+  // surfaces when something actually awaits this (inside a route's own try/catch), producing a
+  // clear "MONGODB_URI is not set" message instead of a mysterious connection timeout to
+  // localhost — that was the previous, silent fallback for a missing env var.
+  if (!process.env.MONGODB_URI) {
+    return Promise.reject(
+      new Error("MONGODB_URI is not set. Add it in your Vercel project's Environment Variables (or .env.local for dev)."),
+    );
+  }
+  const client = new MongoClient(process.env.MONGODB_URI);
   return client.connect();
 }
 
@@ -22,6 +31,13 @@ if (process.env.NODE_ENV === "development") {
 } else {
   clientPromise = createClientPromise();
 }
+
+// A rejected promise with no attached handler crashes the Node process on the next tick
+// (unhandled rejection) — this runs at module load, well before any request awaits it, so
+// without this it would take the whole server down instead of failing one request at a time.
+// This extra handler doesn't consume the rejection: every other `await clientPromise` below
+// still sees it.
+clientPromise.catch(() => {});
 
 export default clientPromise;
 

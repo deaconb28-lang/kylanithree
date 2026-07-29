@@ -39,40 +39,83 @@ export default function DashboardShell({
   // those routes auto-seed generic demo data the instant they see no campaign yet, which used to
   // beat the (much slower, AI-backed) finalize call and silently strand real accounts on demo data.
   const [ready, setReady] = useState(() => !readOnboardingResult());
+  const [finalizeError, setFinalizeError] = useState<string | null>(null);
+  const [retrying, setRetrying] = useState(false);
+
+  const loadCounts = () =>
+    fetch("/api/leads")
+      .then((r) => r.json())
+      .then((leads: { timeSensitive: boolean; status: string }[]) => {
+        const today = leads.filter((l) => l.timeSensitive && l.status === "waiting").length;
+        const queue = leads.filter((l) => !l.timeSensitive && l.status === "waiting").length;
+        setCounts((c) => ({ ...c, today: String(today), queue: String(queue) }));
+      });
+  const loadCampaign = () =>
+    fetch("/api/campaign")
+      .then((r) => r.json())
+      .then((c: { productName: string; productUrl: string }) => setProduct({ name: c.productName, url: c.productUrl }));
+
+  const attemptFinalize = (pending: NonNullable<ReturnType<typeof readOnboardingResult>>) => {
+    fetch("/api/onboarding/finalize", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(pending),
+    })
+      .then((r) => r.json().then((data) => ({ ok: r.ok, data })))
+      .then(({ ok, data }) => {
+        if (!ok) {
+          // Keep the pending payload so "Try again" can retry the exact same request —
+          // clearing it here would strand the user with nothing to retry.
+          setFinalizeError(data.error ?? "Couldn't build your campaign.");
+          return;
+        }
+        setProduct({ name: data.productName, url: data.productUrl });
+        clearOnboardingResult();
+        setReady(true);
+        loadCounts();
+      })
+      .catch(() => setFinalizeError("Couldn't reach the server."))
+      .finally(() => setRetrying(false));
+  };
 
   useEffect(() => {
-    const loadCounts = () =>
-      fetch("/api/leads")
-        .then((r) => r.json())
-        .then((leads: { timeSensitive: boolean; status: string }[]) => {
-          const today = leads.filter((l) => l.timeSensitive && l.status === "waiting").length;
-          const queue = leads.filter((l) => !l.timeSensitive && l.status === "waiting").length;
-          setCounts((c) => ({ ...c, today: String(today), queue: String(queue) }));
-        });
-    const loadCampaign = () =>
-      fetch("/api/campaign")
-        .then((r) => r.json())
-        .then((c: { productName: string; productUrl: string }) => setProduct({ name: c.productName, url: c.productUrl }));
-
     const pending = readOnboardingResult();
     if (pending) {
-      fetch("/api/onboarding/finalize", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(pending),
-      })
-        .then((r) => r.json())
-        .then((c: { productName: string; productUrl: string }) => setProduct({ name: c.productName, url: c.productUrl }))
-        .finally(() => {
-          clearOnboardingResult();
-          setReady(true);
-          loadCounts();
-        });
+      attemptFinalize(pending);
     } else {
       loadCounts();
       loadCampaign();
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  const retry = () => {
+    const pending = readOnboardingResult();
+    if (!pending) return;
+    setRetrying(true);
+    setFinalizeError(null);
+    attemptFinalize(pending);
+  };
+
+  if (finalizeError) {
+    return (
+      <div style={{ width: "100%", minHeight: "100vh", display: "grid", placeItems: "center", background: "var(--card)" }}>
+        <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 14, maxWidth: 420, textAlign: "center", padding: "0 24px" }}>
+          <KylaniLogo size={30} />
+          <span style={{ fontFamily: "var(--font-outfit)", fontWeight: 700, fontSize: 18 }}>Couldn&apos;t build your campaign.</span>
+          <span style={{ fontSize: 14, color: "var(--muted)", lineHeight: 1.6 }}>{finalizeError}</span>
+          <button
+            className="ky-btn-ember"
+            disabled={retrying}
+            onClick={retry}
+            style={{ padding: "12px 22px", fontSize: 15, border: "none", marginTop: 8, opacity: retrying ? 0.6 : 1 }}
+          >
+            {retrying ? "Retrying…" : "Try again"}
+          </button>
+        </div>
+      </div>
+    );
+  }
 
   if (!ready) {
     return (

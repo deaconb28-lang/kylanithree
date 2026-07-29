@@ -11,34 +11,6 @@ const ITEMS = [
   { text: "Drafting buyer hypotheses for you to correct", secs: null },
 ];
 
-const FALLBACK: SiteAnalysis = {
-  whatYouSell: "Dock appointment scheduling that stops trucks stacking up at receiving.",
-  problem: "Dockside removes the 6am queue at the receiving dock.",
-  buyers: [
-    {
-      key: "ops",
-      name: "Operations manager",
-      tag: "Most likely",
-      desc: "Owns the receiving schedule, gets called when a truck waits two hours. Buys tools that make a Monday quieter.",
-      where: "Third-party logistics, 20–200 people",
-    },
-    {
-      key: "warehouse",
-      name: "Warehouse manager",
-      tag: null,
-      desc: "On the floor, feels the congestion directly, rarely holds the budget. Good for learning the language, slower to buy.",
-      where: "Distribution centres, 50–500 people",
-    },
-    {
-      key: "logistics",
-      name: "Logistics director",
-      tag: null,
-      desc: "Your site talks to this person, but the pain is a level below them. Least confident here — worth testing against the other two.",
-      where: "Enterprise shippers, 500+ people",
-    },
-  ],
-};
-
 export default function Step2Reading({
   url,
   note,
@@ -49,22 +21,31 @@ export default function Step2Reading({
   onDone: (analysis: SiteAnalysis) => void;
 }) {
   const [done, setDone] = useState(0);
+  const [error, setError] = useState<string | null>(null);
+  const [attempt, setAttempt] = useState(0);
   const resultRef = useRef<SiteAnalysis | null>(null);
   const fetchDoneRef = useRef(false);
 
   useEffect(() => {
     let cancelled = false;
+    fetchDoneRef.current = false;
+    resultRef.current = null;
     fetch("/api/analyze-site", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ url, note }),
     })
-      .then((res) => (res.ok ? res.json() : Promise.reject(new Error("analysis failed"))))
-      .then((data: SiteAnalysis) => {
-        if (!cancelled) resultRef.current = data;
+      .then((res) => res.json().then((data) => ({ ok: res.ok, data })))
+      .then(({ ok, data }) => {
+        if (cancelled) return;
+        if (!ok) {
+          setError(data.error ?? "Couldn't analyze that site.");
+          return;
+        }
+        resultRef.current = data as SiteAnalysis;
       })
       .catch(() => {
-        if (!cancelled) resultRef.current = FALLBACK;
+        if (!cancelled) setError("Couldn't reach the server.");
       })
       .finally(() => {
         if (!cancelled) fetchDoneRef.current = true;
@@ -73,18 +54,21 @@ export default function Step2Reading({
       cancelled = true;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [attempt]);
 
   useEffect(() => {
+    if (error) return;
     if (done >= ITEMS.length) {
       if (fetchDoneRef.current) {
-        const t = setTimeout(() => onDone(resultRef.current ?? FALLBACK), 500);
+        if (!resultRef.current) return; // an error just landed on this same tick — let the error branch render
+        const result = resultRef.current;
+        const t = setTimeout(() => onDone(result), 500);
         return () => clearTimeout(t);
       }
       const t = setInterval(() => {
-        if (fetchDoneRef.current) {
+        if (fetchDoneRef.current && resultRef.current) {
           clearInterval(t);
-          onDone(resultRef.current ?? FALLBACK);
+          onDone(resultRef.current);
         }
       }, 200);
       return () => clearInterval(t);
@@ -92,7 +76,29 @@ export default function Step2Reading({
     const t = setTimeout(() => setDone((d) => d + 1), 900);
     return () => clearTimeout(t);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [done]);
+  }, [done, error]);
+
+  const retry = () => {
+    setError(null);
+    setDone(0);
+    setAttempt((a) => a + 1);
+  };
+
+  if (error) {
+    return (
+      <OnboardingChrome>
+        <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 20, maxWidth: 560, textAlign: "center" }}>
+          <h1 style={{ fontFamily: "var(--font-outfit)", fontWeight: 800, fontSize: "clamp(24px,3.4vw,36px)", lineHeight: 1.1, letterSpacing: "-.03em", margin: 0 }}>
+            Couldn&apos;t read {url}.
+          </h1>
+          <p style={{ margin: 0, fontSize: 15.5, color: "var(--muted-strong)", lineHeight: 1.6 }}>{error}</p>
+          <button className="ky-btn-ember" onClick={retry} style={{ padding: "13px 24px", fontSize: 15.5, border: "none" }}>
+            Try again
+          </button>
+        </div>
+      </OnboardingChrome>
+    );
+  }
 
   return (
     <OnboardingChrome>

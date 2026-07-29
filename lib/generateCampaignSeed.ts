@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { zodOutputFormat } from "@anthropic-ai/sdk/helpers/zod";
-import { anthropic } from "./anthropic";
+import { getAnthropic } from "./anthropic";
 
 const SeedLeadSchema = z.object({
   name: z.string().describe("Realistic full name."),
@@ -55,7 +55,7 @@ export async function generateCampaignSeed(input: {
     .filter(([, on]) => on)
     .map(([key]) => key);
 
-  const result = await anthropic.messages.parse({
+  const result = await getAnthropic().messages.parse({
     model: "claude-opus-5",
     max_tokens: 4000,
     thinking: { type: "disabled" },

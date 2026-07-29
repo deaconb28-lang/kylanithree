@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { zodOutputFormat } from "@anthropic-ai/sdk/helpers/zod";
-import { anthropic } from "@/lib/anthropic";
+import { getAnthropic } from "@/lib/anthropic";
 
 // This route combines an external site fetch with a Claude call, which can
 // exceed the platform's default serverless function timeout (10s on Vercel
@@ -70,39 +70,46 @@ export async function POST(req: NextRequest) {
     // Fall through with empty pageText — Claude reasons from the URL + note alone.
   }
 
-  const analysis = await anthropic.messages.parse({
-    model: "claude-opus-5",
-    max_tokens: 4000,
-    thinking: { type: "disabled" },
-    system:
-      "You are Kylani, a lead-gen assistant that reads a company's site and works out who buys their product. " +
-      "Be concrete and specific, not generic. Prefer named job titles over vague roles. " +
-      "Order buyers most-likely-to-buy first, and give exactly the top one the tag 'Most likely' (null for the rest). " +
-      "Every field has a hard length limit in its description — treat those as strict maximums, not suggestions. " +
-      "Write like sparse UI copy, not a report: short, punchy, no run-on sentences.",
-    messages: [
-      {
-        role: "user",
-        content: [
-          `Site: ${target}`,
-          note ? `Founder's notes: ${note}` : null,
-          pageText
-            ? `Page text (may be partial/truncated):\n${pageText}`
-            : "The page could not be fetched — infer from the URL and any notes alone, and say so implicitly by keeping guesses conservative.",
-        ]
-          .filter(Boolean)
-          .join("\n\n"),
+  try {
+    const analysis = await getAnthropic().messages.parse({
+      model: "claude-opus-5",
+      max_tokens: 4000,
+      thinking: { type: "disabled" },
+      system:
+        "You are Kylani, a lead-gen assistant that reads a company's site and works out who buys their product. " +
+        "Be concrete and specific, not generic. Prefer named job titles over vague roles. " +
+        "Order buyers most-likely-to-buy first, and give exactly the top one the tag 'Most likely' (null for the rest). " +
+        "Every field has a hard length limit in its description — treat those as strict maximums, not suggestions. " +
+        "Write like sparse UI copy, not a report: short, punchy, no run-on sentences.",
+      messages: [
+        {
+          role: "user",
+          content: [
+            `Site: ${target}`,
+            note ? `Founder's notes: ${note}` : null,
+            pageText
+              ? `Page text (may be partial/truncated):\n${pageText}`
+              : "The page could not be fetched — infer from the URL and any notes alone, and say so implicitly by keeping guesses conservative.",
+          ]
+            .filter(Boolean)
+            .join("\n\n"),
+        },
+      ],
+      output_config: {
+        effort: "low",
+        format: zodOutputFormat(AnalysisSchema),
       },
-    ],
-    output_config: {
-      effort: "low",
-      format: zodOutputFormat(AnalysisSchema),
-    },
-  });
+    });
 
-  if (!analysis.parsed_output) {
-    return NextResponse.json({ error: "Analysis failed to parse." }, { status: 502 });
+    if (!analysis.parsed_output) {
+      return NextResponse.json({ error: "Analysis failed to parse." }, { status: 502 });
+    }
+
+    return NextResponse.json(analysis.parsed_output);
+  } catch (err) {
+    // Surface the real cause (e.g. a missing ANTHROPIC_API_KEY) instead of letting an uncaught
+    // exception fall through as an opaque non-JSON 500 the client can't read a message from.
+    const message = err instanceof Error ? err.message : "Analysis failed.";
+    return NextResponse.json({ error: message }, { status: 500 });
   }
-
-  return NextResponse.json(analysis.parsed_output);
 }

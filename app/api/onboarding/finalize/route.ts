@@ -13,12 +13,19 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Incomplete onboarding data." }, { status: 400 });
   }
 
-  const campaign = await finalizeOnboarding(userId, {
-    url: body.url,
-    whatYouSell: body.whatYouSell,
-    buyers: body.buyers,
-    channels: body.channels,
-  });
-
-  return NextResponse.json(campaign);
+  try {
+    const campaign = await finalizeOnboarding(userId, {
+      url: body.url,
+      whatYouSell: body.whatYouSell,
+      buyers: body.buyers,
+      channels: body.channels,
+    });
+    return NextResponse.json(campaign);
+  } catch (err) {
+    // Nothing is written to the DB unless generation succeeds (see finalizeOnboarding), so a
+    // failure here leaves no partial campaign behind — safe to retry. Surface the real cause
+    // (e.g. a missing ANTHROPIC_API_KEY) instead of an opaque 500.
+    const message = err instanceof Error ? err.message : "Couldn't build your campaign.";
+    return NextResponse.json({ error: message }, { status: 500 });
+  }
 }
