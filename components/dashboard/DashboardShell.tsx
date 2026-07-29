@@ -124,8 +124,8 @@ export default function DashboardShell({
           <KylaniLogo size={30} />
           <span style={{ fontFamily: "var(--font-outfit)", fontWeight: 700, fontSize: 18 }}>Putting your campaign together…</span>
           <span style={{ fontSize: 14, color: "var(--muted)", lineHeight: 1.6 }}>
-            Reading what you sold, then actually searching Reddit, forums, and job boards for real leads. This can take a
-            couple of minutes.
+            Reading what you sold, then actually searching Reddit, forums, and job boards for real leads. This usually
+            takes under a minute.
           </span>
         </div>
       </div>

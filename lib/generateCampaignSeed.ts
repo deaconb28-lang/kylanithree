@@ -77,9 +77,9 @@ export async function generateCampaignSeed(input: {
 
   const result = await getAnthropic().messages.parse({
     model: "claude-opus-5",
-    max_tokens: 16000,
+    max_tokens: 12000,
     thinking: { type: "adaptive" },
-    tools: [{ type: "web_search_20260209", name: "web_search", max_uses: 20 }],
+    tools: [{ type: "web_search_20260209", name: "web_search", max_uses: 8 }],
     system:
       "You are Kylani, a lead-gen assistant. Given a product and its buyer personas, use the web_search tool to actually " +
       "search Reddit, Slack/Discord community directories, public forums, and job boards (scoped to the channels the " +
@@ -88,6 +88,9 @@ export async function generateCampaignSeed(input: {
       "every community in your output must come from something you actually found via search, with a real quote and, " +
       "where possible, a real URL. Do not invent people, quotes, companies, or community stats to fill out a list — " +
       "returning fewer, verified results is strictly better than padding with fabricated ones. " +
+      "You're working under a tight time budget: run at most a handful of well-chosen searches (aim for 4-6, never more " +
+      "than 8) rather than exhaustively covering every platform — pick the 1-2 most promising channels first and stop " +
+      "once you have enough real results, instead of searching every enabled channel one by one. " +
       "Every field has a hard length limit in its description — those are strict maximums, not suggestions. " +
       "Write like sparse UI copy, not a report: short, punchy, no run-on sentences or sub-clauses.",
     messages: [
@@ -102,7 +105,7 @@ export async function generateCampaignSeed(input: {
       },
     ],
     output_config: {
-      effort: "medium",
+      effort: "low",
       format: zodOutputFormat(SeedSchema),
     },
   });

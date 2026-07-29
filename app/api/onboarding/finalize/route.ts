@@ -3,10 +3,11 @@ import { requireUserId } from "@/lib/apiAuth";
 import { toUserError } from "@/lib/apiError";
 import { finalizeOnboarding, type OnboardingAnswers } from "@/lib/seed";
 
-// Real web search across several platforms (see generateCampaignSeed) takes longer than the old
-// invent-from-a-prompt call did — give it real headroom. Requires Fluid Compute on Vercel to take
-// effect at all (see HANDOFF.md); without it this still caps at the platform default.
-export const maxDuration = 180;
+// 60s is the real ceiling on Vercel's Hobby plan even with Fluid Compute enabled (Pro/Enterprise
+// allow more) — setting this higher doesn't buy more time on Hobby, it risks the function (or the
+// whole deploy) failing outright instead of just running long. generateCampaignSeed's search is
+// budgeted (a handful of searches, low effort) specifically to fit inside this window.
+export const maxDuration = 60;
 
 export async function POST(req: NextRequest) {
   const userId = await requireUserId();

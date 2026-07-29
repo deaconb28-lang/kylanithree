@@ -88,8 +88,10 @@ export async function POST(req: NextRequest) {
         "broader, more inclusive framing unless the site or a competitor's positioning explicitly targets one narrow " +
         "niche. Be concrete and specific, not generic — prefer named job titles over vague roles, just not artificially " +
         "narrow ones. Order buyers most-likely-to-buy first, and give exactly the top one the tag 'Most likely' (null " +
-        "for the rest). Every field has a hard length limit in its description — treat those as strict maximums, not " +
-        "suggestions. Write like sparse UI copy, not a report: short, punchy, no run-on sentences.",
+        "for the rest). You're working under a tight time budget — run a handful of targeted searches (aim for 3-4, " +
+        "never more than 6), not an exhaustive investigation. Every field has a hard length limit in its description — " +
+        "treat those as strict maximums, not suggestions. Write like sparse UI copy, not a report: short, punchy, no " +
+        "run-on sentences.",
       messages: [
         {
           role: "user",
@@ -105,7 +107,7 @@ export async function POST(req: NextRequest) {
         },
       ],
       output_config: {
-        effort: "medium",
+        effort: "low",
         format: zodOutputFormat(AnalysisSchema),
       },
     });
