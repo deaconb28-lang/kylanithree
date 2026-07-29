@@ -176,7 +176,15 @@ export default function TodayPage() {
               <div style={{ display: "flex", flexDirection: "column", gap: 3, flex: 1, minWidth: 200 }}>
                 <span style={{ fontFamily: "var(--font-outfit)", fontWeight: 700, fontSize: 21, letterSpacing: "-.02em" }}>{lead.name}</span>
                 <span style={{ fontSize: 14, color: "var(--muted)" }}>
-                  {lead.role}, {lead.company} · {lead.source} · {hoursAgo(lead.createdAt as unknown as string)}
+                  {lead.role}, {lead.company} ·{" "}
+                  {lead.sourceUrl ? (
+                    <a href={lead.sourceUrl} target="_blank" rel="noopener noreferrer">
+                      {lead.source}
+                    </a>
+                  ) : (
+                    lead.source
+                  )}{" "}
+                  · {hoursAgo(lead.createdAt as unknown as string)}
                 </span>
               </div>
               <span style={{ fontSize: 13, fontWeight: 600, color: "var(--green)", background: "var(--green-tint)", padding: "6px 11px", borderRadius: 999, flexShrink: 0, whiteSpace: "nowrap" }}>

@@ -67,53 +67,61 @@ export async function finalizeOnboarding(userId: string, onboarding: OnboardingA
   const { insertedId: campaignId } = await campaigns.insertOne(campaign);
   const cid = campaignId.toString();
 
-  const leadsCol = await Leads();
-  await leadsCol.insertMany(
-    generated.leads.map((l) => {
-      const buyer = onboarding.buyers[l.buyerIndex] ?? onboarding.buyers[0];
-      return {
+  // generated.leads/communities can legitimately be empty — generateCampaignSeed only returns
+  // real, verified search results now rather than a fabricated quota, and insertMany throws on
+  // an empty array, so skip the call entirely when there's nothing real to insert.
+  if (generated.leads.length) {
+    const leadsCol = await Leads();
+    await leadsCol.insertMany(
+      generated.leads.map((l) => {
+        const buyer = onboarding.buyers[l.buyerIndex] ?? onboarding.buyers[0];
+        return {
+          userId,
+          campaignId: cid,
+          name: l.name,
+          role: l.role,
+          company: l.company,
+          detail: l.detail,
+          email: l.email ?? undefined,
+          hypothesisKey: slugify(buyer.name),
+          source: l.source,
+          sourceUrl: l.sourceUrl ?? undefined,
+          quote: l.quote ?? undefined,
+          quoteMeta: l.quoteMeta ?? undefined,
+          subject: l.subject,
+          draft: l.draft,
+          status: (l.dropped ? "dropped" : "waiting") as "dropped" | "waiting",
+          timeSensitive: l.dropped ? false : l.timeSensitive,
+          createdAt: now,
+          updatedAt: now,
+        };
+      }),
+    );
+  }
+
+  if (generated.communities.length) {
+    const communitiesCol = await Communities();
+    await communitiesCol.insertMany(
+      generated.communities.map((c, i) => ({
         userId,
         campaignId: cid,
-        name: l.name,
-        role: l.role,
-        company: l.company,
-        detail: l.detail,
-        email: l.email ?? undefined,
-        hypothesisKey: slugify(buyer.name),
-        source: l.source,
-        quote: l.quote ?? undefined,
-        quoteMeta: l.quoteMeta ?? undefined,
-        subject: l.subject,
-        draft: l.draft,
-        status: (l.dropped ? "dropped" : "waiting") as "dropped" | "waiting",
-        timeSensitive: l.dropped ? false : l.timeSensitive,
-        createdAt: now,
+        key: `${slugify(c.name)}-${i}`,
+        name: c.name,
+        mapLabel1: c.name.split("·")[0]?.trim() || c.name,
+        mapLabel2: c.platform,
+        members: c.members,
+        membersNum: parseMembersNum(c.members),
+        fit: c.fit,
+        reached: "0 reached",
+        reachedNum: 0,
+        replied: "0 replied",
+        repliedNum: 0,
+        note: c.note,
+        rev: "no pipeline yet",
         updatedAt: now,
-      };
-    }),
-  );
-
-  const communitiesCol = await Communities();
-  await communitiesCol.insertMany(
-    generated.communities.map((c, i) => ({
-      userId,
-      campaignId: cid,
-      key: `${slugify(c.name)}-${i}`,
-      name: c.name,
-      mapLabel1: c.name.split("·")[0]?.trim() || c.name,
-      mapLabel2: c.platform,
-      members: c.members,
-      membersNum: parseMembersNum(c.members),
-      fit: c.fit,
-      reached: "0 reached",
-      reachedNum: 0,
-      replied: "0 replied",
-      repliedNum: 0,
-      note: c.note,
-      rev: "no pipeline yet",
-      updatedAt: now,
-    })),
-  );
+      })),
+    );
+  }
 
   const hypothesesCol = await Hypotheses();
   await hypothesesCol.insertMany(

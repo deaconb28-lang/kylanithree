@@ -12,6 +12,7 @@ export interface LeadDoc {
   email?: string;
   hypothesisKey?: string;
   source: string;
+  sourceUrl?: string;
   quote?: string;
   quoteMeta?: string;
   subject: string;
