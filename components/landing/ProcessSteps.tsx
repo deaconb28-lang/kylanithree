@@ -1,8 +1,4 @@
-"use client";
-
 import Link from "next/link";
-import { useState } from "react";
-import { dashboardPath } from "../../lib/dashboardUrl";
 
 const CARDS = [
   {
@@ -65,8 +61,6 @@ const CARDS = [
 ];
 
 export default function ProcessSteps() {
-  const [hrefs] = useState(() => CARDS.map((c) => dashboardPath(c.href)));
-
   return (
     <div style={{ padding: "96px 5vw", display: "flex", flexDirection: "column", gap: 48, borderTop: "1px solid var(--border)" }}>
       <div style={{ display: "flex", flexDirection: "column", gap: 14, maxWidth: 700 }}>
@@ -79,7 +73,7 @@ export default function ProcessSteps() {
       </div>
 
       <div style={{ position: "relative", display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: 20 }}>
-        {CARDS.map((c, i) => (
+        {CARDS.map((c) => (
           <div
             key={c.n}
             className="ky-card-hover"
@@ -116,7 +110,7 @@ export default function ProcessSteps() {
             </div>
             {c.artifact}
             <Link
-              href={hrefs[i]}
+              href={c.href}
               style={{ marginTop: "auto", fontSize: 12.5, color: c.dark ? "#FFB89C" : "var(--ember)", fontWeight: 700, textDecoration: "none" }}
             >
               {c.time}

@@ -28,6 +28,7 @@ export default function OnboardingChrome({
         <span style={{ fontFamily: "var(--font-outfit)", fontWeight: 700, fontSize: 17 }}>Kylani</span>
       </div>
       <div
+        className="ky-fade-in"
         style={{
           position: "relative",
           minHeight: "100vh",
