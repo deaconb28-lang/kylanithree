@@ -95,7 +95,26 @@ export default function SettingsPage() {
               <span style={{ fontSize: 15, fontWeight: 600 }}>{session?.user?.email ?? "connecting…"}</span>
               <span style={{ fontSize: 13, color: "var(--muted)" }}>Gmail · connected</span>
             </div>
+            <span
+              style={{
+                marginLeft: "auto",
+                fontSize: 11.5,
+                fontWeight: 700,
+                color: "var(--green)",
+                background: "var(--green-tint)",
+                padding: "4px 10px",
+                borderRadius: 999,
+                letterSpacing: ".03em",
+                whiteSpace: "nowrap",
+              }}
+            >
+              REQUIRED TO SEND
+            </span>
           </div>
+          <p style={{ margin: 0, fontSize: 13, color: "var(--muted)", lineHeight: 1.5 }}>
+            This can&apos;t be disconnected — without it, Kylani has nowhere to send approved messages from. To send from a
+            different account, sign in with that account instead.
+          </p>
         </div>
 
         <div style={{ border: "1px solid var(--border)", borderRadius: 16, padding: "22px 24px", display: "flex", flexDirection: "column", gap: 14, background: "var(--card)" }}>

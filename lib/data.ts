@@ -294,7 +294,7 @@ export const FAQS = [
   },
   {
     q: "Where do the emails come from?",
-    a: "Your own Gmail or Outlook. Your domain, your reputation, hard daily caps, unsubscribe on every message.",
+    a: "Your own Gmail. Your domain, your reputation, hard daily caps, unsubscribe on every message.",
   },
   {
     q: "Is this a lead database?",

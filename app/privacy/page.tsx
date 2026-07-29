@@ -101,8 +101,10 @@ export default function PrivacyPage() {
 
       <Section title="Your rights">
         <p style={pStyle}>
-          You can access, export, correct, or delete your data at any time. Disconnecting Google or Stripe from Settings
-          revokes that access immediately. To exercise any of these rights, email{" "}
+          You can access, export, correct, or delete your data at any time. Disconnecting Stripe from Settings revokes
+          that access immediately — Google can&apos;t be disconnected from within Kylani since sending depends on it, but
+          you can revoke its access anytime from your Google Account&apos;s connected-apps settings. To exercise any of
+          these rights, email{" "}
           <a href="mailto:deacon@kylani.app">deacon@kylani.app</a>.
         </p>
       </Section>

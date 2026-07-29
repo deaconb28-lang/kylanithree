@@ -38,7 +38,7 @@ export async function PATCH(req: NextRequest, ctx: { params: Promise<{ id: strin
         sendError = toUserError(
           "leads/send",
           err,
-          "Couldn't send that automatically. The draft is saved above — copy it and send it yourself, or reconnect Google from Settings and try again.",
+          "Couldn't send that automatically. The draft is saved above — copy it and send it yourself, or try approving it again in a bit.",
         );
       }
     } else {
