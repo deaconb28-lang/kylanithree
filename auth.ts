@@ -14,11 +14,17 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
     Google({
       clientId: process.env.GOOGLE_CLIENT_ID,
       clientSecret: process.env.GOOGLE_CLIENT_SECRET,
+      // Deliberately basic scopes only (openid/email/profile) for now — no `gmail.send`. That
+      // scope is "sensitive" in Google's OAuth verification model, which means the consent screen
+      // can only be published "In production" (usable by any Google account, not just allow-listed
+      // test users) after Google reviews and approves the app for it. Basic scopes need no review
+      // at all, so dropping this unblocks real sign-in immediately; Gmail sending is off until the
+      // scope (and the verification that comes with it) is added back deliberately. Re-add
+      // `https://www.googleapis.com/auth/gmail.send` to the scope string (plus
+      // access_type: "offline", prompt: "consent" for a refresh token) when that's ready.
       authorization: {
         params: {
-          scope: "openid email profile https://www.googleapis.com/auth/gmail.send",
-          access_type: "offline",
-          prompt: "consent",
+          scope: "openid email profile",
         },
       },
     }),
