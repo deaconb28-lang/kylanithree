@@ -1,4 +1,5 @@
 import { getResend, FROM_EMAIL } from "./resend";
+import { COLOR, FONT_STACK, emailButton, escapeHtml, renderEmailShell, statPair } from "./email/layout";
 
 export type OnboardingSummaryEmailInput = {
   to: string;
@@ -9,10 +10,6 @@ export type OnboardingSummaryEmailInput = {
   communitiesCount: number;
   appUrl: string;
 };
-
-function escapeHtml(s: string) {
-  return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
-}
 
 function buildText(input: OnboardingSummaryEmailInput) {
   const buyerLines = input.buyers.map((b) => `- ${b.name}: ${b.desc}`).join("\n");
@@ -31,31 +28,59 @@ function buildText(input: OnboardingSummaryEmailInput) {
 }
 
 function buildHtml(input: OnboardingSummaryEmailInput) {
-  const buyerItems = input.buyers
-    .map((b) => `<li style="margin-bottom:8px;"><strong>${escapeHtml(b.name)}</strong> — ${escapeHtml(b.desc)}</li>`)
+  const buyerRows = input.buyers
+    .map(
+      (b, i) => `
+      <tr>
+        <td style="padding:${i === 0 ? 0 : 12}px 0 0;${i < input.buyers.length - 1 ? `border-bottom:1px solid ${COLOR.border};padding-bottom:12px;` : ""}">
+          <div style="font-size:14.5px;font-weight:700;color:${COLOR.ink};">${escapeHtml(b.name)}</div>
+          <div style="font-size:13.5px;color:${COLOR.muted};line-height:1.45;margin-top:2px;">${escapeHtml(b.desc)}</div>
+        </td>
+      </tr>`,
+    )
     .join("");
-  return `
-    <div style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;background:#FDFCFA;color:#14120F;padding:32px 24px;">
-      <div style="max-width:520px;margin:0 auto;">
-        <h1 style="font-size:22px;font-weight:800;margin:0 0 8px;">Your Kylani campaign is set up.</h1>
-        <p style="font-size:15px;color:#4A443D;line-height:1.6;margin:0 0 20px;">
-          ${escapeHtml(input.productName)} (${escapeHtml(input.productUrl)}) is live. Here's what I found.
-        </p>
-        <div style="border:1px solid #EDE9E3;border-radius:12px;padding:18px 20px;margin-bottom:20px;">
-          <span style="font-size:12px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;color:#6B655D;">Buyer personas</span>
-          <ul style="margin:10px 0 0;padding-left:18px;font-size:14.5px;line-height:1.5;">${buyerItems}</ul>
-        </div>
-        <p style="font-size:15px;line-height:1.6;margin:0 0 24px;">
-          <strong>${input.leadsCount}</strong> real lead${input.leadsCount === 1 ? "" : "s"} found ·
-          <strong>${input.communitiesCount}</strong> communit${input.communitiesCount === 1 ? "y" : "ies"} confirmed.
-        </p>
-        <a href="${input.appUrl}/app" style="display:inline-block;background:#E4572E;color:#fff;text-decoration:none;font-weight:600;font-size:15px;padding:12px 22px;border-radius:10px;">
-          See your first drafts
-        </a>
-        <p style="font-size:13px;color:#6B655D;margin-top:28px;">— Deacon, Kylani</p>
-      </div>
-    </div>
+
+  const body = `
+    <h1 style="font-family:${FONT_STACK};font-weight:800;font-size:22px;letter-spacing:-.02em;color:${COLOR.ink};margin:0 0 8px;">
+      Your first search is done.
+    </h1>
+    <p style="font-size:15px;color:${COLOR.muted};line-height:1.55;margin:0 0 20px;">
+      ${escapeHtml(input.productName)} (${escapeHtml(input.productUrl)}) is live in Kylani. Here's what I found while you were setting up.
+    </p>
+
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="margin-bottom:20px;">
+      <tr>
+        ${statPair(input.leadsCount, `real lead${input.leadsCount === 1 ? "" : "s"} found`)}
+        <td style="width:12px;"></td>
+        ${statPair(input.communitiesCount, `communit${input.communitiesCount === 1 ? "y" : "ies"} confirmed`)}
+      </tr>
+    </table>
+
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="background:${COLOR.cardAlt};border:1px solid ${COLOR.border};border-radius:12px;">
+      <tr>
+        <td style="padding:16px 18px;">
+          <span style="font-size:11.5px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:${COLOR.muted};">Buyer personas</span>
+          <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="margin-top:10px;">
+            ${buyerRows}
+          </table>
+        </td>
+      </tr>
+    </table>
+
+    ${emailButton("See your first drafts", `${input.appUrl}/app`)}
+
+    <p style="font-size:13.5px;color:${COLOR.muted};line-height:1.5;margin:4px 0 0;">
+      Nothing sends without your approval — every draft is yours to edit, send, or skip.
+    </p>
+
+    <p style="font-size:14px;color:${COLOR.ink};margin:22px 0 0;">— Deacon, Kylani</p>
   `;
+
+  return renderEmailShell({
+    preheader: `${input.leadsCount} real leads and ${input.communitiesCount} communities found for ${input.productName}.`,
+    title: `Your Kylani campaign for ${input.productName} is ready`,
+    bodyHtml: body,
+  });
 }
 
 // Fire-and-forget from the caller's point of view — a failure here should never block or fail
