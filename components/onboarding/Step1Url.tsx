@@ -1,8 +1,19 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import OnboardingChrome from "./OnboardingChrome";
 import { PRODUCT_CATEGORIES, type ProductCategory } from "../../lib/productCategories";
+
+const FLASH_WORDS = ["product", "newsletter", "design", "business", "app"];
+
+function useWordFlash(words: string[], intervalMs = 1800) {
+  const [i, setI] = useState(0);
+  useEffect(() => {
+    const id = setInterval(() => setI((n) => (n + 1) % words.length), intervalMs);
+    return () => clearInterval(id);
+  }, [words, intervalMs]);
+  return words[i];
+}
 
 export default function Step1Url({
   onSubmit,
@@ -13,12 +24,17 @@ export default function Step1Url({
   const [note, setNote] = useState("");
   const [showNote, setShowNote] = useState(false);
   const [category, setCategory] = useState<ProductCategory>("app");
+  const flashWord = useWordFlash(FLASH_WORDS);
 
   return (
     <OnboardingChrome>
       <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 30, maxWidth: 680, textAlign: "center" }}>
         <h1 style={{ fontFamily: "var(--font-outfit)", fontWeight: 800, fontSize: "clamp(32px,5vw,52px)", lineHeight: 1.02, letterSpacing: "-.035em", margin: 0 }}>
-          Where does your product live?
+          Where does your{" "}
+          <span key={flashWord} className="ky-fade-in" style={{ display: "inline-block", color: "var(--ember)" }}>
+            {flashWord}
+          </span>{" "}
+          live?
         </h1>
         <p style={{ margin: 0, fontSize: 18, color: "var(--muted-strong)", lineHeight: 1.55 }}>
           Paste the URL. I&apos;ll read it and tell you who I think buys it — you can correct me on the next screen.

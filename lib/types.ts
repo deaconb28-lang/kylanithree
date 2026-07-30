@@ -10,4 +10,5 @@ export type SiteAnalysis = {
   whatYouSell: string;
   problem: string;
   buyers: SiteBuyer[];
+  keywords: string[];
 };

@@ -1,4 +1,5 @@
 import type { ProductCategory } from "./productCategories";
+import type { GeneratedSeed } from "./generateCampaignSeed";
 
 export type OnboardingResult = {
   url: string;
@@ -6,6 +7,10 @@ export type OnboardingResult = {
   buyers: { name: string; desc: string }[];
   channels: Record<string, boolean>;
   category?: ProductCategory;
+  keywords?: string[];
+  // The real, already-completed lead search from Step5Search — see lib/seed.ts's
+  // finalizeOnboarding, which persists this instead of searching again post-signin.
+  seed?: GeneratedSeed;
 };
 
 const KEY = "kylani_onboarding";

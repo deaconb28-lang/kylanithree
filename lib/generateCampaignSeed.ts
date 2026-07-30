@@ -72,6 +72,7 @@ export async function generateCampaignSeed(input: {
   buyers: { name: string; desc: string }[];
   channels: Record<string, boolean>;
   category?: string;
+  keywords?: string[];
 }): Promise<GeneratedSeed> {
   const enabledChannels = Object.entries(input.channels)
     .filter(([, on]) => on)
@@ -104,7 +105,12 @@ export async function generateCampaignSeed(input: {
           `What they sell: ${input.whatYouSell}`,
           `Buyer personas, indices 0-${input.buyers.length - 1} (most likely first): ${input.buyers.map((b, i) => `${i}: ${b.name} — ${b.desc}`).join(" | ")}`,
           `Channels the founder has enabled to search: ${enabledChannels.join(", ") || "email only — search broadly for public posts regardless of platform"}`,
-        ].join("\n"),
+          input.keywords?.length
+            ? `Real phrases people actually use for this problem (found during the earlier site analysis — start your searches from these): ${input.keywords.join(" | ")}`
+            : null,
+        ]
+          .filter(Boolean)
+          .join("\n"),
       },
     ],
     output_config: {

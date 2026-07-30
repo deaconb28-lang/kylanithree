@@ -1,5 +1,5 @@
 import { Campaigns, Communities, Findings, Hypotheses, Leads, type CampaignDoc } from "./collections";
-import { generateCampaignSeed } from "./generateCampaignSeed";
+import { generateCampaignSeed, type GeneratedSeed } from "./generateCampaignSeed";
 
 function slugify(text: string) {
   return text.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)/g, "") || "buyer";
@@ -27,6 +27,11 @@ export type OnboardingAnswers = {
   buyers: { name: string; desc: string }[];
   channels: Record<string, boolean>;
   category?: string;
+  keywords?: string[];
+  // Populated when Step5Search already ran the real lead search during onboarding (the normal
+  // path) — finalizeOnboarding then just persists it instead of searching a second time. Falls
+  // back to searching here itself if a client ever arrives without one (e.g. an old session).
+  seed?: GeneratedSeed;
 };
 
 export async function finalizeOnboarding(userId: string, onboarding: OnboardingAnswers) {
@@ -42,7 +47,7 @@ export async function finalizeOnboarding(userId: string, onboarding: OnboardingA
   }
 
   const now = new Date();
-  const generated = await generateCampaignSeed(onboarding);
+  const generated = onboarding.seed ?? (await generateCampaignSeed(onboarding));
 
   const campaign: CampaignDoc = {
     userId,

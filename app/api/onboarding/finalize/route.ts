@@ -25,6 +25,8 @@ export async function POST(req: NextRequest) {
       buyers: body.buyers,
       channels: body.channels,
       category: body.category,
+      keywords: body.keywords,
+      seed: body.seed,
     });
     return NextResponse.json(campaign);
   } catch (err) {

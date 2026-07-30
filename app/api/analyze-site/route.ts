@@ -33,6 +33,13 @@ const AnalysisSchema = z.object({
     )
     .min(2)
     .max(4),
+  keywords: z
+    .array(z.string())
+    .min(3)
+    .max(8)
+    .describe(
+      "Real phrases you found people actually typing or saying via web_search — search queries, forum post titles, or complaint language — never invented. 2-6 words each, e.g. 'dock scheduling spreadsheet mess'. These seed the next stage's lead search, so make them the actual words real people use, not marketing language.",
+    ),
 });
 
 function extractReadableText(html: string): string {
@@ -83,18 +90,24 @@ export async function POST(req: NextRequest) {
       thinking: { type: "adaptive" },
       tools: [{ type: "web_search_20260209", name: "web_search", max_uses: 6 }],
       system:
-        "You are Kylani, a lead-gen assistant that reads a company's site and works out who buys their product. " +
-        "The scraped page text can be thin, marketing-fluffed, or missing — use the web_search tool to verify what the " +
-        "company actually sells and confirm you're describing the real product, not guessing from a tagline. Also search " +
-        "for 2-3 competitors or comparable products in the same space: look at who THEY sell to and how broadly they " +
-        "position their market. Use that to sanity-check your buyer list — most real products sell to a wider range of " +
-        "company types and sizes than a single narrow reading of the homepage suggests. Do not narrow the buyer " +
-        "definition (company size, vertical, team type) further than the evidence actually supports; default to the " +
-        "broader, more inclusive framing unless the site or a competitor's positioning explicitly targets one narrow " +
-        "niche. Be concrete and specific, not generic — prefer named job titles over vague roles, just not artificially " +
-        "narrow ones. Order buyers most-likely-to-buy first, and give exactly the top one the tag 'Most likely' (null " +
-        "for the rest). You're working under a tight time budget — run a handful of targeted searches (aim for 3-4, " +
-        "never more than 6), not an exhaustive investigation. " +
+        "You are Kylani, a lead-gen assistant. Your job here is a three-part real search — isolate the PROBLEM, the " +
+        "SOLUTION, and the AUDIENCE — not a guess from scraped marketing copy. Use the web_search tool for all three: " +
+        "(1) Solution — verify what the company actually sells; the scraped page text can be thin, marketing-fluffed, " +
+        "or missing, so confirm the real product against outside sources, not just a tagline. Also search 2-3 " +
+        "competitors or comparable products in the same space to see who THEY sell to and how broadly they position " +
+        "their market. " +
+        "(2) Problem — search for how real people actually describe this pain: forum threads, subreddit posts, " +
+        "review complaints, question-and-answer sites. Pull out the literal phrases and search queries they use, not " +
+        "the vendor's marketing language for the same idea. " +
+        "(3) Audience — use both of the above to name concrete buyers, sanity-checked against how competitors " +
+        "segment their own market. Most real products sell to a wider range of company types/sizes (or consumer " +
+        "types) than a single narrow reading of the homepage suggests — do not narrow the buyer definition further " +
+        "than the evidence actually supports; default to the broader, more inclusive framing unless the evidence " +
+        "explicitly points to one narrow niche. Be concrete and specific, not generic — prefer named job titles over " +
+        "vague roles, just not artificially narrow ones. Order buyers most-likely-to-buy first, and give exactly the " +
+        "top one the tag 'Most likely' (null for the rest). You're working under a tight time budget — run a handful " +
+        "of targeted searches across all three parts (aim for 3-4, never more than 6), not an exhaustive " +
+        "investigation. " +
         categoryGuidance(category) +
         " Every field has a hard length limit in its description — " +
         "treat those as strict maximums, not suggestions. Write like sparse UI copy, not a report: short, punchy, no " +

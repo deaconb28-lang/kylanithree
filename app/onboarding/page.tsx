@@ -23,6 +23,7 @@ function OnboardingInner() {
   const [analysis, setAnalysis] = useState<SiteAnalysis | null>(null);
   const [whatYouSell, setWhatYouSell] = useState("");
   const [buyers, setBuyers] = useState<{ name: string; desc: string }[]>([]);
+  const [channels, setChannels] = useState<Record<string, boolean>>({});
 
   switch (step) {
     case 1:
@@ -62,14 +63,27 @@ function OnboardingInner() {
     case 4:
       return (
         <Step4Channels
-          onDone={(channels) => {
-            saveOnboardingResult({ url, whatYouSell, buyers, channels, category });
+          onDone={(submittedChannels) => {
+            setChannels(submittedChannels);
             setStep(5);
           }}
         />
       );
     case 5:
-      return <Step5Search onDone={() => setStep(6)} />;
+      return (
+        <Step5Search
+          url={url}
+          whatYouSell={whatYouSell}
+          buyers={buyers}
+          channels={channels}
+          category={category}
+          keywords={analysis?.keywords ?? []}
+          onDone={(seed) => {
+            saveOnboardingResult({ url, whatYouSell, buyers, channels, category, keywords: analysis?.keywords, seed });
+            setStep(6);
+          }}
+        />
+      );
     default:
       return <Step6Complete />;
   }
