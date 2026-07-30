@@ -2,9 +2,11 @@ import { NextRequest, NextResponse } from "next/server";
 import { ObjectId } from "mongodb";
 import { auth } from "@/auth";
 import { requireCampaign } from "@/lib/apiAuth";
-import { Campaigns, Leads } from "@/lib/collections";
+import { Campaigns, Leads, Suppressions } from "@/lib/collections";
 import { sendGmail } from "@/lib/gmail";
 import { toUserError } from "@/lib/apiError";
+import { signUnsubscribeToken } from "@/lib/unsubscribeToken";
+import { SUPPRESSION_REASON_LABELS } from "@/lib/suppression";
 
 export async function PATCH(req: NextRequest, ctx: { params: Promise<{ id: string }> }) {
   const result = await requireCampaign();
@@ -24,14 +26,23 @@ export async function PATCH(req: NextRequest, ctx: { params: Promise<{ id: strin
   let sendError: string | null = null;
   let sendNote: string | null = null;
   if (body.status === "approved") {
-    if (lead?.email) {
+    // Suppression is checked before anything sends, not after — real record, see lib/collections.ts.
+    const blocked = lead?.email
+      ? await (await Suppressions()).findOne({ userId: result.userId, email: lead.email })
+      : null;
+    if (blocked) {
+      allowed.status = "dropped";
+      sendNote = `${lead?.name ?? "This contact"} is suppressed (${SUPPRESSION_REASON_LABELS[blocked.reason]}) — nothing was sent.`;
+    } else if (lead?.email) {
       const session = await auth();
       try {
+        const unsubscribeUrl = `${req.nextUrl.origin}/api/unsubscribe?token=${signUnsubscribeToken(id)}`;
+        const draftBody = (allowed.draft as string | undefined) ?? lead.draft;
         await sendGmail(result.userId, {
           to: lead.email,
           from: session?.user?.email ?? "me",
           subject: lead.subject || `Following up, ${lead.name}`,
-          body: allowed.draft as string | undefined ?? lead.draft,
+          body: `${draftBody}\n\n—\nDon't want to hear from me again? ${unsubscribeUrl}`,
         });
         allowed.status = "sent";
       } catch (err) {

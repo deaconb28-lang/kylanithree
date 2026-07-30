@@ -3,17 +3,22 @@
 import Link from "next/link";
 import { signOut, useSession } from "next-auth/react";
 import { useEffect, useState, type ReactNode } from "react";
-import { FindingsIcon, MapIcon, QueueIcon, TodayIcon } from "../icons/NavIcons";
+import { ChannelsIcon, FindingsIcon, HomeIcon, MapIcon, QueueIcon, SuppressedIcon, TodayIcon } from "../icons/NavIcons";
 import KylaniLogo from "../icons/KylaniLogo";
 import { clearOnboardingResult, readOnboardingResult } from "../../lib/onboardingStorage";
 
-type Surface = "today" | "queue" | "map" | "findings" | "settings";
+type Surface = "home" | "today" | "queue" | "map" | "findings" | "channels" | "suppressed" | "settings";
 
-const NAV: { key: Surface; href: string; label: string; Icon: typeof TodayIcon }[] = [
+const OUTREACH_NAV: { key: Surface; href: string; label: string; Icon: typeof TodayIcon }[] = [
   { key: "today", href: "/app/today", label: "Today", Icon: TodayIcon },
   { key: "queue", href: "/app/queue", label: "Queue", Icon: QueueIcon },
   { key: "map", href: "/app/map", label: "Map", Icon: MapIcon },
   { key: "findings", href: "/app/findings", label: "Findings", Icon: FindingsIcon },
+];
+
+const CHANNELS_NAV: { key: Surface; href: string; label: string; Icon: typeof TodayIcon }[] = [
+  { key: "channels", href: "/app/channels", label: "Channels", Icon: ChannelsIcon },
+  { key: "suppressed", href: "/app/suppressed", label: "Suppressed", Icon: SuppressedIcon },
 ];
 
 export default function DashboardShell({
@@ -27,13 +32,16 @@ export default function DashboardShell({
 }) {
   const { data: session } = useSession();
   const [counts, setCounts] = useState<Record<Surface, string | null>>({
+    home: null,
     today: null,
     queue: null,
     map: null,
     findings: null,
+    channels: null,
+    suppressed: null,
     settings: null,
   });
-  const [product, setProduct] = useState<{ name: string; url: string } | null>(null);
+  const [product, setProduct] = useState<{ name: string; url: string; trialEndsAt: string | null } | null>(null);
   // Starts false whenever onboarding data is still pending finalize, so no descendant page can
   // mount and race its own /api/leads or /api/campaign fetch against the finalize call below —
   // those routes auto-seed generic demo data the instant they see no campaign yet, which used to
@@ -53,7 +61,13 @@ export default function DashboardShell({
   const loadCampaign = () =>
     fetch("/api/campaign")
       .then((r) => r.json())
-      .then((c: { productName: string; productUrl: string }) => setProduct({ name: c.productName, url: c.productUrl }));
+      .then((c: { productName: string; productUrl: string; trialEndsAt: string | null }) =>
+        setProduct({ name: c.productName, url: c.productUrl, trialEndsAt: c.trialEndsAt ?? null }),
+      );
+  const loadSuppressedCount = () =>
+    fetch("/api/suppressions")
+      .then((r) => r.json())
+      .then((list: unknown[]) => setCounts((c) => ({ ...c, suppressed: String(list.length) })));
 
   const attemptFinalize = (pending: NonNullable<ReturnType<typeof readOnboardingResult>>) => {
     fetch("/api/onboarding/finalize", {
@@ -69,10 +83,11 @@ export default function DashboardShell({
           setFinalizeError(data.error ?? "Couldn't build your campaign.");
           return;
         }
-        setProduct({ name: data.productName, url: data.productUrl });
+        setProduct({ name: data.productName, url: data.productUrl, trialEndsAt: data.trialEndsAt ?? null });
         clearOnboardingResult();
         setReady(true);
         loadCounts();
+        loadSuppressedCount();
       })
       .catch(() => setFinalizeError("Couldn't reach the server."))
       .finally(() => setRetrying(false));
@@ -85,6 +100,7 @@ export default function DashboardShell({
     } else {
       loadCounts();
       loadCampaign();
+      loadSuppressedCount();
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -131,6 +147,37 @@ export default function DashboardShell({
       </div>
     );
   }
+
+  const daysLeft = product?.trialEndsAt
+    ? Math.max(0, Math.ceil((new Date(product.trialEndsAt).getTime() - new Date().getTime()) / 86_400_000))
+    : null;
+  const trialPct = daysLeft !== null ? Math.max(4, Math.min(100, ((7 - daysLeft) / 7) * 100)) : 4;
+  const accountLabel = daysLeft !== null && daysLeft > 0 ? "Trial" : "Active";
+  const displayName = session?.user?.name || session?.user?.email?.split("@")[0] || "there";
+
+  const renderLink = ({ key, href, label, Icon }: (typeof OUTREACH_NAV)[number]) => {
+    const isActive = key === active;
+    return (
+      <Link key={key} href={href} className={`ky-sidebar-link${isActive ? " active" : ""}`}>
+        <Icon color={isActive ? "var(--ember)" : "#9C948A"} />
+        <span style={{ flex: 1 }}>{label}</span>
+        {counts[key] && counts[key] !== "0" && (
+          <span
+            style={{
+              fontSize: 12.5,
+              padding: "2px 7px",
+              borderRadius: 999,
+              background: isActive ? "var(--ember)" : "transparent",
+              color: isActive ? "#fff" : "var(--muted)",
+            }}
+          >
+            {counts[key]}
+          </span>
+        )}
+      </Link>
+    );
+  };
+
   return (
     <div
       style={{
@@ -158,7 +205,7 @@ export default function DashboardShell({
           padding: "24px 18px",
           display: "flex",
           flexDirection: "column",
-          gap: 26,
+          gap: 20,
           boxSizing: "border-box",
         }}
       >
@@ -182,51 +229,54 @@ export default function DashboardShell({
           <span style={{ fontSize: 12.5, color: "var(--muted)" }}>{product?.url ?? ""} · campaign 1</span>
         </div>
 
-        <nav style={{ display: "flex", flexDirection: "column", gap: 3 }}>
-          {NAV.map(({ key, href, label, Icon }) => {
-            const isActive = key === active;
-            return (
-              <Link
-                key={key}
-                href={href}
-                className={`ky-sidebar-link${isActive ? " active" : ""}`}
-              >
-                <Icon color={isActive ? "var(--ember)" : "#9C948A"} />
-                <span style={{ flex: 1 }}>{label}</span>
-                {counts[key] && counts[key] !== "0" && (
-                  <span
-                    style={{
-                      fontSize: 12.5,
-                      padding: "2px 7px",
-                      borderRadius: 999,
-                      background: isActive ? "var(--ember)" : "transparent",
-                      color: isActive ? "#fff" : "var(--muted)",
-                    }}
-                  >
-                    {counts[key]}
-                  </span>
-                )}
-              </Link>
-            );
-          })}
-        </nav>
+        <Link href="/app" className={`ky-sidebar-link${active === "home" ? " active" : ""}`}>
+          <HomeIcon color={active === "home" ? "var(--ember)" : "#9C948A"} />
+          <span style={{ flex: 1 }}>Home</span>
+        </Link>
+
+        <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+          <span style={{ fontSize: 11, fontWeight: 700, letterSpacing: ".08em", textTransform: "uppercase", color: "#A39C90", padding: "0 12px" }}>
+            Outreach
+          </span>
+          <nav style={{ display: "flex", flexDirection: "column", gap: 3 }}>{OUTREACH_NAV.map(renderLink)}</nav>
+        </div>
+
+        <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+          <span style={{ fontSize: 11, fontWeight: 700, letterSpacing: ".08em", textTransform: "uppercase", color: "#A39C90", padding: "0 12px" }}>
+            Channels
+          </span>
+          <nav style={{ display: "flex", flexDirection: "column", gap: 3 }}>{CHANNELS_NAV.map(renderLink)}</nav>
+        </div>
 
         <div style={{ marginTop: "auto", display: "flex", flexDirection: "column", gap: 12 }}>
           {bottom}
-          <div style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 12.5, color: "var(--muted)", padding: "0 6px", whiteSpace: "nowrap", overflow: "hidden" }}>
-            <span style={{ width: 7, height: 7, borderRadius: 999, background: "var(--green)", flexShrink: 0 }} />
-            <span style={{ overflow: "hidden", textOverflow: "ellipsis" }}>
-              {session?.user?.email ?? "connecting…"}
-            </span>
-          </div>
-          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, padding: "0 6px" }}>
-            <Link
-              href="/app/settings"
-              style={{ fontSize: 13.5, color: active === "settings" ? "var(--ink)" : "var(--muted)", fontWeight: active === "settings" ? 600 : 400, cursor: "pointer" }}
-            >
-              Settings
-            </Link>
-            <span onClick={() => signOut({ callbackUrl: "/" })} style={{ fontSize: 13.5, color: "var(--muted)", cursor: "pointer" }}>
+          {daysLeft !== null && (
+            <div style={{ border: "1px solid var(--border)", borderRadius: 10, padding: "12px 13px", display: "flex", flexDirection: "column", gap: 6, background: "var(--card)" }}>
+              <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between" }}>
+                <span style={{ fontSize: 12.5, color: "var(--muted)" }}>Trial</span>
+                <span style={{ fontSize: 13, fontWeight: 700, color: daysLeft > 0 ? "var(--ember)" : "var(--muted)" }}>
+                  {daysLeft > 0 ? `${daysLeft} day${daysLeft === 1 ? "" : "s"} left` : "Ended"}
+                </span>
+              </div>
+              <div style={{ height: 4, borderRadius: 999, background: "var(--border)", overflow: "hidden" }}>
+                <div style={{ width: `${trialPct}%`, height: "100%", background: "var(--ember)" }} />
+              </div>
+            </div>
+          )}
+          <div style={{ borderTop: "1px solid var(--border)", paddingTop: 12, display: "flex", alignItems: "center", gap: 10, padding: "12px 6px 0" }}>
+            <div style={{ width: 28, height: 28, borderRadius: 999, background: "#E8EEFF", flexShrink: 0, display: "grid", placeItems: "center", fontSize: 12, fontWeight: 700, color: "#4A5D8A" }}>
+              {displayName[0]?.toUpperCase()}
+            </div>
+            <div style={{ display: "flex", flexDirection: "column", gap: 1, minWidth: 0, flex: 1 }}>
+              <span style={{ fontSize: 14, fontWeight: 600, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{displayName}</span>
+              <span style={{ fontSize: 12, color: "var(--muted)" }}>
+                {accountLabel} ·{" "}
+                <Link href="/app/settings" style={{ color: active === "settings" ? "var(--ink)" : "var(--muted)", fontWeight: active === "settings" ? 600 : 400 }}>
+                  Settings
+                </Link>
+              </span>
+            </div>
+            <span onClick={() => signOut({ callbackUrl: "/" })} style={{ fontSize: 12.5, color: "var(--muted)", cursor: "pointer", flexShrink: 0 }}>
               Sign out
             </span>
           </div>
@@ -251,7 +301,7 @@ export default function DashboardShell({
           backdropFilter: "blur(8px)",
         }}
       >
-        {NAV.map(({ key, href, label, Icon }) => {
+        {OUTREACH_NAV.map(({ key, href, label, Icon }) => {
           const isActive = key === active;
           return (
             <Link

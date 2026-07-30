@@ -33,3 +33,31 @@ export function FindingsIcon({ color = "#9C948A", size = 14 }: IconProps) {
     </svg>
   );
 }
+
+export function HomeIcon({ color = "#9C948A", size = 14 }: IconProps) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 14 14" style={{ display: "block", flexShrink: 0 }} fill="none" stroke={color} strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M1.3 6.6L7 2l5.7 4.6" />
+      <path d="M2.6 5.7V12h8.8V5.7" />
+      <path d="M5.4 12V8.2h3.2V12" />
+    </svg>
+  );
+}
+
+export function ChannelsIcon({ color = "#9C948A", size = 14 }: IconProps) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 14 14" style={{ display: "block", flexShrink: 0 }} fill="none" stroke={color} strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round">
+      <rect x="2" y="2.3" width="10" height="9.4" rx="1.6" />
+      <path d="M4.6 5.4h4.8M4.6 7.7h4.8" />
+    </svg>
+  );
+}
+
+export function SuppressedIcon({ color = "#9C948A", size = 14 }: IconProps) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 14 14" style={{ display: "block", flexShrink: 0 }} fill="none" stroke={color} strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round">
+      <circle cx="7" cy="7" r="5.4" />
+      <path d="M4.9 4.9l4.2 4.2M9.1 4.9l-4.2 4.2" />
+    </svg>
+  );
+}

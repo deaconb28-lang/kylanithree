@@ -7,7 +7,7 @@ import KylaniLogo from "../../components/icons/KylaniLogo";
 
 function SignInInner() {
   const params = useSearchParams();
-  const callbackUrl = params.get("callbackUrl") || "/app/today";
+  const callbackUrl = params.get("callbackUrl") || "/app";
 
   const [mode, setMode] = useState<"signin" | "signup">("signin");
   const [email, setEmail] = useState("");

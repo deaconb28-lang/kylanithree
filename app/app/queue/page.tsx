@@ -2,7 +2,8 @@
 
 import { useEffect, useMemo, useState } from "react";
 import DashboardShell from "../../../components/dashboard/DashboardShell";
-import type { HypothesisDoc, LeadDoc } from "../../../lib/collections";
+import type { HypothesisDoc, LeadDoc, SuppressionReason } from "../../../lib/collections";
+import { SUPPRESSION_REASON_LABELS, SUPPRESSION_REASONS } from "../../../lib/suppression";
 
 type Lead = LeadDoc & { _id: string };
 type Hypothesis = HypothesisDoc & { _id: string };
@@ -20,6 +21,7 @@ export default function QueuePage() {
   const [sendError, setSendError] = useState<string | null>(null);
   const [sendNote, setSendNote] = useState<string | null>(null);
   const [rewriting, setRewriting] = useState(false);
+  const [suppressPickerOpen, setSuppressPickerOpen] = useState(false);
 
   useEffect(() => {
     fetch("/api/leads?scope=queue")
@@ -68,6 +70,7 @@ export default function QueuePage() {
     setSelected(i);
     setEditing(false);
     setSendError(null);
+    setSuppressPickerOpen(false);
   };
 
   const moveToNextWaiting = (fromList: Lead[], fromIdx: number) => {
@@ -103,6 +106,20 @@ export default function QueuePage() {
     setLeads((ls) => ls!.map((l) => (l._id === lead._id ? { ...l, status: "dropped" } : l)));
     setEditing(false);
     moveToNextWaiting(filtered, selected);
+  };
+
+  const suppress = async (reason: SuppressionReason) => {
+    setSuppressPickerOpen(false);
+    const res = await fetch(`/api/leads/${lead._id}/suppress`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ reason }),
+    });
+    if (res.ok) {
+      setLeads((ls) => ls!.map((l) => (l._id === lead._id ? { ...l, status: "dropped" } : l)));
+      setEditing(false);
+      moveToNextWaiting(filtered, selected);
+    }
   };
 
   const rewriteWithAi = async () => {
@@ -300,6 +317,46 @@ export default function QueuePage() {
                 <button className="ky-btn-outline" onClick={drop} style={{ padding: "12px 18px", fontSize: 15.5, fontWeight: 500, color: "var(--muted)" }}>
                   Drop {lead.name.split(" ")[0]}
                 </button>
+              )}
+              {status === "waiting" && !editing && (
+                <div style={{ position: "relative" }}>
+                  <button
+                    className="ky-btn-outline"
+                    onClick={() => setSuppressPickerOpen((o) => !o)}
+                    style={{ padding: "12px 18px", fontSize: 15.5, fontWeight: 500, color: "var(--muted)" }}
+                  >
+                    Suppress
+                  </button>
+                  {suppressPickerOpen && (
+                    <div
+                      style={{
+                        position: "absolute",
+                        bottom: "calc(100% + 8px)",
+                        left: 0,
+                        background: "var(--card)",
+                        border: "1px solid var(--border)",
+                        borderRadius: 12,
+                        padding: 6,
+                        display: "flex",
+                        flexDirection: "column",
+                        gap: 2,
+                        boxShadow: "0 1px 2px rgba(20,18,15,.05), 0 18px 40px -22px rgba(20,18,15,.25)",
+                        zIndex: 10,
+                        minWidth: 200,
+                      }}
+                    >
+                      {SUPPRESSION_REASONS.map((r) => (
+                        <span
+                          key={r}
+                          onClick={() => suppress(r)}
+                          style={{ fontSize: 14, padding: "9px 12px", borderRadius: 8, cursor: "pointer", whiteSpace: "nowrap" }}
+                        >
+                          {SUPPRESSION_REASON_LABELS[r]}
+                        </span>
+                      ))}
+                    </div>
+                  )}
+                </div>
               )}
               <span style={{ marginLeft: "auto", fontSize: 13.5, color: "var(--muted)" }}>Follow-up in 5 days if no reply</span>
             </div>

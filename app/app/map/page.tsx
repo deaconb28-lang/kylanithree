@@ -32,7 +32,7 @@ export default function MapPage() {
   const [leads, setLeads] = useState<Lead[] | null>(null);
   const [campaign, setCampaign] = useState<Campaign | null>(null);
   const [node, setNode] = useState<string | null>(null);
-  const [tab, setTab] = useState<"hypotheses" | "communities" | "contacts" | "suppressed">("hypotheses");
+  const [tab, setTab] = useState<"hypotheses" | "communities" | "contacts">("hypotheses");
   const [stripeSummary, setStripeSummary] = useState<StripeSummary | null>(null);
 
   useEffect(() => {
@@ -117,7 +117,7 @@ export default function MapPage() {
             </span>
           </div>
           <div style={{ display: "flex", gap: 8, fontSize: 13.5, flexWrap: "wrap" }}>
-            {(["hypotheses", "communities", "contacts", "suppressed"] as const).map((t) => (
+            {(["hypotheses", "communities", "contacts"] as const).map((t) => (
               <span
                 key={t}
                 onClick={() => setTab(t)}
@@ -139,16 +139,6 @@ export default function MapPage() {
             ))}
           </div>
         </div>
-
-        {tab === "suppressed" && (
-          <div style={{ border: "1px dashed var(--border-strong)", borderRadius: 16, padding: "28px 24px", background: "var(--card-alt)", display: "flex", flexDirection: "column", gap: 10 }}>
-            <span style={{ fontFamily: "var(--font-outfit)", fontWeight: 700, fontSize: 20 }}>Nobody suppressed yet.</span>
-            <p style={{ margin: 0, fontSize: 15, color: "var(--muted)", lineHeight: 1.6, maxWidth: 640 }}>
-              Suppression is checked before anything sends — unsubscribes, bounces, or people who are already a customer get
-              removed automatically and Kylani won&apos;t write to them again for this campaign. Nothing&apos;s been caught here yet.
-            </p>
-          </div>
-        )}
 
         {tab === "contacts" && (
           <div style={{ border: "1px solid var(--border)", borderRadius: 16, background: "var(--card)", overflow: "hidden" }}>
@@ -206,7 +196,8 @@ export default function MapPage() {
           <>
             <div style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 13, color: "var(--muted)" }}>
               <span style={{ width: 7, height: 7, borderRadius: 999, background: "var(--border-strong)", flexShrink: 0 }} />
-              Unsubscribes, bounces, and existing customers are suppressed automatically — see the Suppressed tab.
+              Unsubscribes, bounces, and existing customers are suppressed automatically —{" "}
+              <Link href="/app/suppressed" style={{ color: "var(--ink)", fontWeight: 600 }}>see Suppressed</Link>.
             </div>
 
             {tab === "hypotheses" && (

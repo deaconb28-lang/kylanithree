@@ -96,8 +96,31 @@ export interface CampaignDoc {
   channels: Record<string, boolean>;
   stats: CampaignStats;
   stripe?: StripeConnection;
+  // 7 days from campaign creation. Real, not decorative — used to drive the sidebar's trial pill
+  // and the Trial page. There's no billing/subscription system behind it yet (see HANDOFF.md), so
+  // nothing gates or charges when it lapses.
+  trialEndsAt: Date;
   createdAt: Date;
   updatedAt: Date;
+}
+
+// A real suppression record — never fabricated. Created only two ways: automatically when a
+// recipient clicks the unsubscribe link in a sent email (reason "unsubscribed"), or when the
+// founder manually flags a contact via the Suppress action on a lead (any of the three reasons).
+// There's no bounce-webhook integration, so "bounced" only appears when a founder reports it
+// themselves after seeing a bounce in their own inbox.
+export type SuppressionReason = "unsubscribed" | "bounced" | "existing_customer";
+
+export interface SuppressionDoc {
+  userId: string;
+  campaignId: string;
+  name: string;
+  role: string;
+  email?: string | null;
+  reason: SuppressionReason;
+  where: string;
+  leadId?: string;
+  createdAt: Date;
 }
 
 export async function Campaigns() {
@@ -114,4 +137,7 @@ export async function Hypotheses() {
 }
 export async function Findings() {
   return (await getDb()).collection<FindingDoc>("findings");
+}
+export async function Suppressions() {
+  return (await getDb()).collection<SuppressionDoc>("suppressions");
 }

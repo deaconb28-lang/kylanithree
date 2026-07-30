@@ -1,10 +1,10 @@
 "use client";
 
+import Link from "next/link";
 import { Suspense, useEffect, useState } from "react";
 import { useSession } from "next-auth/react";
 import { useSearchParams } from "next/navigation";
 import DashboardShell from "../../../components/dashboard/DashboardShell";
-import { CHANNELS, type ChannelKey } from "../../../lib/data";
 
 type Campaign = {
   productName: string;
@@ -50,12 +50,6 @@ export default function SettingsPage() {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(body),
     }).catch(() => {});
-  };
-
-  const toggleChannel = (key: ChannelKey) => {
-    if (!campaign) return;
-    const channels = { ...campaign.channels, [key]: !campaign.channels[key] };
-    patchCampaign({ channels });
   };
 
   const disconnectStripe = async () => {
@@ -176,59 +170,16 @@ export default function SettingsPage() {
           </div>
         </div>
 
-        <div style={{ border: "1px solid var(--border)", borderRadius: 16, overflow: "hidden", background: "var(--card)" }}>
-          <div style={{ padding: "20px 24px 4px" }}>
-            <span style={{ fontFamily: "var(--font-outfit)", fontWeight: 700, fontSize: 17 }}>Channels</span>
+        <Link
+          href="/app/channels"
+          style={{ border: "1px solid var(--border)", borderRadius: 16, padding: "22px 24px", display: "flex", alignItems: "center", justifyContent: "space-between", gap: 16, background: "var(--card)", textDecoration: "none", flexWrap: "wrap" }}
+        >
+          <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+            <span style={{ fontFamily: "var(--font-outfit)", fontWeight: 700, fontSize: 17, color: "var(--ink)" }}>Channels</span>
+            <span style={{ fontSize: 14, color: "var(--muted)" }}>Where Kylani looks, and how it behaves once it&apos;s there.</span>
           </div>
-          {CHANNELS.map((c, i) => {
-            const enabled = campaign.channels[c.key] ?? c.matched;
-            const disabled = !c.matched;
-            return (
-              <div
-                key={c.key}
-                style={{
-                  display: "flex",
-                  alignItems: "center",
-                  gap: 16,
-                  padding: "14px 24px",
-                  borderTop: i === 0 ? "1px solid var(--border)" : "none",
-                  borderBottom: i < CHANNELS.length - 1 ? "1px solid var(--border)" : "none",
-                  flexWrap: "wrap",
-                  color: disabled ? "var(--muted)" : "inherit",
-                }}
-              >
-                <span style={{ width: 28, height: 28, borderRadius: 7, background: c.color, display: "grid", placeItems: "center", color: "#fff", fontWeight: 700, fontSize: 12, fontFamily: "var(--font-outfit)", flexShrink: 0 }}>
-                  {c.glyph}
-                </span>
-                <span style={{ fontFamily: "var(--font-outfit)", fontWeight: 700, fontSize: 15, width: 180, flexShrink: 0 }}>{c.name}</span>
-                <span style={{ fontSize: 13.5, color: "var(--muted)", flex: 1, minWidth: 160 }}>{disabled ? "Not matched yet" : c.desc}</span>
-                {disabled ? (
-                  <span style={{ fontSize: 12, fontWeight: 600, color: "#A39C90", whiteSpace: "nowrap" }}>Add once matched</span>
-                ) : c.required ? (
-                  <span style={{ fontSize: 12, fontWeight: 600, color: "var(--green)", whiteSpace: "nowrap" }}>Required</span>
-                ) : (
-                  <div
-                    onClick={() => toggleChannel(c.key)}
-                    style={{
-                      width: 40,
-                      height: 24,
-                      borderRadius: 999,
-                      background: enabled ? "var(--green)" : "var(--border-strong)",
-                      padding: 3,
-                      boxSizing: "border-box",
-                      display: "flex",
-                      justifyContent: enabled ? "flex-end" : "flex-start",
-                      flexShrink: 0,
-                      cursor: "pointer",
-                    }}
-                  >
-                    <div style={{ width: 18, height: 18, borderRadius: 999, background: "#fff" }} />
-                  </div>
-                )}
-              </div>
-            );
-          })}
-        </div>
+          <span style={{ fontSize: 14, fontWeight: 600, color: "var(--ink)", whiteSpace: "nowrap" }}>Manage channels →</span>
+        </Link>
 
         <div style={{ border: `1px solid ${campaign.paused ? "var(--border)" : "#E8B4A6"}`, borderRadius: 16, padding: "22px 24px", display: "flex", alignItems: "center", justifyContent: "space-between", gap: 20, flexWrap: "wrap", background: campaign.paused ? "var(--card-alt)" : "var(--card)" }}>
           <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>

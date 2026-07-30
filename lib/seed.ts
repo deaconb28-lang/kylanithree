@@ -1,4 +1,4 @@
-import { Campaigns, Communities, Findings, Hypotheses, Leads, type CampaignDoc } from "./collections";
+import { Campaigns, Communities, Findings, Hypotheses, Leads, Suppressions, type CampaignDoc } from "./collections";
 import { generateCampaignSeed, type GeneratedSeed } from "./generateCampaignSeed";
 
 function slugify(text: string) {
@@ -67,6 +67,7 @@ export async function finalizeOnboarding(userId: string, onboarding: OnboardingA
       communitiesTotal: generated.communities.length,
       weeksActive: 0,
     },
+    trialEndsAt: new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000),
     createdAt: now,
     updatedAt: now,
   };
@@ -171,6 +172,7 @@ export async function ensureSeeded(userId: string) {
       communitiesTotal: 18,
       weeksActive: 3,
     },
+    trialEndsAt: new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000),
     createdAt: now,
     updatedAt: now,
   };
@@ -375,6 +377,14 @@ export async function ensureSeeded(userId: string) {
     { userId, campaignId: cid, tag: "Language", headline: "They say “detention fees”, you say “dock congestion”.", body: "Nine of eleven repliers described the problem as money lost to waiting trucks, not as a scheduling problem. Worth changing on your homepage.", createdAt: now },
     { userId, campaignId: cid, tag: "Where", headline: "One Slack channel is worth more than all of X.", body: "Ops Nerds #warehousing: 14 reached, 5 replied. Freight ops on X: 19 reached, none. I've stopped spending sends there.", createdAt: now },
     { userId, campaignId: cid, tag: "Coming back", headline: "Four people said “not right now”. Two have a reason to hear from you in September.", body: "Peak season starts for both. I've set return timers and drafted the openers already.", createdAt: now },
+  ]);
+
+  const suppressions = await Suppressions();
+  await suppressions.insertMany([
+    { userId, campaignId: cid, name: "Lena Ford", role: "ops manager, Chicago", reason: "unsubscribed", where: "Was matched via r/supplychain", createdAt: new Date(now.getTime() - 12 * 24 * 60 * 60 * 1000) },
+    { userId, campaignId: cid, name: "Marcus Diehl", role: "warehouse director", reason: "existing_customer", where: "Signed up on the waitlist last year", createdAt: new Date(now.getTime() - 14 * 24 * 60 * 60 * 1000) },
+    { userId, campaignId: cid, name: "Priya Anand", role: "fleet coordinator", email: "priya@example.com", reason: "bounced", where: "maya@dockside.app · Gmail", createdAt: new Date(now.getTime() - 15 * 24 * 60 * 60 * 1000) },
+    { userId, campaignId: cid, name: "Owen Kessler", role: "ops manager", reason: "unsubscribed", where: "Replied \"stop\" on Slack", createdAt: new Date(now.getTime() - 18 * 24 * 60 * 60 * 1000) },
   ]);
 
   return created;
