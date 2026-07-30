@@ -34,6 +34,9 @@ export type OnboardingAnswers = {
   seed?: GeneratedSeed;
 };
 
+// isNew tells the caller whether a campaign was actually just created (vs. a duplicate finalize
+// call hitting the early-return below) — used to decide whether to send the onboarding summary
+// email exactly once, not on every retry.
 export async function finalizeOnboarding(userId: string, onboarding: OnboardingAnswers) {
   const campaigns = await Campaigns();
   const existing = await campaigns.findOne({ userId });
@@ -43,7 +46,7 @@ export async function finalizeOnboarding(userId: string, onboarding: OnboardingA
       { userId },
       { $set: { productUrl: onboarding.url, whatYouSell: onboarding.whatYouSell, channels: onboarding.channels, updatedAt: new Date() } },
     );
-    return campaigns.findOne({ userId });
+    return { campaign: await campaigns.findOne({ userId }), isNew: false };
   }
 
   const now = new Date();
@@ -144,7 +147,7 @@ export async function finalizeOnboarding(userId: string, onboarding: OnboardingA
     })),
   );
 
-  return campaigns.findOne({ userId });
+  return { campaign: await campaigns.findOne({ userId }), isNew: true };
 }
 
 export async function ensureSeeded(userId: string) {
