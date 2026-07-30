@@ -51,6 +51,9 @@ export default function DashboardShell({
   const [finalizeError, setFinalizeError] = useState<string | null>(null);
   const [retrying, setRetrying] = useState(false);
 
+  // These only feed sidebar badges/labels, not page content — a failure here degrades quietly
+  // (badges just stay blank) rather than blocking the shell, since each page underneath already
+  // loads and error-handles its own data independently.
   const loadCounts = () =>
     fetch("/api/leads")
       .then((r) => r.json())
@@ -58,7 +61,8 @@ export default function DashboardShell({
         const today = leads.filter((l) => l.timeSensitive && l.status === "waiting").length;
         const queue = leads.filter((l) => !l.timeSensitive && l.status === "waiting").length;
         setCounts((c) => ({ ...c, today: String(today), queue: String(queue) }));
-      });
+      })
+      .catch(() => {});
   const loadCampaign = () =>
     fetch("/api/campaign")
       .then((r) => r.json())
@@ -69,11 +73,13 @@ export default function DashboardShell({
           trialEndsAt: c.trialEndsAt ?? null,
           subscriptionPlan: c.subscription?.status === "active" ? c.subscription.plan : null,
         }),
-      );
+      )
+      .catch(() => {});
   const loadSuppressedCount = () =>
     fetch("/api/suppressions")
       .then((r) => r.json())
-      .then((list: unknown[]) => setCounts((c) => ({ ...c, suppressed: String(list.length) })));
+      .then((list: unknown[]) => setCounts((c) => ({ ...c, suppressed: String(list.length) })))
+      .catch(() => {});
 
   const attemptFinalize = (pending: NonNullable<ReturnType<typeof readOnboardingResult>>) => {
     fetch("/api/onboarding/finalize", {

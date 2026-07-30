@@ -13,12 +13,28 @@ type Campaign = {
 
 export default function ChannelsPage() {
   const [campaign, setCampaign] = useState<Campaign | null>(null);
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const [attempt, setAttempt] = useState(0);
 
   useEffect(() => {
+    let cancelled = false;
     fetch("/api/campaign")
-      .then((r) => r.json())
-      .then(setCampaign);
-  }, []);
+      .then((r) => r.json().then((data) => ({ ok: r.ok, data })))
+      .then(({ ok, data }) => {
+        if (cancelled) return;
+        if (!ok) {
+          setLoadError(data.error ?? "Couldn't load Channels.");
+          return;
+        }
+        setCampaign(data);
+      })
+      .catch(() => {
+        if (!cancelled) setLoadError("Couldn't reach the server.");
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [attempt]);
 
   const patchChannels = (channels: Record<string, boolean>) => {
     setCampaign((c) => (c ? { ...c, channels } : c));
@@ -42,6 +58,20 @@ export default function ChannelsPage() {
     }
     patchChannels(channels);
   };
+
+  if (loadError) {
+    return (
+      <DashboardShell active="channels">
+        <div style={{ padding: "36px 5vw", display: "flex", flexDirection: "column", alignItems: "flex-start", gap: 14 }}>
+          <span style={{ fontFamily: "var(--font-outfit)", fontWeight: 700, fontSize: 18 }}>Couldn&apos;t load Channels.</span>
+          <span style={{ fontSize: 14.5, color: "var(--muted)" }}>{loadError}</span>
+          <button className="ky-btn-ember" onClick={() => { setLoadError(null); setAttempt((a) => a + 1); }} style={{ padding: "11px 20px", fontSize: 14.5, border: "none" }}>
+            Try again
+          </button>
+        </div>
+      </DashboardShell>
+    );
+  }
 
   if (!campaign) {
     return (

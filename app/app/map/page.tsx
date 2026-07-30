@@ -34,17 +34,43 @@ export default function MapPage() {
   const [node, setNode] = useState<string | null>(null);
   const [tab, setTab] = useState<"hypotheses" | "communities" | "contacts">("hypotheses");
   const [stripeSummary, setStripeSummary] = useState<StripeSummary | null>(null);
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const [attempt, setAttempt] = useState(0);
 
   useEffect(() => {
-    fetch("/api/communities").then((r) => r.json()).then((data: Community[]) => {
-      setCommunities(data);
-      if (data[0]) setNode(data[0].key);
-    });
-    fetch("/api/hypotheses").then((r) => r.json()).then(setHypotheses);
-    fetch("/api/leads").then((r) => r.json()).then(setLeads);
-    fetch("/api/campaign").then((r) => r.json()).then(setCampaign);
-    fetch("/api/stripe/summary").then((r) => r.json()).then(setStripeSummary);
-  }, []);
+    let cancelled = false;
+
+    const loadJson = (url: string) => fetch(url).then((r) => r.json().then((data) => ({ ok: r.ok, data })));
+
+    Promise.all([loadJson("/api/communities"), loadJson("/api/hypotheses"), loadJson("/api/leads"), loadJson("/api/campaign")])
+      .then(([communitiesRes, hypothesesRes, leadsRes, campaignRes]) => {
+        if (cancelled) return;
+        const failed = [communitiesRes, hypothesesRes, leadsRes, campaignRes].find((r) => !r.ok);
+        if (failed) {
+          setLoadError(failed.data?.error ?? "Couldn't load Map.");
+          return;
+        }
+        setCommunities(communitiesRes.data);
+        if (communitiesRes.data[0]) setNode(communitiesRes.data[0].key);
+        setHypotheses(hypothesesRes.data);
+        setLeads(leadsRes.data);
+        setCampaign(campaignRes.data);
+      })
+      .catch(() => {
+        if (!cancelled) setLoadError("Couldn't reach the server.");
+      });
+
+    // Revenue is its own, separately-degrading concern (already has "not connected" / "error"
+    // states) — a Stripe hiccup shouldn't block the rest of the page from loading.
+    fetch("/api/stripe/summary")
+      .then((r) => r.json())
+      .then(setStripeSummary)
+      .catch(() => setStripeSummary({ connected: false }));
+
+    return () => {
+      cancelled = true;
+    };
+  }, [attempt]);
 
   const mapNodes = useMemo(() => {
     if (!communities) return [];
@@ -83,6 +109,20 @@ export default function MapPage() {
 
   const contacted = useMemo(() => (leads ?? []).filter((l) => l.status !== "waiting"), [leads]);
 
+  if (loadError) {
+    return (
+      <DashboardShell active="map">
+        <div style={{ padding: "36px 5vw", display: "flex", flexDirection: "column", alignItems: "flex-start", gap: 14 }}>
+          <span style={{ fontFamily: "var(--font-outfit)", fontWeight: 700, fontSize: 18 }}>Couldn&apos;t load Map.</span>
+          <span style={{ fontSize: 14.5, color: "var(--muted)" }}>{loadError}</span>
+          <button className="ky-btn-ember" onClick={() => { setLoadError(null); setAttempt((a) => a + 1); }} style={{ padding: "11px 20px", fontSize: 14.5, border: "none" }}>
+            Try again
+          </button>
+        </div>
+      </DashboardShell>
+    );
+  }
+
   if (!communities || !hypotheses || !leads || !campaign) {
     return (
       <DashboardShell active="map">
@@ -91,7 +131,7 @@ export default function MapPage() {
     );
   }
 
-  const active = communities.find((c) => c.key === node) ?? communities[0];
+  const active = communities.find((c) => c.key === node) ?? communities[0] ?? null;
 
   return (
     <DashboardShell
@@ -324,21 +364,27 @@ export default function MapPage() {
               </div>
 
               <div style={{ display: "flex", flexDirection: "column", gap: 14, minHeight: 0 }}>
-                <div style={{ border: "1px solid var(--border)", borderRadius: 16, padding: 20, display: "flex", flexDirection: "column", gap: 12, background: "var(--card)" }}>
-                  <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10 }}>
-                    <span style={{ fontFamily: "var(--font-outfit)", fontWeight: 700, fontSize: 18, letterSpacing: "-.02em" }}>{active.name}</span>
-                    <span style={{ fontSize: 11.5, fontWeight: 700, color: "var(--muted)", background: "var(--active-bg)", padding: "4px 9px", borderRadius: 999 }}>{active.fit}</span>
+                {active ? (
+                  <div style={{ border: "1px solid var(--border)", borderRadius: 16, padding: 20, display: "flex", flexDirection: "column", gap: 12, background: "var(--card)" }}>
+                    <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10 }}>
+                      <span style={{ fontFamily: "var(--font-outfit)", fontWeight: 700, fontSize: 18, letterSpacing: "-.02em" }}>{active.name}</span>
+                      <span style={{ fontSize: 11.5, fontWeight: 700, color: "var(--muted)", background: "var(--active-bg)", padding: "4px 9px", borderRadius: 999 }}>{active.fit}</span>
+                    </div>
+                    <div style={{ display: "flex", gap: 16, fontSize: 13.5, color: "var(--muted)", flexWrap: "wrap" }}>
+                      <span>{active.members}</span>
+                      <span>{active.reached}</span>
+                      <span style={{ color: "var(--green)", fontWeight: 600 }}>{active.replied}</span>
+                    </div>
+                    <p style={{ margin: 0, fontSize: 14.5, lineHeight: 1.6, color: "var(--ink)" }}>{active.note}</p>
+                    <span style={{ fontSize: 13.5, color: "var(--muted)", borderTop: "1px solid var(--border)", paddingTop: 12 }}>
+                      Attributed: <strong style={{ color: "var(--ink)", fontWeight: 600 }}>{active.rev}</strong>
+                    </span>
                   </div>
-                  <div style={{ display: "flex", gap: 16, fontSize: 13.5, color: "var(--muted)", flexWrap: "wrap" }}>
-                    <span>{active.members}</span>
-                    <span>{active.reached}</span>
-                    <span style={{ color: "var(--green)", fontWeight: 600 }}>{active.replied}</span>
+                ) : (
+                  <div style={{ border: "1px dashed var(--border-strong)", borderRadius: 16, padding: 20, background: "var(--card-alt)" }}>
+                    <span style={{ fontSize: 14.5, color: "var(--muted)", lineHeight: 1.6 }}>No communities confirmed yet — they&apos;ll show up here once the next search finds one.</span>
                   </div>
-                  <p style={{ margin: 0, fontSize: 14.5, lineHeight: 1.6, color: "var(--ink)" }}>{active.note}</p>
-                  <span style={{ fontSize: 13.5, color: "var(--muted)", borderTop: "1px solid var(--border)", paddingTop: 12 }}>
-                    Attributed: <strong style={{ color: "var(--ink)", fontWeight: 600 }}>{active.rev}</strong>
-                  </span>
-                </div>
+                )}
 
                 {!stripeSummary || stripeSummary.connected === false ? (
                   <div style={{ border: "1px dashed var(--border-strong)", borderRadius: 16, padding: 20, display: "flex", flexDirection: "column", gap: 10, background: "var(--card-alt)" }}>

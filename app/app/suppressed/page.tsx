@@ -20,10 +20,28 @@ const REASON_COLORS: Record<SuppressionReason, { color: string; background: stri
 export default function SuppressedPage() {
   const [suppressions, setSuppressions] = useState<Suppression[] | null>(null);
   const [filter, setFilter] = useState<"all" | SuppressionReason>("all");
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const [attempt, setAttempt] = useState(0);
 
   useEffect(() => {
-    fetch("/api/suppressions").then((r) => r.json()).then(setSuppressions);
-  }, []);
+    let cancelled = false;
+    fetch("/api/suppressions")
+      .then((r) => r.json().then((data) => ({ ok: r.ok, data })))
+      .then(({ ok, data }) => {
+        if (cancelled) return;
+        if (!ok) {
+          setLoadError(data.error ?? "Couldn't load Suppressed.");
+          return;
+        }
+        setSuppressions(data);
+      })
+      .catch(() => {
+        if (!cancelled) setLoadError("Couldn't reach the server.");
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [attempt]);
 
   const counts = useMemo(() => {
     const c: Record<SuppressionReason, number> = { unsubscribed: 0, bounced: 0, existing_customer: 0 };
@@ -36,6 +54,20 @@ export default function SuppressedPage() {
     if (filter === "all") return suppressions;
     return suppressions.filter((s) => s.reason === filter);
   }, [suppressions, filter]);
+
+  if (loadError) {
+    return (
+      <DashboardShell active="suppressed">
+        <div style={{ padding: "36px 5vw", display: "flex", flexDirection: "column", alignItems: "flex-start", gap: 14 }}>
+          <span style={{ fontFamily: "var(--font-outfit)", fontWeight: 700, fontSize: 18 }}>Couldn&apos;t load Suppressed.</span>
+          <span style={{ fontSize: 14.5, color: "var(--muted)" }}>{loadError}</span>
+          <button className="ky-btn-ember" onClick={() => { setLoadError(null); setAttempt((a) => a + 1); }} style={{ padding: "11px 20px", fontSize: 14.5, border: "none" }}>
+            Try again
+          </button>
+        </div>
+      </DashboardShell>
+    );
+  }
 
   if (!suppressions) {
     return (

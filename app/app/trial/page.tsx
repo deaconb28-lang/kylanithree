@@ -128,11 +128,44 @@ function TrialInner() {
   const [campaign, setCampaign] = useState<Campaign | null>(null);
   const [links, setLinks] = useState<CheckoutLinks | null>(null);
   const [interval, setInterval] = useState<BillingInterval>("monthly");
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const [attempt, setAttempt] = useState(0);
 
   useEffect(() => {
-    fetch("/api/campaign").then((r) => r.json()).then(setCampaign);
-    fetch("/api/stripe/checkout-links").then((r) => r.json()).then(setLinks);
-  }, []);
+    let cancelled = false;
+    fetch("/api/campaign")
+      .then((r) => r.json().then((data) => ({ ok: r.ok, data })))
+      .then(({ ok, data }) => {
+        if (cancelled) return;
+        if (!ok) {
+          setLoadError(data.error ?? "Couldn't load Trial.");
+          return;
+        }
+        setCampaign(data);
+      })
+      .catch(() => {
+        if (!cancelled) setLoadError("Couldn't reach the server.");
+      });
+    // Non-critical — the plan cards already show "Loading checkout link…" until this resolves.
+    fetch("/api/stripe/checkout-links").then((r) => r.json()).then(setLinks).catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, [attempt]);
+
+  if (loadError) {
+    return (
+      <DashboardShell active="home">
+        <div style={{ padding: "36px 5vw", display: "flex", flexDirection: "column", alignItems: "flex-start", gap: 14 }}>
+          <span style={{ fontFamily: "var(--font-outfit)", fontWeight: 700, fontSize: 18 }}>Couldn&apos;t load Trial.</span>
+          <span style={{ fontSize: 14.5, color: "var(--muted)" }}>{loadError}</span>
+          <button className="ky-btn-ember" onClick={() => { setLoadError(null); setAttempt((a) => a + 1); }} style={{ padding: "11px 20px", fontSize: 14.5, border: "none" }}>
+            Try again
+          </button>
+        </div>
+      </DashboardShell>
+    );
+  }
 
   if (!campaign) {
     return (

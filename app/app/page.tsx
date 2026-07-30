@@ -32,14 +32,55 @@ export default function HomePage() {
   const [findings, setFindings] = useState<Finding[] | null>(null);
   const [campaign, setCampaign] = useState<Campaign | null>(null);
   const [suppressedCount, setSuppressedCount] = useState<number | null>(null);
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const [attempt, setAttempt] = useState(0);
 
   useEffect(() => {
-    fetch("/api/leads").then((r) => r.json()).then(setLeads);
-    fetch("/api/communities").then((r) => r.json()).then(setCommunities);
-    fetch("/api/findings").then((r) => r.json()).then(setFindings);
-    fetch("/api/campaign").then((r) => r.json()).then(setCampaign);
-    fetch("/api/suppressions").then((r) => r.json()).then((list: unknown[]) => setSuppressedCount(list.length));
-  }, []);
+    let cancelled = false;
+
+    const loadJson = (url: string) => fetch(url).then((r) => r.json().then((data) => ({ ok: r.ok, data })));
+
+    Promise.all([loadJson("/api/leads"), loadJson("/api/communities"), loadJson("/api/findings"), loadJson("/api/campaign")])
+      .then(([leadsRes, communitiesRes, findingsRes, campaignRes]) => {
+        if (cancelled) return;
+        const failed = [leadsRes, communitiesRes, findingsRes, campaignRes].find((r) => !r.ok);
+        if (failed) {
+          setLoadError(failed.data?.error ?? "Couldn't load Home.");
+          return;
+        }
+        setLeads(leadsRes.data);
+        setCommunities(communitiesRes.data);
+        setFindings(findingsRes.data.findings);
+        setCampaign(campaignRes.data);
+      })
+      .catch(() => {
+        if (!cancelled) setLoadError("Couldn't reach the server.");
+      });
+
+    // Non-critical for the rest of the page — degrade quietly rather than blocking Home on it.
+    fetch("/api/suppressions")
+      .then((r) => r.json())
+      .then((list: unknown[]) => setSuppressedCount(list.length))
+      .catch(() => setSuppressedCount(null));
+
+    return () => {
+      cancelled = true;
+    };
+  }, [attempt]);
+
+  if (loadError) {
+    return (
+      <DashboardShell active="home">
+        <div style={{ padding: "36px 5vw", display: "flex", flexDirection: "column", alignItems: "flex-start", gap: 14 }}>
+          <span style={{ fontFamily: "var(--font-outfit)", fontWeight: 700, fontSize: 18 }}>Couldn&apos;t load Home.</span>
+          <span style={{ fontSize: 14.5, color: "var(--muted)" }}>{loadError}</span>
+          <button className="ky-btn-ember" onClick={() => { setLoadError(null); setAttempt((a) => a + 1); }} style={{ padding: "11px 20px", fontSize: 14.5, border: "none" }}>
+            Try again
+          </button>
+        </div>
+      </DashboardShell>
+    );
+  }
 
   if (!leads || !communities || !findings || !campaign) {
     return (

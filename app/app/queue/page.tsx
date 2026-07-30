@@ -13,6 +13,8 @@ export default function QueuePage() {
   const [leads, setLeads] = useState<Lead[] | null>(null);
   const [hypotheses, setHypotheses] = useState<Hypothesis[] | null>(null);
   const [campaign, setCampaign] = useState<Campaign | null>(null);
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const [attempt, setAttempt] = useState(0);
   const [filter, setFilter] = useState<string>("all");
   const [selected, setSelected] = useState(0);
   const [editing, setEditing] = useState(false);
@@ -24,16 +26,30 @@ export default function QueuePage() {
   const [suppressPickerOpen, setSuppressPickerOpen] = useState(false);
 
   useEffect(() => {
-    fetch("/api/leads?scope=queue")
-      .then((r) => r.json())
-      .then((data: Lead[]) => setLeads(data));
-    fetch("/api/campaign")
-      .then((r) => r.json())
-      .then(setCampaign);
-    fetch("/api/hypotheses")
-      .then((r) => r.json())
-      .then(setHypotheses);
-  }, []);
+    let cancelled = false;
+
+    const loadJson = (url: string) => fetch(url).then((r) => r.json().then((data) => ({ ok: r.ok, data })));
+
+    Promise.all([loadJson("/api/leads?scope=queue"), loadJson("/api/campaign"), loadJson("/api/hypotheses")])
+      .then(([leadsRes, campaignRes, hypothesesRes]) => {
+        if (cancelled) return;
+        const failed = [leadsRes, campaignRes, hypothesesRes].find((r) => !r.ok);
+        if (failed) {
+          setLoadError(failed.data?.error ?? "Couldn't load Queue.");
+          return;
+        }
+        setLeads(leadsRes.data);
+        setCampaign(campaignRes.data);
+        setHypotheses(hypothesesRes.data);
+      })
+      .catch(() => {
+        if (!cancelled) setLoadError("Couldn't reach the server.");
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [attempt]);
 
   const filtered = useMemo(() => {
     if (!leads) return [];
@@ -54,10 +70,38 @@ export default function QueuePage() {
     </div>
   );
 
-  if (!leads) {
+  if (loadError) {
+    return (
+      <DashboardShell active="queue" bottom={sidebarBottom}>
+        <div style={{ padding: "36px 5vw", display: "flex", flexDirection: "column", alignItems: "flex-start", gap: 14 }}>
+          <span style={{ fontFamily: "var(--font-outfit)", fontWeight: 700, fontSize: 18 }}>Couldn&apos;t load Queue.</span>
+          <span style={{ fontSize: 14.5, color: "var(--muted)" }}>{loadError}</span>
+          <button className="ky-btn-ember" onClick={() => { setLoadError(null); setAttempt((a) => a + 1); }} style={{ padding: "11px 20px", fontSize: 14.5, border: "none" }}>
+            Try again
+          </button>
+        </div>
+      </DashboardShell>
+    );
+  }
+
+  if (!leads || !hypotheses || !campaign) {
     return (
       <DashboardShell active="queue" bottom={sidebarBottom}>
         <div style={{ padding: "36px 5vw", color: "var(--muted)" }}>Loading…</div>
+      </DashboardShell>
+    );
+  }
+
+  if (leads.length === 0) {
+    return (
+      <DashboardShell active="queue" bottom={sidebarBottom}>
+        <div style={{ padding: "36px 5vw", display: "flex", flexDirection: "column", alignItems: "flex-start", gap: 10, maxWidth: 560 }}>
+          <span style={{ fontFamily: "var(--font-outfit)", fontWeight: 700, fontSize: 20 }}>Nothing in Queue yet.</span>
+          <p style={{ margin: 0, fontSize: 15, color: "var(--muted)", lineHeight: 1.6 }}>
+            Every lead here came from a real search — if it hasn&apos;t found anyone yet, there&apos;s nothing to pad the
+            list with. Check Today for anything time-sensitive, or check back once the next search runs.
+          </p>
+        </div>
       </DashboardShell>
     );
   }
