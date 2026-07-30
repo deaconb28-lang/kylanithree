@@ -5,12 +5,16 @@ import { useSearchParams } from "next/navigation";
 import Step1Url from "../../components/onboarding/Step1Url";
 import Step2Reading from "../../components/onboarding/Step2Reading";
 import Step3Buyers from "../../components/onboarding/Step3Buyers";
-import Step4Channels from "../../components/onboarding/Step4Channels";
 import Step5Search from "../../components/onboarding/Step5Search";
 import Step6Complete from "../../components/onboarding/Step6Complete";
 import type { SiteAnalysis } from "../../lib/types";
 import type { ProductCategory } from "../../lib/productCategories";
 import { saveOnboardingResult } from "../../lib/onboardingStorage";
+import { CHANNELS } from "../../lib/data";
+
+// Onboarding no longer asks where to reach people — every matched channel starts on, same as the
+// "Turn on all matched" default, and founders adjust it afterward from the real Channels page.
+const DEFAULT_CHANNELS: Record<string, boolean> = Object.fromEntries(CHANNELS.map((c) => [c.key, c.matched]));
 
 function OnboardingInner() {
   const params = useSearchParams();
@@ -23,7 +27,7 @@ function OnboardingInner() {
   const [analysis, setAnalysis] = useState<SiteAnalysis | null>(null);
   const [whatYouSell, setWhatYouSell] = useState("");
   const [buyers, setBuyers] = useState<{ name: string; desc: string }[]>([]);
-  const [channels, setChannels] = useState<Record<string, boolean>>({});
+  const channels = DEFAULT_CHANNELS;
 
   switch (step) {
     case 1:
@@ -56,15 +60,6 @@ function OnboardingInner() {
           onDone={(finalWhatYouSell, finalBuyers) => {
             setWhatYouSell(finalWhatYouSell);
             setBuyers(finalBuyers);
-            setStep(4);
-          }}
-        />
-      );
-    case 4:
-      return (
-        <Step4Channels
-          onDone={(submittedChannels) => {
-            setChannels(submittedChannels);
             setStep(5);
           }}
         />
