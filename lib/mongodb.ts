@@ -17,7 +17,12 @@ function createClientPromise(): Promise<MongoClient> {
       new Error("MONGODB_URI is not set. Add it in your Vercel project's Environment Variables (or .env.local for dev)."),
     );
   }
-  const client = new MongoClient(process.env.MONGODB_URI);
+  // The driver's default serverSelectionTimeoutMS is 30s — on Vercel that's longer than the
+  // platform's own function timeout (10s on Hobby), so a real connectivity problem (Atlas
+  // Network Access not allowing Vercel's IPs, a paused cluster, a bad URI) used to get killed by
+  // the platform before the driver ever produced its own clear MongoServerSelectionError. Failing
+  // fast here means that error actually reaches our catch blocks and gets logged.
+  const client = new MongoClient(process.env.MONGODB_URI, { serverSelectionTimeoutMS: 8000 });
   return client.connect();
 }
 

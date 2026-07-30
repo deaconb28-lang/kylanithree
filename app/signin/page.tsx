@@ -5,6 +5,25 @@ import { Suspense, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import KylaniLogo from "../../components/icons/KylaniLogo";
 
+// Auth.js error "type" codes, surfaced via a `?error=` param on redirect (e.g. after a failed
+// Google OAuth callback) or in signIn()'s result.error (credentials flow). Mapped to honest
+// copy — the previous version showed nothing for OAuth failures and blamed "wrong password" for
+// every credentials failure including a genuinely unreachable database.
+function messageForErrorCode(code: string): string {
+  switch (code) {
+    case "CredentialsSignin":
+      return "That email and password don't match.";
+    case "OAuthAccountNotLinked":
+      return "That Google account is already linked to a different sign-in method. Try signing in with email and password instead.";
+    case "AccessDenied":
+      return "Google sign-in was cancelled.";
+    default:
+      // CallbackRouteError, AdapterError, Configuration, or anything else — a real backend
+      // problem (most often the database being unreachable), not something the user did wrong.
+      return "Couldn't connect right now — this looks like a problem on our end, not your account. Try again in a bit.";
+  }
+}
+
 function SignInInner() {
   const params = useSearchParams();
   const callbackUrl = params.get("callbackUrl") || "/app";
@@ -12,7 +31,13 @@ function SignInInner() {
   const [mode, setMode] = useState<"signin" | "signup">("signin");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [error, setError] = useState<string | null>(null);
+  // Google sign-in redirects the whole page, so a failed OAuth callback comes back here as a
+  // `?error=<code>` on the very first render rather than through the submit() handler below —
+  // without reading it, that failure used to be completely silent.
+  const [error, setError] = useState<string | null>(() => {
+    const code = params.get("error");
+    return code ? messageForErrorCode(code) : null;
+  });
   const [loading, setLoading] = useState(false);
   const [googleLoading, setGoogleLoading] = useState(false);
 
@@ -37,7 +62,7 @@ function SignInInner() {
 
       const result = await signIn("credentials", { email, password, redirect: false, callbackUrl });
       if (result?.error) {
-        setError("That email and password don't match.");
+        setError(messageForErrorCode(result.error));
         setLoading(false);
         return;
       }

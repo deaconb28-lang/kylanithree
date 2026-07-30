@@ -32,7 +32,18 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         const password = credentials?.password as string | undefined;
         if (!email || !password) return null;
 
-        const db = await getDb();
+        let db;
+        try {
+          db = await getDb();
+        } catch (err) {
+          // A real connectivity failure (bad/missing MONGODB_URI, Atlas Network Access blocking
+          // Vercel, a paused cluster) — log the actual cause here so it's visible in Vercel's
+          // function logs, then rethrow. Returning null instead would surface to the user as
+          // "wrong password", which is wrong and would send them chasing the wrong problem.
+          console.error("[auth/credentials] MongoDB unreachable:", err instanceof Error ? err.message : err);
+          throw new Error("DatabaseUnavailable");
+        }
+
         const user = await db.collection("users").findOne({ email });
         if (!user?.passwordHash) return null;
 
