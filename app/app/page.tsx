@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useEffect, useState } from "react";
 import { useSession } from "next-auth/react";
 import DashboardShell from "../../components/dashboard/DashboardShell";
+import SearchAgainButton from "../../components/dashboard/SearchAgainButton";
 import type { CommunityDoc, FindingDoc, LeadDoc } from "../../lib/collections";
 
 type Lead = LeadDoc & { _id: string };
@@ -170,9 +171,18 @@ export default function HomePage() {
                 </div>
               </div>
             ) : (
-              <div style={{ background: "var(--card)", border: "1px solid var(--border)", borderRadius: 18, padding: "26px 24px", textAlign: "center" }}>
-                <span style={{ fontFamily: "var(--font-outfit)", fontWeight: 700, fontSize: 17 }}>Nothing time-sensitive right now.</span>
-                <p style={{ margin: "6px 0 0", fontSize: 14, color: "var(--muted)" }}>Check Queue for the rest of the backlog whenever you have a minute.</p>
+              <div style={{ background: "var(--card)", border: "1px solid var(--border)", borderRadius: 18, padding: "26px 24px", display: "flex", flexDirection: "column", alignItems: "center", gap: 12, textAlign: "center" }}>
+                <div>
+                  <span style={{ fontFamily: "var(--font-outfit)", fontWeight: 700, fontSize: 17 }}>
+                    {queueWaiting.length === 0 ? "Nothing waiting anywhere yet." : "Nothing time-sensitive right now."}
+                  </span>
+                  <p style={{ margin: "6px 0 0", fontSize: 14, color: "var(--muted)" }}>
+                    {queueWaiting.length === 0
+                      ? "Every lead comes from a real search — run it again to look for more."
+                      : "Check Queue for the rest of the backlog whenever you have a minute."}
+                  </p>
+                </div>
+                {queueWaiting.length === 0 && <SearchAgainButton onDone={() => setAttempt((a) => a + 1)} />}
               </div>
             )}
 

@@ -1,7 +1,7 @@
 import { Campaigns, Communities, Findings, Hypotheses, Leads, Suppressions, type CampaignDoc } from "./collections";
 import { generateCampaignSeed, type GeneratedSeed } from "./generateCampaignSeed";
 
-function slugify(text: string) {
+export function slugify(text: string) {
   return text.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)/g, "") || "buyer";
 }
 
@@ -19,6 +19,80 @@ function productNameFromUrl(url: string): string {
   const host = url.replace(/^https?:\/\//i, "").split("/")[0].replace(/^www\./, "");
   const label = host.split(".")[0] || host;
   return label.charAt(0).toUpperCase() + label.slice(1);
+}
+
+// Shared by finalizeOnboarding (fresh campaign, no dedupe needed) and the "search again" route
+// (an existing campaign, where the model may legitimately re-find the same real post — dedupe
+// against what's already stored rather than inserting it twice).
+export async function persistGeneratedSeed(params: {
+  userId: string;
+  campaignId: string;
+  buyers: { name: string }[];
+  generated: GeneratedSeed;
+  dedupe?: { leadKeys: Set<string>; communityNames: Set<string> };
+}): Promise<{ insertedLeads: number; insertedCommunities: number }> {
+  const now = new Date();
+  const { userId, campaignId: cid, buyers, generated, dedupe } = params;
+
+  const leadsToInsert = dedupe
+    ? generated.leads.filter((l) => !dedupe.leadKeys.has(l.sourceUrl ? `url:${l.sourceUrl}` : `ns:${l.name}|${l.source}`))
+    : generated.leads;
+  const communitiesToInsert = dedupe ? generated.communities.filter((c) => !dedupe.communityNames.has(c.name)) : generated.communities;
+
+  if (leadsToInsert.length) {
+    const leadsCol = await Leads();
+    await leadsCol.insertMany(
+      leadsToInsert.map((l) => {
+        const buyer = buyers[l.buyerIndex] ?? buyers[0];
+        return {
+          userId,
+          campaignId: cid,
+          name: l.name,
+          role: l.role,
+          company: l.company,
+          detail: l.detail,
+          email: l.email ?? undefined,
+          hypothesisKey: slugify(buyer.name),
+          source: l.source,
+          sourceUrl: l.sourceUrl ?? undefined,
+          quote: l.quote ?? undefined,
+          quoteMeta: l.quoteMeta ?? undefined,
+          subject: l.subject,
+          draft: l.draft,
+          status: (l.dropped ? "dropped" : "waiting") as "dropped" | "waiting",
+          timeSensitive: l.dropped ? false : l.timeSensitive,
+          createdAt: now,
+          updatedAt: now,
+        };
+      }),
+    );
+  }
+
+  if (communitiesToInsert.length) {
+    const communitiesCol = await Communities();
+    await communitiesCol.insertMany(
+      communitiesToInsert.map((c, i) => ({
+        userId,
+        campaignId: cid,
+        key: `${slugify(c.name)}-${now.getTime()}-${i}`,
+        name: c.name,
+        mapLabel1: c.name.split("·")[0]?.trim() || c.name,
+        mapLabel2: c.platform,
+        members: c.members,
+        membersNum: parseMembersNum(c.members),
+        fit: c.fit,
+        reached: "0 reached",
+        reachedNum: 0,
+        replied: "0 replied",
+        repliedNum: 0,
+        note: c.note,
+        rev: "no pipeline yet",
+        updatedAt: now,
+      })),
+    );
+  }
+
+  return { insertedLeads: leadsToInsert.length, insertedCommunities: communitiesToInsert.length };
 }
 
 export type OnboardingAnswers = {
@@ -78,60 +152,9 @@ export async function finalizeOnboarding(userId: string, onboarding: OnboardingA
   const cid = campaignId.toString();
 
   // generated.leads/communities can legitimately be empty — generateCampaignSeed only returns
-  // real, verified search results now rather than a fabricated quota, and insertMany throws on
-  // an empty array, so skip the call entirely when there's nothing real to insert.
-  if (generated.leads.length) {
-    const leadsCol = await Leads();
-    await leadsCol.insertMany(
-      generated.leads.map((l) => {
-        const buyer = onboarding.buyers[l.buyerIndex] ?? onboarding.buyers[0];
-        return {
-          userId,
-          campaignId: cid,
-          name: l.name,
-          role: l.role,
-          company: l.company,
-          detail: l.detail,
-          email: l.email ?? undefined,
-          hypothesisKey: slugify(buyer.name),
-          source: l.source,
-          sourceUrl: l.sourceUrl ?? undefined,
-          quote: l.quote ?? undefined,
-          quoteMeta: l.quoteMeta ?? undefined,
-          subject: l.subject,
-          draft: l.draft,
-          status: (l.dropped ? "dropped" : "waiting") as "dropped" | "waiting",
-          timeSensitive: l.dropped ? false : l.timeSensitive,
-          createdAt: now,
-          updatedAt: now,
-        };
-      }),
-    );
-  }
-
-  if (generated.communities.length) {
-    const communitiesCol = await Communities();
-    await communitiesCol.insertMany(
-      generated.communities.map((c, i) => ({
-        userId,
-        campaignId: cid,
-        key: `${slugify(c.name)}-${i}`,
-        name: c.name,
-        mapLabel1: c.name.split("·")[0]?.trim() || c.name,
-        mapLabel2: c.platform,
-        members: c.members,
-        membersNum: parseMembersNum(c.members),
-        fit: c.fit,
-        reached: "0 reached",
-        reachedNum: 0,
-        replied: "0 replied",
-        repliedNum: 0,
-        note: c.note,
-        rev: "no pipeline yet",
-        updatedAt: now,
-      })),
-    );
-  }
+  // real, verified search results now rather than a fabricated quota, so a fresh campaign may
+  // start with zero of either.
+  await persistGeneratedSeed({ userId, campaignId: cid, buyers: onboarding.buyers, generated });
 
   const hypothesesCol = await Hypotheses();
   await hypothesesCol.insertMany(

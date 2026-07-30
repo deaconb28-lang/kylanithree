@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import DashboardShell from "../../../components/dashboard/DashboardShell";
+import SearchAgainButton from "../../../components/dashboard/SearchAgainButton";
 import type { HypothesisDoc, LeadDoc, SuppressionReason } from "../../../lib/collections";
 import { SUPPRESSION_REASON_LABELS, SUPPRESSION_REASONS } from "../../../lib/suppression";
 
@@ -95,12 +96,15 @@ export default function QueuePage() {
   if (leads.length === 0) {
     return (
       <DashboardShell active="queue" bottom={sidebarBottom}>
-        <div style={{ padding: "36px 5vw", display: "flex", flexDirection: "column", alignItems: "flex-start", gap: 10, maxWidth: 560 }}>
-          <span style={{ fontFamily: "var(--font-outfit)", fontWeight: 700, fontSize: 20 }}>Nothing in Queue yet.</span>
-          <p style={{ margin: 0, fontSize: 15, color: "var(--muted)", lineHeight: 1.6 }}>
-            Every lead here came from a real search — if it hasn&apos;t found anyone yet, there&apos;s nothing to pad the
-            list with. Check Today for anything time-sensitive, or check back once the next search runs.
-          </p>
+        <div style={{ padding: "36px 5vw", display: "flex", flexDirection: "column", alignItems: "flex-start", gap: 16, maxWidth: 560 }}>
+          <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+            <span style={{ fontFamily: "var(--font-outfit)", fontWeight: 700, fontSize: 20 }}>Nothing in Queue yet.</span>
+            <p style={{ margin: 0, fontSize: 15, color: "var(--muted)", lineHeight: 1.6 }}>
+              Every lead here came from a real search — if it hasn&apos;t found anyone yet, there&apos;s nothing to pad the
+              list with. Check Today for anything time-sensitive, or run the search again.
+            </p>
+          </div>
+          <SearchAgainButton onDone={() => { setLoadError(null); setAttempt((a) => a + 1); }} />
         </div>
       </DashboardShell>
     );
