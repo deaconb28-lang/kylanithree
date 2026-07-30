@@ -6,6 +6,7 @@ import { useEffect, useState, type ReactNode } from "react";
 import { ChannelsIcon, FindingsIcon, HomeIcon, MapIcon, QueueIcon, SuppressedIcon, TodayIcon } from "../icons/NavIcons";
 import KylaniLogo from "../icons/KylaniLogo";
 import { clearOnboardingResult, readOnboardingResult } from "../../lib/onboardingStorage";
+import { PLAN_COPY } from "../../lib/billing";
 
 type Surface = "home" | "today" | "queue" | "map" | "findings" | "channels" | "suppressed" | "settings";
 
@@ -41,7 +42,7 @@ export default function DashboardShell({
     suppressed: null,
     settings: null,
   });
-  const [product, setProduct] = useState<{ name: string; url: string; trialEndsAt: string | null } | null>(null);
+  const [product, setProduct] = useState<{ name: string; url: string; trialEndsAt: string | null; subscriptionPlan: "pro" | "founder" | null } | null>(null);
   // Starts false whenever onboarding data is still pending finalize, so no descendant page can
   // mount and race its own /api/leads or /api/campaign fetch against the finalize call below —
   // those routes auto-seed generic demo data the instant they see no campaign yet, which used to
@@ -61,8 +62,13 @@ export default function DashboardShell({
   const loadCampaign = () =>
     fetch("/api/campaign")
       .then((r) => r.json())
-      .then((c: { productName: string; productUrl: string; trialEndsAt: string | null }) =>
-        setProduct({ name: c.productName, url: c.productUrl, trialEndsAt: c.trialEndsAt ?? null }),
+      .then((c: { productName: string; productUrl: string; trialEndsAt: string | null; subscription?: { plan: "pro" | "founder"; status: string } }) =>
+        setProduct({
+          name: c.productName,
+          url: c.productUrl,
+          trialEndsAt: c.trialEndsAt ?? null,
+          subscriptionPlan: c.subscription?.status === "active" ? c.subscription.plan : null,
+        }),
       );
   const loadSuppressedCount = () =>
     fetch("/api/suppressions")
@@ -83,7 +89,7 @@ export default function DashboardShell({
           setFinalizeError(data.error ?? "Couldn't build your campaign.");
           return;
         }
-        setProduct({ name: data.productName, url: data.productUrl, trialEndsAt: data.trialEndsAt ?? null });
+        setProduct({ name: data.productName, url: data.productUrl, trialEndsAt: data.trialEndsAt ?? null, subscriptionPlan: null });
         clearOnboardingResult();
         setReady(true);
         loadCounts();
@@ -152,7 +158,8 @@ export default function DashboardShell({
     ? Math.max(0, Math.ceil((new Date(product.trialEndsAt).getTime() - new Date().getTime()) / 86_400_000))
     : null;
   const trialPct = daysLeft !== null ? Math.max(4, Math.min(100, ((7 - daysLeft) / 7) * 100)) : 4;
-  const accountLabel = daysLeft !== null && daysLeft > 0 ? "Trial" : "Active";
+  const subscriptionPlan = product?.subscriptionPlan ?? null;
+  const accountLabel = subscriptionPlan ? PLAN_COPY[subscriptionPlan].name.replace("Kylani ", "") : daysLeft !== null && daysLeft > 0 ? "Trial" : "Trial ended";
   const displayName = session?.user?.name || session?.user?.email?.split("@")[0] || "there";
 
   const renderLink = ({ key, href, label, Icon }: (typeof OUTREACH_NAV)[number]) => {
@@ -250,18 +257,25 @@ export default function DashboardShell({
 
         <div style={{ marginTop: "auto", display: "flex", flexDirection: "column", gap: 12 }}>
           {bottom}
-          {daysLeft !== null && (
-            <div style={{ border: "1px solid var(--border)", borderRadius: 10, padding: "12px 13px", display: "flex", flexDirection: "column", gap: 6, background: "var(--card)" }}>
-              <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between" }}>
-                <span style={{ fontSize: 12.5, color: "var(--muted)" }}>Trial</span>
-                <span style={{ fontSize: 13, fontWeight: 700, color: daysLeft > 0 ? "var(--ember)" : "var(--muted)" }}>
-                  {daysLeft > 0 ? `${daysLeft} day${daysLeft === 1 ? "" : "s"} left` : "Ended"}
-                </span>
-              </div>
-              <div style={{ height: 4, borderRadius: 999, background: "var(--border)", overflow: "hidden" }}>
-                <div style={{ width: `${trialPct}%`, height: "100%", background: "var(--ember)" }} />
-              </div>
-            </div>
+          {subscriptionPlan ? (
+            <Link href="/app/trial" style={{ border: "1px solid var(--border)", borderRadius: 10, padding: "12px 13px", display: "flex", alignItems: "center", justifyContent: "space-between", background: "var(--card)" }}>
+              <span style={{ fontSize: 12.5, color: "var(--muted)" }}>Plan</span>
+              <span style={{ fontSize: 13, fontWeight: 700, color: "var(--green)" }}>{PLAN_COPY[subscriptionPlan].name}</span>
+            </Link>
+          ) : (
+            daysLeft !== null && (
+              <Link href="/app/trial" style={{ border: "1px solid var(--border)", borderRadius: 10, padding: "12px 13px", display: "flex", flexDirection: "column", gap: 6, background: "var(--card)" }}>
+                <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between" }}>
+                  <span style={{ fontSize: 12.5, color: "var(--muted)" }}>Trial</span>
+                  <span style={{ fontSize: 13, fontWeight: 700, color: daysLeft > 0 ? "var(--ember)" : "var(--muted)" }}>
+                    {daysLeft > 0 ? `${daysLeft} day${daysLeft === 1 ? "" : "s"} left` : "Ended"}
+                  </span>
+                </div>
+                <div style={{ height: 4, borderRadius: 999, background: "var(--border)", overflow: "hidden" }}>
+                  <div style={{ width: `${trialPct}%`, height: "100%", background: "var(--ember)" }} />
+                </div>
+              </Link>
+            )
           )}
           <div style={{ borderTop: "1px solid var(--border)", paddingTop: 12, display: "flex", alignItems: "center", gap: 10, padding: "12px 6px 0" }}>
             <div style={{ width: 28, height: 28, borderRadius: 999, background: "#E8EEFF", flexShrink: 0, display: "grid", placeItems: "center", fontSize: 12, fontWeight: 700, color: "#4A5D8A" }}>

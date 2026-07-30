@@ -85,6 +85,20 @@ export interface StripeConnection {
   connectedAt?: Date;
 }
 
+// This is Kylani's OWN subscription billing (Pro/Founder, via the platform's Stripe account and
+// its real Payment Links — see lib/billing.ts) — a completely separate concept from
+// StripeConnection above, which is a founder connecting THEIR OWN Stripe account so Map can show
+// their real product revenue. Never conflate the two.
+export interface SubscriptionInfo {
+  plan: "pro" | "founder";
+  interval: "monthly" | "annual";
+  status: "active" | "past_due" | "canceled" | "incomplete";
+  stripeCustomerId: string;
+  stripeSubscriptionId: string;
+  currentPeriodEnd?: Date;
+  updatedAt: Date;
+}
+
 export interface CampaignDoc {
   userId: string;
   productName: string;
@@ -96,9 +110,10 @@ export interface CampaignDoc {
   channels: Record<string, boolean>;
   stats: CampaignStats;
   stripe?: StripeConnection;
+  subscription?: SubscriptionInfo;
   // 7 days from campaign creation. Real, not decorative — used to drive the sidebar's trial pill
-  // and the Trial page. There's no billing/subscription system behind it yet (see HANDOFF.md), so
-  // nothing gates or charges when it lapses.
+  // and the Trial page. Doesn't gate access on its own (see lib/billing.ts / the Trial page for
+  // the real subscription state that now exists alongside it).
   trialEndsAt: Date;
   createdAt: Date;
   updatedAt: Date;

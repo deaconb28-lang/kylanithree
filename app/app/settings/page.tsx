@@ -5,6 +5,7 @@ import { Suspense, useEffect, useState } from "react";
 import { useSession } from "next-auth/react";
 import { useSearchParams } from "next/navigation";
 import DashboardShell from "../../../components/dashboard/DashboardShell";
+import { DAILY_CAP_MAX, PLAN_COPY, type SubscriptionPlan } from "../../../lib/billing";
 
 type Campaign = {
   productName: string;
@@ -13,6 +14,7 @@ type Campaign = {
   paused: boolean;
   channels: Record<string, boolean>;
   stripe?: { connected: boolean };
+  subscription?: { plan: SubscriptionPlan; interval: "monthly" | "annual"; status: "active" | "past_due" | "canceled" | "incomplete" };
 };
 
 function StripeNotice() {
@@ -80,6 +82,26 @@ export default function SettingsPage() {
         <Suspense fallback={null}>
           <StripeNotice />
         </Suspense>
+
+        <div style={{ border: "1px solid var(--border)", borderRadius: 16, padding: "22px 24px", display: "flex", alignItems: "center", justifyContent: "space-between", gap: 16, background: "var(--card)", flexWrap: "wrap" }}>
+          <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+            <span style={{ fontFamily: "var(--font-outfit)", fontWeight: 700, fontSize: 17 }}>Plan &amp; billing</span>
+            <span style={{ fontSize: 14, color: "var(--muted)" }}>
+              {campaign.subscription?.status === "active"
+                ? `${PLAN_COPY[campaign.subscription.plan].name}, billed ${campaign.subscription.interval}.`
+                : "No active subscription — see plans and trial status."}
+            </span>
+          </div>
+          {campaign.subscription?.status === "active" ? (
+            <a href="/api/stripe/portal" className="ky-btn-outline" style={{ padding: "10px 16px", fontSize: 14, fontWeight: 600, whiteSpace: "nowrap" }}>
+              Manage billing
+            </a>
+          ) : (
+            <Link href="/app/trial" className="ky-btn-ember" style={{ padding: "11px 18px", fontSize: 14, fontWeight: 600, border: "none", whiteSpace: "nowrap" }}>
+              View plans
+            </Link>
+          )}
+        </div>
 
         <div style={{ border: "1px solid var(--border)", borderRadius: 16, padding: "22px 24px", display: "flex", flexDirection: "column", gap: 14, background: "var(--card)" }}>
           <span style={{ fontFamily: "var(--font-outfit)", fontWeight: 700, fontSize: 17 }}>Sending inbox</span>
@@ -158,7 +180,7 @@ export default function SettingsPage() {
             <input
               type="range"
               min={5}
-              max={60}
+              max={campaign.subscription?.status === "active" ? DAILY_CAP_MAX[campaign.subscription.plan] : DAILY_CAP_MAX.trial}
               step={5}
               value={campaign.dailyCap}
               onChange={(e) => setCampaign((c) => (c ? { ...c, dailyCap: Number(e.target.value) } : c))}
@@ -168,6 +190,9 @@ export default function SettingsPage() {
             />
             <span style={{ fontFamily: "var(--font-outfit)", fontWeight: 700, fontSize: 18, width: 70, textAlign: "right" }}>{campaign.dailyCap}/day</span>
           </div>
+          {campaign.subscription?.status !== "active" && (
+            <span style={{ fontSize: 12.5, color: "var(--muted)" }}>Founder plans can go up to {DAILY_CAP_MAX.founder}/day.</span>
+          )}
         </div>
 
         <Link
