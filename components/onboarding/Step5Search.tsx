@@ -39,6 +39,32 @@ export default function Step5Search({
   const [error, setError] = useState<string | null>(null);
   const [attempt, setAttempt] = useState(0);
   const advancedRef = useRef(false);
+  const notifiedRef = useRef(false);
+  const notificationSupported = typeof window !== "undefined" && "Notification" in window;
+  const [notifyPermission, setNotifyPermission] = useState<NotificationPermission | "unsupported">(
+    notificationSupported ? Notification.permission : "unsupported",
+  );
+
+  const requestNotifications = () => {
+    if (!notificationSupported) return;
+    Notification.requestPermission().then(setNotifyPermission);
+  };
+
+  // Fires once, whichever happens first — lets someone actually leave the tab instead of
+  // babysitting the timer. Only real if permission is actually "granted"; otherwise this is a
+  // no-op and the on-screen copy says so instead of pretending it'll ping them.
+  useEffect(() => {
+    if (notifyPermission !== "granted" || notifiedRef.current) return;
+    if (seed) {
+      notifiedRef.current = true;
+      const n = new Notification("Your leads are ready", { body: `Found ${seed.leads.length} real lead${seed.leads.length === 1 ? "" : "s"} — come take a look.` });
+      n.onclick = () => window.focus();
+    } else if (error) {
+      notifiedRef.current = true;
+      const n = new Notification("The search hit a snag", { body: error });
+      n.onclick = () => window.focus();
+    }
+  }, [seed, error, notifyPermission]);
 
   // Real elapsed time — one tick per real second, no compression.
   useEffect(() => {
@@ -84,6 +110,7 @@ export default function Step5Search({
   const retry = () => {
     setError(null);
     advancedRef.current = false;
+    notifiedRef.current = false;
     setAttempt((a) => a + 1);
   };
 
@@ -153,9 +180,26 @@ export default function Step5Search({
               ))}
             </div>
           )}
-          <span style={{ fontSize: 14, color: "var(--muted)" }}>
-            {seed ? "Taking you to your first drafts…" : "Or close this — I'll email you when the first batch is drafted."}
-          </span>
+          {seed ? (
+            <span style={{ fontSize: 14, color: "var(--muted)" }}>Taking you to your first drafts…</span>
+          ) : notifyPermission === "granted" ? (
+            <span style={{ fontSize: 14, color: "var(--green)", fontWeight: 600 }}>
+              🔔 I&apos;ll notify you the moment it&apos;s done — feel free to switch tabs.
+            </span>
+          ) : notifyPermission === "denied" ? (
+            <span style={{ fontSize: 14, color: "var(--muted)" }}>
+              Notifications are blocked in your browser — you can leave this tab open, it&apos;ll finish on its own.
+            </span>
+          ) : notifyPermission === "unsupported" ? (
+            <span style={{ fontSize: 14, color: "var(--muted)" }}>You can leave this tab open — it&apos;ll finish on its own.</span>
+          ) : (
+            <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
+              <button className="ky-btn-outline" onClick={requestNotifications} style={{ padding: "10px 16px", fontSize: 14, fontWeight: 600 }}>
+                🔔 Notify me when it&apos;s done
+              </button>
+              <span style={{ fontSize: 14, color: "var(--muted)" }}>Then feel free to switch tabs.</span>
+            </div>
+          )}
         </div>
 
         <div style={{ background: "var(--card)", border: "1px solid var(--border)", borderRadius: 16, padding: 24, display: "flex", flexDirection: "column", gap: 16, boxShadow: "0 1px 2px rgba(20,18,15,.05), 0 22px 46px -24px rgba(20,18,15,.18)", height: "fit-content" }}>
