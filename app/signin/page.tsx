@@ -3,6 +3,7 @@
 import { signIn } from "next-auth/react";
 import { Suspense, useState } from "react";
 import { useSearchParams } from "next/navigation";
+import Link from "next/link";
 import KylaniLogo from "../../components/icons/KylaniLogo";
 
 // Auth.js error "type" codes, surfaced via a `?error=` param on redirect (e.g. after a failed
@@ -100,10 +101,10 @@ function SignInInner() {
           boxShadow: "0 1px 2px rgba(20,18,15,.06), 0 24px 60px -20px rgba(20,18,15,.18)",
         }}
       >
-        <div style={{ display: "flex", alignItems: "center", gap: 9 }}>
+        <Link href="/" style={{ display: "flex", alignItems: "center", gap: 9 }}>
           <KylaniLogo size={30} />
-          <span style={{ fontFamily: "var(--font-outfit)", fontWeight: 700, fontSize: 20 }}>Kylani</span>
-        </div>
+          <span style={{ fontFamily: "var(--font-outfit)", fontWeight: 700, fontSize: 20, color: "var(--ink)" }}>Kylani</span>
+        </Link>
         <div style={{ display: "flex", flexDirection: "column", gap: 8, textAlign: "center" }}>
           <h1 style={{ fontFamily: "var(--font-outfit)", fontWeight: 800, fontSize: 26, letterSpacing: "-.02em", margin: 0 }}>
             {mode === "signin" ? "Sign in to Kylani" : "Create your Kylani account"}

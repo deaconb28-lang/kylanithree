@@ -42,10 +42,10 @@ export default function ClosingFooter() {
         </a>
       </div>
       <div style={{ position: "relative", padding: "40px 5vw 44px", display: "flex", alignItems: "center", justifyContent: "space-between", fontSize: 14, color: "var(--muted)", flexWrap: "wrap", gap: 16 }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+        <Link href="/" style={{ display: "flex", alignItems: "center", gap: 8, color: "inherit" }}>
           <KylaniLogo size={22} />
           <span>Kylani · your first sales hire</span>
-        </div>
+        </Link>
         <div style={{ display: "flex", gap: 26, flexWrap: "wrap" }}>
           <Link href="/about" className="ky-link">About</Link>
           <Link href="/privacy" className="ky-link">Privacy</Link>

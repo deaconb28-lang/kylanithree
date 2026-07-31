@@ -129,6 +129,28 @@ button {
     transform: none;
   }
 }
+@keyframes kyShimmer {
+  0%, 100% { opacity: .5; }
+  50% { opacity: 1; }
+}
+@keyframes kyScan {
+  0% { transform: translateY(-30px); }
+  100% { transform: translateY(150px); }
+}
+@keyframes kyOrbit {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+@keyframes kyGlow {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(228,87,46,.35); }
+  50% { box-shadow: 0 0 0 8px rgba(228,87,46,0); }
+}
+@keyframes kyShake {
+  10%, 90% { transform: translateX(-1px); }
+  20%, 80% { transform: translateX(2px); }
+  30%, 50%, 70% { transform: translateX(-4px); }
+  40%, 60% { transform: translateX(4px); }
+}
 
 @media (prefers-reduced-motion: reduce) {
   .ky-track-a,

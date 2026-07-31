@@ -13,6 +13,11 @@ export const maxDuration = 60;
 const AnalysisSchema = z.object({
   whatYouSell: z.string().describe("Exactly one short sentence (under 20 words) describing the product, the way a founder would say it out loud."),
   problem: z.string().describe("Exactly one sentence (under 25 words) naming the specific problem this product removes for its buyer."),
+  siteSummary: z
+    .string()
+    .describe(
+      "A real, specific 2-3 sentence summary (hard limit 60 words) of what you actually found reading and researching this site — like a sharp colleague's quick take, not marketing copy. Mention what it does, who it's clearly built for, and one concrete, specific detail you noticed (a pricing model, a design choice, a feature, a tone) that shows you actually looked rather than guessed. Never generic filler like 'this is a great tool for businesses' — be as specific as the evidence allows.",
+    ),
   buyers: z
     .array(
       z.object({

@@ -9,6 +9,7 @@ export type SiteBuyer = {
 export type SiteAnalysis = {
   whatYouSell: string;
   problem: string;
+  siteSummary: string;
   buyers: SiteBuyer[];
   keywords: string[];
 };

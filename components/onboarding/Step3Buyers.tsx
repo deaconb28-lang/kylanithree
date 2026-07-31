@@ -14,7 +14,7 @@ type Buyer = {
   editing?: boolean;
 };
 
-const DEFAULT_PROBLEM = "This product removes a recurring, expensive problem for a specific buyer.";
+const DEFAULT_SUMMARY = "I read your site and matched it against a few real buyers — correct anything that's off.";
 const DEFAULT_SELL = "Describe what you sell in a sentence.";
 
 export default function Step3Buyers({
@@ -27,7 +27,7 @@ export default function Step3Buyers({
   const [buyers, setBuyers] = useState<Buyer[]>(() => (analysis?.buyers ?? []).map((b) => ({ ...b, dropped: false })));
   const [whatYouSell, setWhatYouSell] = useState(analysis?.whatYouSell ?? DEFAULT_SELL);
   const [editingSell, setEditingSell] = useState(false);
-  const problem = analysis?.problem ?? DEFAULT_PROBLEM;
+  const siteSummary = analysis?.siteSummary ?? DEFAULT_SUMMARY;
 
   return (
     <OnboardingChrome align="stretch">
@@ -35,11 +35,12 @@ export default function Step3Buyers({
         <div style={{ display: "flex", alignItems: "flex-end", justifyContent: "space-between", gap: 40, flexWrap: "wrap" }}>
           <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
             <h1 style={{ fontFamily: "var(--font-outfit)", fontWeight: 800, fontSize: "clamp(28px,4vw,40px)", lineHeight: 1.06, letterSpacing: "-.03em", margin: 0 }}>
-              Here&apos;s who I think buys this.
+              Is this your audience?
             </h1>
             <p style={{ margin: 0, fontSize: 16.5, color: "var(--muted-strong)", lineHeight: 1.55, maxWidth: 640 }}>
-              {problem} Guesses ordered most likely first. Correct anything — I&apos;ll search for what you keep.
+              {siteSummary}
             </p>
+            <span style={{ fontSize: 13.5, color: "var(--muted)" }}>Guesses ordered most likely first — correct anything, I&apos;ll search for what you keep.</span>
           </div>
           <div style={{ display: "flex", gap: 10, alignItems: "center", flexShrink: 0 }}>
             <button

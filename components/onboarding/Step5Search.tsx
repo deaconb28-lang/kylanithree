@@ -2,20 +2,24 @@
 
 import { useEffect, useRef, useState } from "react";
 import OnboardingChrome from "./OnboardingChrome";
+import ScanningWindow from "./ScanningWindow";
 import type { ProductCategory } from "../../lib/productCategories";
 import type { GeneratedSeed } from "../../lib/generateCampaignSeed";
 
 // Generic stages of the real search architecture in lib/generateCampaignSeed.ts — not fake
 // progress, just labels for work that's genuinely happening behind one longer API call. Advanced
 // on a rough time budget rather than real server progress, since the API call itself doesn't
-// stream intermediate steps back.
+// stream intermediate steps back. Turning buyer hypotheses into search queries happens
+// synchronously, instantly, the moment this screen mounts (see expandSearchQueries) — it's
+// deliberately not shown as a visible step here, so every stage on screen reads as real-time
+// search work already underway rather than slow setup.
 const STAGES = [
-  "Turning your buyer hypotheses into real search queries",
-  "Searching Reddit, Slack, Discord, and forums for people describing the problem",
-  "Checking job boards for postings that name the same pain",
-  "Matching what it finds back to your buyer personas",
+  "Matching communities where these buyers actually hang out",
+  "Searching Reddit, forums, and job boards for real signal",
+  "Cross-checking specific threads and listings it found",
+  "Writing first-draft replies anchored to what they said",
 ];
-const SECONDS_PER_STAGE = 12;
+const SECONDS_PER_STAGE = 8;
 
 export default function Step5Search({
   url,
@@ -80,17 +84,33 @@ export default function Step5Search({
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ url, whatYouSell, buyers, channels, category, keywords }),
     })
-      .then((res) => res.json().then((data) => ({ ok: res.ok, data })))
+      .then(async (res) => {
+        // A response that isn't valid JSON (a platform timeout/gateway error page, not our own
+        // route's own error handling) is a genuinely different failure than a dropped connection
+        // — distinguish them instead of always blaming "the server" for what's really a timeout.
+        let data: { error?: string } | GeneratedSeed;
+        try {
+          data = await res.json();
+        } catch {
+          throw new Error(res.ok ? "PARSE_ERROR" : `HTTP_${res.status}`);
+        }
+        return { ok: res.ok, data };
+      })
       .then(({ ok, data }) => {
         if (cancelled) return;
         if (!ok) {
-          setError(data.error ?? "Couldn't search for real leads right now.");
+          setError((data as { error?: string }).error ?? "Couldn't search for real leads right now.");
           return;
         }
         setSeed(data as GeneratedSeed);
       })
-      .catch(() => {
-        if (!cancelled) setError("Couldn't reach the server.");
+      .catch((err) => {
+        if (cancelled) return;
+        setError(
+          err instanceof Error && /^(PARSE_ERROR|HTTP_)/.test(err.message)
+            ? "That took longer than expected and timed out. Try again — most searches finish well within a minute."
+            : "Couldn't reach the server — check your connection and try again.",
+        );
       });
     return () => {
       cancelled = true;
@@ -143,11 +163,14 @@ export default function Step5Search({
             <span style={{ width: 9, height: 9, borderRadius: 999, background: "var(--ember)", animation: "kyPulse 1.6s ease-in-out infinite" }} />
             Searching for real {(buyers[0]?.name || "buyers").toLowerCase()} right now
           </div>
-          <div style={{ display: "flex", alignItems: "baseline", gap: 18, flexWrap: "wrap" }}>
-            <span style={{ fontFamily: "var(--font-outfit)", fontWeight: 800, fontSize: "clamp(48px,7vw,92px)", lineHeight: 0.9, letterSpacing: "-.045em", fontVariantNumeric: "tabular-nums" }}>
-              {clock}
-            </span>
-            <span style={{ fontSize: 17, color: "var(--muted)" }}>{seed ? "search complete" : "elapsed — this is a real, live web search"}</span>
+          <div style={{ display: "flex", alignItems: "center", gap: 22, flexWrap: "wrap" }}>
+            <div style={{ display: "flex", alignItems: "baseline", gap: 18, flexWrap: "wrap" }}>
+              <span style={{ fontFamily: "var(--font-outfit)", fontWeight: 800, fontSize: "clamp(48px,7vw,92px)", lineHeight: 0.9, letterSpacing: "-.045em", fontVariantNumeric: "tabular-nums" }}>
+                {clock}
+              </span>
+              <span style={{ fontSize: 17, color: "var(--muted)" }}>{seed ? "search complete" : "elapsed — this is a real, live web search"}</span>
+            </div>
+            {!seed && <ScanningWindow label={`${buyers[0]?.name || "buyers"} · live`} accent="var(--ember)" />}
           </div>
           <div style={{ background: "rgba(253,252,250,.86)", border: "1px solid var(--border)", borderRadius: 14, padding: 8, display: "flex", flexDirection: "column", gap: 2 }}>
             {STAGES.map((stage, i) => {
@@ -193,11 +216,28 @@ export default function Step5Search({
           ) : notifyPermission === "unsupported" ? (
             <span style={{ fontSize: 14, color: "var(--muted)" }}>You can leave this tab open — it&apos;ll finish on its own.</span>
           ) : (
-            <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
-              <button className="ky-btn-outline" onClick={requestNotifications} style={{ padding: "10px 16px", fontSize: 14, fontWeight: 600 }}>
-                🔔 Notify me when it&apos;s done
+            <div
+              style={{
+                display: "flex",
+                alignItems: "center",
+                gap: 16,
+                flexWrap: "wrap",
+                border: "1px solid #F3D9BE",
+                background: "#FFF8F1",
+                borderRadius: 14,
+                padding: "14px 18px",
+              }}
+            >
+              <button
+                onClick={requestNotifications}
+                className="ky-btn-ember"
+                style={{ padding: "12px 20px", fontSize: 14.5, border: "none", whiteSpace: "nowrap", animation: "kyGlow 2.2s ease-in-out infinite" }}
+              >
+                🔔 Notify me the second it&apos;s ready
               </button>
-              <span style={{ fontSize: 14, color: "var(--muted)" }}>Then feel free to switch tabs.</span>
+              <span style={{ fontSize: 13.5, color: "var(--muted-strong)", lineHeight: 1.4 }}>
+                Go grab a coffee — I&apos;ll ping you the instant real leads are in, no need to babysit this screen.
+              </span>
             </div>
           )}
         </div>

@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import Link from "next/link";
 import { useHeroDemo } from "./useHeroDemo";
 import { useUrlCycle } from "./useUrlCycle";
 import KylaniLogo from "../icons/KylaniLogo";
@@ -14,8 +15,18 @@ export default function Hero() {
   const [typedUrl, setTypedUrl] = useState("");
   const router = useRouter();
 
+  const [shake, setShake] = useState(false);
+
   const goToOnboarding = () => {
-    const value = typedUrl.trim() || url;
+    // The rotating placeholder is only ever a hint, never a real submission — the demo cycling
+    // through dockside.app/fathom.dev/etc. used to get silently submitted as the URL if someone
+    // clicked without typing (the placeholder looks enough like real content to skim past).
+    const value = typedUrl.trim();
+    if (!value) {
+      setShake(true);
+      setTimeout(() => setShake(false), 500);
+      return;
+    }
     router.push(`/onboarding?url=${encodeURIComponent(value)}`);
   };
 
@@ -33,10 +44,10 @@ export default function Hero() {
       />
 
       <nav style={{ position: "relative", display: "flex", alignItems: "center", justifyContent: "space-between", padding: "26px 5vw", flexWrap: "wrap", gap: 16 }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 9 }}>
+        <Link href="/" style={{ display: "flex", alignItems: "center", gap: 9 }}>
           <KylaniLogo size={28} />
-          <span style={{ fontFamily: "var(--font-outfit)", fontWeight: 700, fontSize: 19, letterSpacing: "-.01em" }}>Kylani</span>
-        </div>
+          <span style={{ fontFamily: "var(--font-outfit)", fontWeight: 700, fontSize: 19, letterSpacing: "-.01em", color: "var(--ink)" }}>Kylani</span>
+        </Link>
         <div className="ky-hide-mobile" style={{ display: "flex", alignItems: "center", gap: 34, fontSize: 15, color: "var(--muted)" }}>
           <a href="#how" className="ky-link">How it works</a>
           <a href="#findings" className="ky-link">Findings</a>
@@ -67,20 +78,35 @@ export default function Hero() {
             buying.
           </p>
           <div style={{ display: "flex", flexDirection: "column", gap: 16, maxWidth: 560 }}>
-            <div style={{ display: "flex", gap: 10, background: "var(--card)", border: "1px solid var(--border)", borderRadius: 14, padding: "8px 8px 8px 20px", alignItems: "center", boxShadow: "0 1px 2px rgba(20,18,15,.05), 0 12px 28px -14px rgba(20,18,15,.16)" }}>
+            <div
+              style={{
+                display: "flex",
+                gap: 10,
+                background: "var(--card)",
+                border: shake ? "1px solid var(--ember)" : "1px solid var(--border)",
+                borderRadius: 14,
+                padding: "8px 8px 8px 20px",
+                alignItems: "center",
+                boxShadow: "0 1px 2px rgba(20,18,15,.05), 0 12px 28px -14px rgba(20,18,15,.16)",
+                animation: shake ? "kyShake .5s" : undefined,
+              }}
+            >
               <input
                 value={typedUrl}
                 onChange={(e) => setTypedUrl(e.target.value)}
                 onKeyDown={(e) => {
                   if (e.key === "Enter") goToOnboarding();
                 }}
-                placeholder={url}
+                placeholder={`e.g. ${url}`}
                 style={{ fontSize: 17, color: "var(--ink)", flex: 1, overflow: "hidden", border: "none", outline: "none", background: "transparent", fontFamily: "inherit" }}
               />
               <button onClick={goToOnboarding} className="ky-btn-ember" style={{ padding: "13px 24px", fontSize: 16, border: "none", whiteSpace: "nowrap" }}>
                 Find my buyers free
               </button>
             </div>
+            {shake && (
+              <span style={{ fontSize: 13.5, color: "var(--ember)", marginTop: -10 }}>Paste your own URL first — that&apos;s just an example.</span>
+            )}
             <div style={{ display: "flex", alignItems: "center", gap: 18, flexWrap: "wrap" }}>
               <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
                 <div style={{ display: "flex" }}>

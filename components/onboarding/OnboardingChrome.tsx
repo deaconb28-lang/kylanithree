@@ -1,4 +1,5 @@
 import type { ReactNode } from "react";
+import Link from "next/link";
 import KylaniLogo from "../icons/KylaniLogo";
 
 export default function OnboardingChrome({
@@ -23,10 +24,10 @@ export default function OnboardingChrome({
           }}
         />
       )}
-      <div style={{ position: "absolute", top: 26, left: 32, display: "flex", alignItems: "center", gap: 8 }}>
+      <Link href="/" style={{ position: "absolute", top: 26, left: 32, display: "flex", alignItems: "center", gap: 8, zIndex: 20, color: "var(--ink)" }}>
         <KylaniLogo size={26} />
         <span style={{ fontFamily: "var(--font-outfit)", fontWeight: 700, fontSize: 17 }}>Kylani</span>
-      </div>
+      </Link>
       <div
         className="ky-fade-in"
         style={{

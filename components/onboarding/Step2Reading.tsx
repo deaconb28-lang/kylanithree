@@ -2,14 +2,20 @@
 
 import { useEffect, useRef, useState } from "react";
 import OnboardingChrome from "./OnboardingChrome";
+import ScanningWindow from "./ScanningWindow";
 import type { SiteAnalysis } from "../../lib/types";
 import type { ProductCategory } from "../../lib/productCategories";
 
+// Paced by real elapsed time rather than a fixed script — a typical real analysis (site fetch +
+// a handful of web searches at low effort) lands around this window. The checklist advances at
+// roughly these real seconds and then holds on the last item — pulsing, not stalled-looking —
+// until the actual fetch resolves, instead of racing through 4 fake steps in under 4 seconds and
+// then sitting frozen on a "done" checklist for the next 15-20s of real work.
 const ITEMS = [
-  { text: "Read the site — pages, pricing, and the changelog", secs: "11s" },
-  { text: "Named the problem it removes", secs: "6s" },
-  { text: "Deciding which roles carry that problem", secs: null },
-  { text: "Drafting buyer hypotheses for you to correct", secs: null },
+  { text: "Reading the site — pages, pricing, and the changelog", atSecond: 0 },
+  { text: "Naming the problem it removes", atSecond: 6 },
+  { text: "Deciding which roles carry that problem", atSecond: 12 },
+  { text: "Drafting buyer hypotheses for you to correct", atSecond: 17 },
 ];
 
 export default function Step2Reading({
@@ -23,11 +29,19 @@ export default function Step2Reading({
   category: ProductCategory;
   onDone: (analysis: SiteAnalysis) => void;
 }) {
-  const [done, setDone] = useState(0);
+  const [seconds, setSeconds] = useState(0);
   const [error, setError] = useState<string | null>(null);
   const [attempt, setAttempt] = useState(0);
+  const [fetchDone, setFetchDone] = useState(false);
   const resultRef = useRef<SiteAnalysis | null>(null);
   const fetchDoneRef = useRef(false);
+  const advancedRef = useRef(false);
+
+  useEffect(() => {
+    const start = Date.now();
+    const id = setInterval(() => setSeconds(Math.floor((Date.now() - start) / 1000)), 1000);
+    return () => clearInterval(id);
+  }, [attempt]);
 
   useEffect(() => {
     let cancelled = false;
@@ -38,20 +52,36 @@ export default function Step2Reading({
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ url, note, category }),
     })
-      .then((res) => res.json().then((data) => ({ ok: res.ok, data })))
+      .then(async (res) => {
+        let data: { error?: string } | SiteAnalysis;
+        try {
+          data = await res.json();
+        } catch {
+          throw new Error(res.ok ? "PARSE_ERROR" : `HTTP_${res.status}`);
+        }
+        return { ok: res.ok, data };
+      })
       .then(({ ok, data }) => {
         if (cancelled) return;
         if (!ok) {
-          setError(data.error ?? "Couldn't analyze that site.");
+          setError((data as { error?: string }).error ?? "Couldn't analyze that site.");
           return;
         }
         resultRef.current = data as SiteAnalysis;
       })
-      .catch(() => {
-        if (!cancelled) setError("Couldn't reach the server.");
+      .catch((err) => {
+        if (cancelled) return;
+        setError(
+          err instanceof Error && /^(PARSE_ERROR|HTTP_)/.test(err.message)
+            ? "That took longer than expected and timed out. Try again — most reads finish in under a minute."
+            : "Couldn't reach the server — check your connection and try again.",
+        );
       })
       .finally(() => {
-        if (!cancelled) fetchDoneRef.current = true;
+        if (!cancelled) {
+          fetchDoneRef.current = true;
+          setFetchDone(true);
+        }
       });
     return () => {
       cancelled = true;
@@ -60,32 +90,40 @@ export default function Step2Reading({
   }, [attempt]);
 
   useEffect(() => {
-    if (error) return;
-    if (done >= ITEMS.length) {
-      if (fetchDoneRef.current) {
-        if (!resultRef.current) return; // an error just landed on this same tick — let the error branch render
-        const result = resultRef.current;
-        const t = setTimeout(() => onDone(result), 500);
-        return () => clearTimeout(t);
-      }
-      const t = setInterval(() => {
-        if (fetchDoneRef.current && resultRef.current) {
-          clearInterval(t);
-          onDone(resultRef.current);
-        }
-      }, 200);
-      return () => clearInterval(t);
+    if (error || advancedRef.current) return;
+    if (fetchDoneRef.current && resultRef.current) {
+      advancedRef.current = true;
+      const result = resultRef.current;
+      const t = setTimeout(() => onDone(result), 400);
+      return () => clearTimeout(t);
     }
-    const t = setTimeout(() => setDone((d) => d + 1), 900);
-    return () => clearTimeout(t);
+    const t = setInterval(() => {
+      if (fetchDoneRef.current && resultRef.current && !advancedRef.current) {
+        advancedRef.current = true;
+        clearInterval(t);
+        onDone(resultRef.current);
+      }
+    }, 200);
+    return () => clearInterval(t);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [done, error]);
+  }, [seconds, error]);
 
   const retry = () => {
     setError(null);
-    setDone(0);
+    setFetchDone(false);
+    advancedRef.current = false;
     setAttempt((a) => a + 1);
   };
+
+  // The item whose atSecond threshold we've most recently crossed is "current" (pulsing); once
+  // the real fetch resolves, everything snaps to complete regardless of elapsed time — reached
+  // the last item's time and the fetch is still running holds there rather than racing ahead of
+  // what's actually true.
+  let currentIndex = 0;
+  for (let i = 0; i < ITEMS.length; i++) {
+    if (seconds >= ITEMS[i].atSecond) currentIndex = i;
+  }
+  const done = fetchDone ? ITEMS.length : currentIndex;
 
   if (error) {
     return (
@@ -105,7 +143,7 @@ export default function Step2Reading({
 
   return (
     <OnboardingChrome>
-      <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 34, maxWidth: 680, textAlign: "center" }}>
+      <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 28, maxWidth: 680, textAlign: "center" }}>
         <div style={{ display: "flex", alignItems: "center", gap: 12, fontSize: 15, color: "var(--muted)" }}>
           <span style={{ width: 9, height: 9, borderRadius: 999, background: "var(--ember)", animation: "kyPulse 1.8s ease-in-out infinite" }} />
           Reading {url}
@@ -113,6 +151,9 @@ export default function Step2Reading({
         <h1 style={{ fontFamily: "var(--font-outfit)", fontWeight: 800, fontSize: "clamp(26px,4vw,44px)", lineHeight: 1.06, letterSpacing: "-.03em", margin: 0 }}>
           Working out what you sell and who has the problem.
         </h1>
+
+        <ScanningWindow label={`${url} · ${seconds}s`} />
+
         <div style={{ width: "100%", maxWidth: 620, display: "flex", flexDirection: "column", gap: 2, background: "rgba(253,252,250,.86)", border: "1px solid var(--border)", borderRadius: 14, padding: 8, boxShadow: "0 1px 2px rgba(20,18,15,.05), 0 18px 40px -22px rgba(20,18,15,.18)" }}>
           {ITEMS.map((item, i) => {
             const complete = i < done;
@@ -127,7 +168,6 @@ export default function Step2Reading({
                   <span style={{ width: 18, height: 18, borderRadius: 999, border: "2px solid var(--border-strong)", boxSizing: "border-box", flexShrink: 0 }} />
                 )}
                 <span style={{ fontSize: 15.5, flex: 1, textAlign: "left", fontWeight: current ? 500 : 400 }}>{item.text}</span>
-                {complete && item.secs && <span style={{ fontSize: 13, color: "var(--muted)" }}>{item.secs}</span>}
               </div>
             );
           })}

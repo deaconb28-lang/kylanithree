@@ -222,10 +222,10 @@ export default function DashboardShell({
           boxSizing: "border-box",
         }}
       >
-        <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "0 6px" }}>
+        <Link href="/app" style={{ display: "flex", alignItems: "center", gap: 8, padding: "0 6px" }}>
           <KylaniLogo size={26} />
-          <span style={{ fontFamily: "var(--font-outfit)", fontWeight: 700, fontSize: 17 }}>Kylani</span>
-        </div>
+          <span style={{ fontFamily: "var(--font-outfit)", fontWeight: 700, fontSize: 17, color: "var(--ink)" }}>Kylani</span>
+        </Link>
 
         <div
           style={{

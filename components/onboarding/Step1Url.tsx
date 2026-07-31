@@ -1,19 +1,20 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import OnboardingChrome from "./OnboardingChrome";
 import { PRODUCT_CATEGORIES, type ProductCategory } from "../../lib/productCategories";
 
-const FLASH_WORDS = ["product", "newsletter", "design", "business", "app"];
-
-function useWordFlash(words: string[], intervalMs = 1800) {
-  const [i, setI] = useState(0);
-  useEffect(() => {
-    const id = setInterval(() => setI((n) => (n + 1) % words.length), intervalMs);
-    return () => clearInterval(id);
-  }, [words, intervalMs]);
-  return words[i];
-}
+// The headline word matches whichever category button the user actually clicked — it used to
+// cycle on its own timer regardless of the selected category, which read as disconnected from the
+// picker right below it (the header could say "newsletter" while "App" was highlighted).
+const HEADLINE_WORD: Record<ProductCategory, string> = {
+  newsletter: "newsletter",
+  culture: "culture",
+  app: "app",
+  design: "design",
+  physical: "product",
+  other: "business",
+};
 
 export default function Step1Url({
   onSubmit,
@@ -24,7 +25,7 @@ export default function Step1Url({
   const [note, setNote] = useState("");
   const [showNote, setShowNote] = useState(false);
   const [category, setCategory] = useState<ProductCategory>("app");
-  const flashWord = useWordFlash(FLASH_WORDS);
+  const flashWord = HEADLINE_WORD[category];
 
   return (
     <OnboardingChrome>

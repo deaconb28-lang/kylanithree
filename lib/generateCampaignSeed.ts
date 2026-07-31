@@ -88,7 +88,7 @@ export async function generateCampaignSeed(input: {
     model: "claude-opus-5",
     max_tokens: 12000,
     thinking: { type: "adaptive" },
-    tools: [{ type: "web_search_20260209", name: "web_search", max_uses: 16 }],
+    tools: [{ type: "web_search_20260209", name: "web_search", max_uses: 8 }],
     system:
       "You are Kylani, a lead-gen assistant. Given a product and its buyer personas, use the web_search tool to actually " +
       "find REAL communities and REAL people who match the buyer personas and show a real, current signal of the " +
@@ -120,7 +120,9 @@ export async function generateCampaignSeed(input: {
       "early; a handful of unproductive searches is expected and fine. Try to cover more than just the single top " +
       "buyer persona if you have budget left — a real lead for a secondary persona beats a fourth search repeating " +
       "the first one. " +
-      "You have up to 16 searches across both phases — use as many as genuinely useful rather than stopping early. " +
+      "You're working under a tight time budget — you have up to 8 searches across both phases, so spend them on the " +
+      "most promising candidates from the pool above rather than spreading thin. Use as many as genuinely useful " +
+      "rather than stopping after just one or two, but don't expect to exhaustively cover every channel. " +
       categoryGuidance(input.category) +
       " Every field has a hard length limit in its description — those are strict maximums, not suggestions. " +
       "Write like sparse UI copy, not a report: short, punchy, no run-on sentences or sub-clauses.",
