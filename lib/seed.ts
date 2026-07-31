@@ -29,14 +29,20 @@ export async function persistGeneratedSeed(params: {
   campaignId: string;
   buyers: { name: string }[];
   generated: GeneratedSeed;
-  dedupe?: { leadKeys: Set<string>; communityNames: Set<string> };
+  dedupe?: { authors: Set<string>; communityNames: Set<string> };
 }): Promise<{ insertedLeads: number; insertedCommunities: number }> {
   const now = new Date();
   const { userId, campaignId: cid, buyers, generated, dedupe } = params;
 
-  const leadsToInsert = dedupe
-    ? generated.leads.filter((l) => !dedupe.leadKeys.has(l.sourceUrl ? `url:${l.sourceUrl}` : `ns:${l.name}|${l.source}`))
-    : generated.leads;
+  // Dedupe by AUTHOR, not by URL — one person is one lead however many posts or venues surfaced
+  // them. URL-keyed dedupe let the same person in twice from two different threads.
+  const seenAuthors = new Set(dedupe ? [...dedupe.authors].map((a) => a.toLowerCase()) : []);
+  const leadsToInsert = generated.leads.filter((l) => {
+    const key = l.author.toLowerCase();
+    if (seenAuthors.has(key)) return false;
+    seenAuthors.add(key);
+    return true;
+  });
   const communitiesToInsert = dedupe ? generated.communities.filter((c) => !dedupe.communityNames.has(c.name)) : generated.communities;
 
   if (leadsToInsert.length) {
@@ -47,20 +53,27 @@ export async function persistGeneratedSeed(params: {
         return {
           userId,
           campaignId: cid,
-          name: l.name,
-          role: l.role,
-          company: l.company,
-          detail: l.detail,
-          email: l.email ?? undefined,
-          hypothesisKey: slugify(buyer.name),
-          source: l.source,
-          sourceUrl: l.sourceUrl ?? undefined,
-          quote: l.quote ?? undefined,
-          quoteMeta: l.quoteMeta ?? undefined,
-          subject: l.subject,
-          draft: l.draft,
-          status: (l.dropped ? "dropped" : "waiting") as "dropped" | "waiting",
-          timeSensitive: l.dropped ? false : l.timeSensitive,
+          name: l.author,
+          role: buyer?.name ?? "Unknown",
+          company: l.venueName,
+          detail: l.excerpt.slice(0, 90),
+          hypothesisKey: slugify(buyer?.name ?? "buyer"),
+          source: l.venueName,
+          sourceUrl: l.permalink,
+          quote: l.excerpt,
+          quoteMeta: `${l.numComments} comment${l.numComments === 1 ? "" : "s"} · ${l.score} points`,
+          // Written on demand via /api/leads/[id]/draft — deliberately not composed during search.
+          subject: "",
+          draft: "",
+          status: "waiting" as const,
+          timeSensitive: l.intentTier === "seeking",
+          authorHandle: l.author,
+          permalink: l.permalink,
+          postedAt: l.postedAt,
+          excerpt: l.excerpt,
+          intentTier: l.intentTier,
+          venueId: l.venueId,
+          signalScore: l.confidence,
           createdAt: now,
           updatedAt: now,
         };
@@ -78,8 +91,9 @@ export async function persistGeneratedSeed(params: {
         name: c.name,
         mapLabel1: c.name.split("·")[0]?.trim() || c.name,
         mapLabel2: c.platform,
-        members: c.members,
-        membersNum: parseMembersNum(c.members),
+        members: c.membersLabel,
+        // Real subscriber count from the platform now, so no string-parsing guesswork.
+        membersNum: c.members ?? parseMembersNum(c.membersLabel),
         fit: c.fit,
         reached: "0 reached",
         reachedNum: 0,
@@ -98,10 +112,18 @@ export async function persistGeneratedSeed(params: {
 export type OnboardingAnswers = {
   url: string;
   whatYouSell: string;
+  problem?: string;
   buyers: { name: string; desc: string }[];
   channels: Record<string, boolean>;
   category?: string;
   keywords?: string[];
+  // The lexicon from analyze-site — stored on the campaign so a later re-search reuses the same
+  // vocabulary and niche cache rather than re-deriving a coarser one from `keywords` alone.
+  nicheKey?: string;
+  problemPhrases?: string[];
+  seekingPhrases?: string[];
+  negativeTerms?: string[];
+  relevanceWindowDays?: number;
   // Populated when Step5Search already ran the real lead search during onboarding (the normal
   // path) — finalizeOnboarding then just persists it instead of searching a second time. Falls
   // back to searching here itself if a client ever arrives without one (e.g. an old session).
@@ -136,6 +158,12 @@ export async function finalizeOnboarding(userId: string, onboarding: OnboardingA
     revenueBase: 0,
     channels: onboarding.channels,
     keywords: onboarding.keywords,
+    problem: onboarding.problem,
+    nicheKey: onboarding.nicheKey,
+    problemPhrases: onboarding.problemPhrases,
+    seekingPhrases: onboarding.seekingPhrases,
+    negativeTerms: onboarding.negativeTerms,
+    relevanceWindowDays: onboarding.relevanceWindowDays,
     stats: {
       sentToday: 0,
       buyersTotal: generated.leads.length,

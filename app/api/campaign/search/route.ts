@@ -34,13 +34,21 @@ export async function POST() {
     const generated = await generateCampaignSeed({
       url: campaign.productUrl,
       whatYouSell: campaign.whatYouSell,
+      problem: campaign.problem,
       buyers,
       channels: campaign.channels,
       keywords: campaign.keywords,
+      nicheKey: campaign.nicheKey,
+      problemPhrases: campaign.problemPhrases,
+      seekingPhrases: campaign.seekingPhrases,
+      negativeTerms: campaign.negativeTerms,
+      relevanceWindowDays: campaign.relevanceWindowDays,
     });
 
+    // Author-keyed, matching persistGeneratedSeed — a re-search that re-finds the same person in a
+    // different thread must not create a second lead for them.
     const dedupe = {
-      leadKeys: new Set(existingLeads.map((l) => (l.sourceUrl ? `url:${l.sourceUrl}` : `ns:${l.name}|${l.source}`))),
+      authors: new Set(existingLeads.map((l) => (l.authorHandle ?? l.name).toLowerCase())),
       communityNames: new Set(existingCommunities.map((c) => c.name)),
     };
 

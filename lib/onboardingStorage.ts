@@ -8,6 +8,14 @@ export type OnboardingResult = {
   channels: Record<string, boolean>;
   category?: ProductCategory;
   keywords?: string[];
+  // Carried across the sign-in redirect so finalize stores the same lexicon the search actually
+  // used — a later re-search then reuses it rather than re-deriving a coarser one.
+  problem?: string;
+  nicheKey?: string;
+  problemPhrases?: string[];
+  seekingPhrases?: string[];
+  negativeTerms?: string[];
+  relevanceWindowDays?: number;
   // The real, already-completed lead search from Step5Search — see lib/seed.ts's
   // finalizeOnboarding, which persists this instead of searching again post-signin.
   seed?: GeneratedSeed;

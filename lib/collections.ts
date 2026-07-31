@@ -2,6 +2,10 @@ import { getDb } from "./mongodb";
 
 export type LeadStatus = "waiting" | "approved" | "dropped" | "sent" | "replied";
 
+// How strongly this person is expressing the problem right now. Assigned by the scoring stage
+// from the real post text, not guessed — see lib/search/score.ts.
+export type IntentTier = "seeking" | "complaining" | "adjacent";
+
 export interface LeadDoc {
   userId: string;
   campaignId: string;
@@ -15,6 +19,8 @@ export interface LeadDoc {
   sourceUrl?: string;
   quote?: string;
   quoteMeta?: string;
+  // subject/draft are written on demand (/api/leads/[id]/draft), not during search — composing
+  // outreach used to sit on the critical path of every search and dominated its latency.
   subject: string;
   draft: string;
   draftMeta?: string;
@@ -23,8 +29,37 @@ export interface LeadDoc {
   status: LeadStatus;
   timeSensitive: boolean;
   feedback?: "landed" | "missed";
+  // --- evidence: every field below comes from the platform itself, never from a model, which is
+  // what makes a lead checkable rather than merely asserted.
+  authorHandle?: string;
+  permalink?: string;
+  postedAt?: Date;
+  excerpt?: string; // verified to be a literal span of the real post body
+  intentTier?: IntentTier;
+  venueId?: string;
+  signalScore?: number;
   createdAt: Date;
   updatedAt: Date;
+}
+
+// One row per search run, so a thin result set can be diagnosed after the fact instead of
+// reproduced by guesswork: which stage lost the candidates, and why.
+export interface SearchRunDoc {
+  userId?: string;
+  campaignId?: string;
+  runId: string;
+  nicheKey?: string;
+  stages: {
+    stage: string;
+    candidatesIn: number;
+    candidatesOut: number;
+    ms: number;
+    drops: Record<string, number>;
+    note?: string;
+  }[];
+  totalMs: number;
+  leadsShipped: number;
+  createdAt: Date;
 }
 
 export interface CommunityDoc {
@@ -112,6 +147,14 @@ export interface CampaignDoc {
   // kept so a later re-search (see /api/campaign/search) can reuse them instead of falling back
   // to a generic placeholder.
   keywords?: string[];
+  // The full search lexicon from onboarding. Stored so a re-search reuses the same vocabulary,
+  // niche cache entry, and relevance window rather than re-deriving a coarser one from `keywords`.
+  problem?: string;
+  nicheKey?: string;
+  problemPhrases?: string[];
+  seekingPhrases?: string[];
+  negativeTerms?: string[];
+  relevanceWindowDays?: number;
   stats: CampaignStats;
   stripe?: StripeConnection;
   subscription?: SubscriptionInfo;
@@ -159,4 +202,7 @@ export async function Findings() {
 }
 export async function Suppressions() {
   return (await getDb()).collection<SuppressionDoc>("suppressions");
+}
+export async function SearchRuns() {
+  return (await getDb()).collection<SearchRunDoc>("searchRuns");
 }

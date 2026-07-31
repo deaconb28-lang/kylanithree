@@ -1,0 +1,19 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "noEmit": false,
+    "outDir": ".test-build",
+    "module": "esnext",
+    "moduleResolution": "bundler",
+    "target": "es2022",
+    "jsx": "react-jsx",
+    "rootDir": "."
+  },
+  "include": [
+    "lib/search/filter.ts",
+    "lib/search/ranking.ts",
+    "lib/search/reddit.ts",
+    "lib/search/types.ts",
+    "lib/search/trace.ts"
+  ]
+}

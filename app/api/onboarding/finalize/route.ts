@@ -24,10 +24,16 @@ export async function POST(req: NextRequest) {
     const { campaign, isNew } = await finalizeOnboarding(userId, {
       url: body.url,
       whatYouSell: body.whatYouSell,
+      problem: body.problem,
       buyers: body.buyers,
       channels: body.channels,
       category: body.category,
       keywords: body.keywords,
+      nicheKey: body.nicheKey,
+      problemPhrases: body.problemPhrases,
+      seekingPhrases: body.seekingPhrases,
+      negativeTerms: body.negativeTerms,
+      relevanceWindowDays: body.relevanceWindowDays,
       seed: body.seed,
     });
 

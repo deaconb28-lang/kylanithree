@@ -5,23 +5,18 @@ import OnboardingChrome from "./OnboardingChrome";
 import ScanningWindow from "./ScanningWindow";
 import type { ProductCategory } from "../../lib/productCategories";
 import type { GeneratedSeed } from "../../lib/generateCampaignSeed";
+import type { ScoredLead, Venue } from "../../lib/search/types";
+import type { SiteAnalysis } from "../../lib/types";
 import { useNotificationPermission } from "../../lib/useNotificationPermission";
 
-// Two real phases now (see lib/generateCampaignSeed.ts + the search-communities/search-people
-// routes): communities first, people second, each its own request so it fits comfortably inside
-// Vercel's 60s ceiling instead of racing one long combined call against it. The first stage
-// completes on a real event (the communities fetch resolving) rather than a guess; the remaining
-// three are time-paced within phase 2 the same way the old single-call version paced all four,
-// since the people search itself doesn't stream finer-grained progress back.
-const STAGES = [
-  "Matching communities where these buyers actually hang out",
-  "Searching Reddit, forums, and job boards for real signal",
-  "Cross-checking specific threads and listings it found",
-  "Writing first-draft replies anchored to what they said",
-];
-const SECONDS_PER_STAGE = 7;
+// Orchestrates the real two-phase pipeline from the client, which is what makes results stream.
+// Venues resolve first and render the moment they land — communities ARE the first result, not a
+// loading state for one. Extraction then runs as several parallel shards, each its own request, so
+// leads appear in batches as they confirm and no single request has to fit the whole run inside
+// Vercel's function ceiling.
+const VENUES_PER_SHARD = 3;
 
-type Phase = "communities" | "people" | "done";
+type Phase = "venues" | "leads" | "done";
 
 export default function Step5Search({
   url,
@@ -29,7 +24,7 @@ export default function Step5Search({
   buyers,
   channels,
   category,
-  keywords,
+  analysis,
   onDone,
 }: {
   url: string;
@@ -37,99 +32,132 @@ export default function Step5Search({
   buyers: { name: string; desc: string }[];
   channels: Record<string, boolean>;
   category: ProductCategory;
-  keywords: string[];
+  analysis: SiteAnalysis | null;
   onDone: (seed: GeneratedSeed) => void;
 }) {
   const [seconds, setSeconds] = useState(0);
-  const secondsRef = useRef(0);
-  const [phase, setPhase] = useState<Phase>("communities");
-  const [phase2StartSecond, setPhase2StartSecond] = useState<number | null>(null);
-  const [communities, setCommunities] = useState<GeneratedSeed["communities"] | null>(null);
-  const [leads, setLeads] = useState<GeneratedSeed["leads"] | null>(null);
+  const [phase, setPhase] = useState<Phase>("venues");
+  const [venues, setVenues] = useState<Venue[] | null>(null);
+  const [leads, setLeads] = useState<ScoredLead[]>([]);
+  const [shardsDone, setShardsDone] = useState(0);
+  const [shardTotal, setShardTotal] = useState(0);
   const [error, setError] = useState<string | null>(null);
   const [attempt, setAttempt] = useState(0);
   const advancedRef = useRef(false);
   const notifiedRef = useRef(false);
   const { permission: notifyPermission, request: requestNotifications } = useNotificationPermission();
 
-  const seed: GeneratedSeed | null = useMemo(() => (communities && leads ? { communities, leads } : null), [communities, leads]);
+  const searchPayload = useMemo(
+    () => ({
+      url,
+      whatYouSell,
+      problem: analysis?.problem,
+      buyers,
+      channels,
+      category,
+      keywords: analysis?.keywords,
+      nicheKey: analysis?.nicheKey,
+      problemPhrases: analysis?.problemPhrases,
+      seekingPhrases: analysis?.seekingPhrases,
+      negativeTerms: analysis?.negativeTerms,
+      relevanceWindowDays: analysis?.relevanceWindowDays,
+    }),
+    [url, whatYouSell, buyers, channels, category, analysis],
+  );
 
-  // Fires once, whichever happens first — lets someone actually leave the tab instead of
-  // babysitting the timer. Only real if permission is actually "granted"; otherwise this is a
-  // no-op and the on-screen copy says so instead of pretending it'll ping them.
   useEffect(() => {
     if (notifyPermission !== "granted" || notifiedRef.current) return;
-    if (seed) {
+    if (phase === "done") {
       notifiedRef.current = true;
-      const n = new Notification("Your leads are ready", { body: `Found ${seed.leads.length} real lead${seed.leads.length === 1 ? "" : "s"} — come take a look.` });
+      const n = new Notification("Your leads are ready", { body: `Found ${leads.length} real lead${leads.length === 1 ? "" : "s"} — come take a look.` });
       n.onclick = () => window.focus();
     } else if (error) {
       notifiedRef.current = true;
       const n = new Notification("The search hit a snag", { body: error });
       n.onclick = () => window.focus();
     }
-  }, [seed, error, notifyPermission]);
+  }, [phase, leads.length, error, notifyPermission]);
 
-  // Real elapsed time — one tick per real second, no compression.
   useEffect(() => {
     const start = Date.now();
-    const id = setInterval(() => {
-      const next = Math.floor((Date.now() - start) / 1000);
-      secondsRef.current = next;
-      setSeconds(next);
-    }, 1000);
+    const id = setInterval(() => setSeconds(Math.floor((Date.now() - start) / 1000)), 1000);
     return () => clearInterval(id);
   }, [attempt]);
 
   useEffect(() => {
     let cancelled = false;
 
-    const parseJson = async (res: Response) => {
+    const readJson = async (res: Response) => {
       try {
         return { ok: res.ok, data: await res.json() };
       } catch {
         throw new Error(res.ok ? "PARSE_ERROR" : `HTTP_${res.status}`);
       }
     };
-    const timeoutMessage = (err: unknown) =>
-      err instanceof Error && /^(PARSE_ERROR|HTTP_)/.test(err.message)
-        ? "That took longer than expected and timed out. Try again — most searches finish well within a minute."
-        : "Couldn't reach the server — check your connection and try again.";
 
     (async () => {
       try {
-        const communitiesRes = await fetch("/api/onboarding/search-communities", {
+        const venuesRes = await fetch("/api/onboarding/resolve-venues", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ url, whatYouSell, buyers, channels, category, keywords }),
+          body: JSON.stringify(searchPayload),
         });
-        const { ok: communitiesOk, data: communitiesData } = await parseJson(communitiesRes);
+        const { ok: venuesOk, data: venuesData } = await readJson(venuesRes);
         if (cancelled) return;
-        if (!communitiesOk) {
-          setError((communitiesData as { error?: string }).error ?? "Couldn't search for real communities right now.");
+        if (!venuesOk) {
+          setError((venuesData as { error?: string }).error ?? "Couldn't work out where your buyers gather.");
           return;
         }
-        const foundCommunities = (communitiesData as { communities: GeneratedSeed["communities"] }).communities;
-        setCommunities(foundCommunities);
-        setPhase("people");
-        setPhase2StartSecond(secondsRef.current);
+        const found = (venuesData as { venues: Venue[] }).venues ?? [];
+        setVenues(found);
+        setPhase("leads");
 
-        const peopleRes = await fetch("/api/onboarding/search-people", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ url, whatYouSell, buyers, channels, category, keywords, communities: foundCommunities }),
-        });
-        const { ok: peopleOk, data: peopleData } = await parseJson(peopleRes);
-        if (cancelled) return;
-        if (!peopleOk) {
-          setError((peopleData as { error?: string }).error ?? "Couldn't search for real leads right now.");
+        const searchable = found.filter((v) => v.searchable);
+        if (searchable.length === 0) {
+          setPhase("done");
           return;
         }
-        setLeads((peopleData as { leads: GeneratedSeed["leads"] }).leads);
-        setPhase("done");
+
+        const shards: Venue[][] = [];
+        for (let i = 0; i < searchable.length; i += VENUES_PER_SHARD) {
+          shards.push(searchable.slice(i, i + VENUES_PER_SHARD));
+        }
+        setShardTotal(shards.length);
+
+        // Fired together, rendered as each resolves. A shard that fails or times out costs its own
+        // venues only — the rest of the run is unaffected, which is the whole point of sharding.
+        await Promise.all(
+          shards.map(async (shard) => {
+            try {
+              const res = await fetch("/api/onboarding/extract-leads", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ ...searchPayload, venues: shard }),
+              });
+              const { ok, data } = await readJson(res);
+              if (cancelled || !ok) return;
+              const batch = (data as { leads: ScoredLead[] }).leads ?? [];
+              setLeads((prev) => {
+                // Author-dedupe across shards — the same person can surface in two communities.
+                const seen = new Set(prev.map((l) => l.author.toLowerCase()));
+                return [...prev, ...batch.filter((l) => !seen.has(l.author.toLowerCase()))];
+              });
+            } catch {
+              // Swallowed on purpose: a dead shard degrades the result set, it never fails the run.
+            } finally {
+              if (!cancelled) setShardsDone((n) => n + 1);
+            }
+          }),
+        );
+
+        if (!cancelled) setPhase("done");
       } catch (err) {
         if (cancelled) return;
-        setError(timeoutMessage(err));
+        setError(
+          err instanceof Error && /^(PARSE_ERROR|HTTP_)/.test(err.message)
+            ? "That took longer than expected and timed out. Try again — most searches finish well within a minute."
+            : "Couldn't reach the server — check your connection and try again.",
+        );
       }
     })();
 
@@ -140,20 +168,21 @@ export default function Step5Search({
   }, [attempt]);
 
   useEffect(() => {
-    if (seed && !advancedRef.current) {
+    if (phase === "done" && !advancedRef.current) {
       advancedRef.current = true;
-      const t = setTimeout(() => onDone(seed), 1400);
+      const t = setTimeout(() => onDone({ leads, communities: venues ?? [] }), 1600);
       return () => clearTimeout(t);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [seed]);
+  }, [phase]);
 
   const retry = () => {
     setError(null);
-    setCommunities(null);
-    setLeads(null);
-    setPhase("communities");
-    setPhase2StartSecond(null);
+    setVenues(null);
+    setLeads([]);
+    setShardsDone(0);
+    setShardTotal(0);
+    setPhase("venues");
     advancedRef.current = false;
     notifiedRef.current = false;
     setAttempt((a) => a + 1);
@@ -161,15 +190,23 @@ export default function Step5Search({
 
   const clock = Math.floor(seconds / 60) + ":" + String(seconds % 60).padStart(2, "0");
 
-  // Stage 0 completes on the real communities-fetch resolving (phase !== "communities"), not a
-  // guess. Stages 1-3 are time-paced from the moment phase 2 actually started, same rationale as
-  // the old single-call version — the people search doesn't stream finer-grained progress back.
-  const phase2Elapsed = phase2StartSecond === null ? 0 : seconds - phase2StartSecond;
-  const stageIndex = seed
-    ? STAGES.length
-    : phase === "communities"
-      ? 0
-      : Math.min(STAGES.length - 1, 1 + Math.floor(phase2Elapsed / SECONDS_PER_STAGE));
+  const stages: { label: string; state: "done" | "active" | "pending" }[] = [
+    {
+      label: venues ? `Found ${venues.length} communities where these buyers gather` : "Finding the communities where these buyers gather",
+      state: venues ? "done" : "active",
+    },
+    {
+      label:
+        shardTotal > 0
+          ? `Reading real posts inside them (${shardsDone}/${shardTotal} batches)`
+          : "Reading real posts inside them",
+      state: phase === "done" ? "done" : phase === "leads" ? "active" : "pending",
+    },
+    {
+      label: leads.length ? `Verified ${leads.length} real ${leads.length === 1 ? "person" : "people"} with a live problem` : "Verifying who has a live problem right now",
+      state: phase === "done" ? "done" : leads.length ? "active" : "pending",
+    },
+  ];
 
   if (error) {
     return (
@@ -202,71 +239,57 @@ export default function Step5Search({
               <span style={{ fontFamily: "var(--font-outfit)", fontWeight: 800, fontSize: "clamp(48px,7vw,92px)", lineHeight: 0.9, letterSpacing: "-.045em", fontVariantNumeric: "tabular-nums" }}>
                 {clock}
               </span>
-              <span style={{ fontSize: 17, color: "var(--muted)" }}>{seed ? "search complete" : "elapsed — this is a real, live web search"}</span>
+              <span style={{ fontSize: 17, color: "var(--muted)" }}>{phase === "done" ? "search complete" : "elapsed — this is a real, live search"}</span>
             </div>
-            {!seed && <ScanningWindow label={`${buyers[0]?.name || "buyers"} · live`} accent="var(--ember)" />}
+            {phase !== "done" && <ScanningWindow label={`${buyers[0]?.name || "buyers"} · live`} accent="var(--ember)" />}
           </div>
+
           <div style={{ background: "rgba(253,252,250,.86)", border: "1px solid var(--border)", borderRadius: 14, padding: 8, display: "flex", flexDirection: "column", gap: 2 }}>
-            {STAGES.map((stage, i) => {
-              const complete = i < stageIndex || !!seed;
-              const current = i === stageIndex && !seed;
-              return (
-                <div key={stage} style={{ display: "flex", alignItems: "center", gap: 12, padding: "13px 14px", borderRadius: 10, background: current ? "#F7F3EE" : "transparent", opacity: i > stageIndex && !seed ? 0.45 : 1 }}>
-                  {complete ? (
-                    <span style={{ width: 18, height: 18, borderRadius: 999, background: "var(--green)", display: "grid", placeItems: "center", color: "#fff", fontSize: 11, fontWeight: 700, flexShrink: 0 }}>✓</span>
-                  ) : current ? (
-                    <span style={{ width: 18, height: 18, borderRadius: 999, border: "2px solid var(--ember)", boxSizing: "border-box", animation: "kyPulse 1.4s ease-in-out infinite", flexShrink: 0 }} />
-                  ) : (
-                    <span style={{ width: 18, height: 18, borderRadius: 999, border: "2px solid var(--border-strong)", boxSizing: "border-box", flexShrink: 0 }} />
-                  )}
-                  <span style={{ fontSize: 15.5, flex: 1, textAlign: "left", fontWeight: current ? 500 : 400 }}>{stage}</span>
-                </div>
-              );
-            })}
+            {stages.map((s) => (
+              <div key={s.label} style={{ display: "flex", alignItems: "center", gap: 12, padding: "13px 14px", borderRadius: 10, background: s.state === "active" ? "#F7F3EE" : "transparent", opacity: s.state === "pending" ? 0.45 : 1 }}>
+                {s.state === "done" ? (
+                  <span style={{ width: 18, height: 18, borderRadius: 999, background: "var(--green)", display: "grid", placeItems: "center", color: "#fff", fontSize: 11, fontWeight: 700, flexShrink: 0 }}>✓</span>
+                ) : s.state === "active" ? (
+                  <span style={{ width: 18, height: 18, borderRadius: 999, border: "2px solid var(--ember)", boxSizing: "border-box", animation: "kyPulse 1.4s ease-in-out infinite", flexShrink: 0 }} />
+                ) : (
+                  <span style={{ width: 18, height: 18, borderRadius: 999, border: "2px solid var(--border-strong)", boxSizing: "border-box", flexShrink: 0 }} />
+                )}
+                <span style={{ fontSize: 15.5, flex: 1, textAlign: "left", fontWeight: s.state === "active" ? 500 : 400 }}>{s.label}</span>
+              </div>
+            ))}
           </div>
-          {seed && (
-            <div style={{ display: "flex", gap: 14, flexWrap: "wrap" }}>
-              {[
-                { v: seed.leads.length, l: "real leads found" },
-                { v: seed.communities.length, l: "communities confirmed" },
-              ].map((s) => (
-                <div key={s.l} style={{ flex: "1 1 140px", background: "rgba(253,252,250,.86)", border: "1px solid var(--border)", borderRadius: 14, padding: 20 }}>
-                  <div style={{ fontFamily: "var(--font-outfit)", fontWeight: 800, fontSize: 42, letterSpacing: "-.035em", fontVariantNumeric: "tabular-nums" }}>{s.v}</div>
-                  <div style={{ fontSize: 14, color: "var(--muted)" }}>{s.l}</div>
+
+          {leads.length > 0 && (
+            <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+              <span style={{ fontFamily: "var(--font-outfit)", fontWeight: 700, fontSize: 15, letterSpacing: ".08em", textTransform: "uppercase", color: "var(--muted)" }}>
+                People found
+              </span>
+              {leads.slice(0, 5).map((l) => (
+                <div key={l.id} className="ky-fade-in" style={{ background: "rgba(253,252,250,.86)", border: "1px solid var(--border)", borderRadius: 12, padding: "14px 16px", display: "flex", flexDirection: "column", gap: 6 }}>
+                  <div style={{ display: "flex", alignItems: "baseline", gap: 8, flexWrap: "wrap" }}>
+                    <span style={{ fontSize: 15, fontWeight: 600 }}>{l.author}</span>
+                    <span style={{ fontSize: 13, color: "var(--muted)" }}>{l.venueName}</span>
+                    <span style={{ marginLeft: "auto", fontSize: 11.5, fontWeight: 700, textTransform: "uppercase", letterSpacing: ".05em", color: l.intentTier === "seeking" ? "var(--green)" : "var(--muted)" }}>
+                      {l.intentTier === "seeking" ? "Actively looking" : "Complaining"}
+                    </span>
+                  </div>
+                  <span style={{ fontSize: 13.5, color: "var(--muted-strong)", lineHeight: 1.5 }}>&ldquo;{l.excerpt}&rdquo;</span>
                 </div>
               ))}
             </div>
           )}
-          {seed ? (
+
+          {phase === "done" ? (
             <span style={{ fontSize: 14, color: "var(--muted)" }}>Taking you to your first drafts…</span>
           ) : notifyPermission === "granted" ? (
-            <span style={{ fontSize: 14, color: "var(--green)", fontWeight: 600 }}>
-              🔔 I&apos;ll notify you the moment it&apos;s done — feel free to switch tabs.
-            </span>
+            <span style={{ fontSize: 14, color: "var(--green)", fontWeight: 600 }}>🔔 I&apos;ll notify you the moment it&apos;s done — feel free to switch tabs.</span>
           ) : notifyPermission === "denied" ? (
-            <span style={{ fontSize: 14, color: "var(--muted)" }}>
-              Notifications are blocked in your browser — you can leave this tab open, it&apos;ll finish on its own.
-            </span>
+            <span style={{ fontSize: 14, color: "var(--muted)" }}>Notifications are blocked in your browser — you can leave this tab open, it&apos;ll finish on its own.</span>
           ) : notifyPermission === "unsupported" ? (
             <span style={{ fontSize: 14, color: "var(--muted)" }}>You can leave this tab open — it&apos;ll finish on its own.</span>
           ) : (
-            <div
-              style={{
-                display: "flex",
-                alignItems: "center",
-                gap: 16,
-                flexWrap: "wrap",
-                border: "1px solid #F3D9BE",
-                background: "#FFF8F1",
-                borderRadius: 14,
-                padding: "14px 18px",
-              }}
-            >
-              <button
-                onClick={requestNotifications}
-                className="ky-btn-ember"
-                style={{ padding: "12px 20px", fontSize: 14.5, border: "none", whiteSpace: "nowrap", animation: "kyGlow 2.2s ease-in-out infinite" }}
-              >
+            <div style={{ display: "flex", alignItems: "center", gap: 16, flexWrap: "wrap", border: "1px solid #F3D9BE", background: "#FFF8F1", borderRadius: 14, padding: "14px 18px" }}>
+              <button onClick={requestNotifications} className="ky-btn-ember" style={{ padding: "12px 20px", fontSize: 14.5, border: "none", whiteSpace: "nowrap", animation: "kyGlow 2.2s ease-in-out infinite" }}>
                 🔔 Notify me the second it&apos;s ready
               </button>
               <span style={{ fontSize: 13.5, color: "var(--muted-strong)", lineHeight: 1.4 }}>
@@ -281,14 +304,15 @@ export default function Step5Search({
             Communities found
           </span>
           <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-            {communities ? (
-              communities.length ? (
-                communities.map((c, i) => (
-                  <div key={c.name} className="ky-fade-in" style={{ display: "flex", flexDirection: "column", gap: 4, paddingBottom: 12, borderBottom: i < communities.length - 1 ? "1px solid var(--border)" : "none" }}>
+            {venues ? (
+              venues.length ? (
+                venues.map((c, i) => (
+                  <div key={c.id} className="ky-fade-in" style={{ display: "flex", flexDirection: "column", gap: 4, paddingBottom: 12, borderBottom: i < venues.length - 1 ? "1px solid var(--border)" : "none" }}>
                     <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: 8 }}>
                       <span style={{ fontSize: 15.5, fontWeight: 600 }}>{c.name}</span>
                       <span style={{ fontSize: 13, color: c.fit === "Strong fit" ? "var(--green)" : "var(--muted)", fontWeight: 600, whiteSpace: "nowrap" }}>{c.fit}</span>
                     </div>
+                    <span style={{ fontSize: 12.5, color: "var(--muted)" }}>{c.membersLabel}</span>
                     <span style={{ fontSize: 13.5, color: "var(--muted)", lineHeight: 1.5 }}>{c.note}</span>
                   </div>
                 ))
@@ -296,7 +320,7 @@ export default function Step5Search({
                 <span style={{ fontSize: 14, color: "var(--muted)" }}>No communities confirmed yet — I&apos;ll keep looking once you&apos;re in.</span>
               )
             ) : (
-              <span style={{ fontSize: 14, color: "var(--muted)" }}>Searching live — results land here once the search finishes.</span>
+              <span style={{ fontSize: 14, color: "var(--muted)" }}>Searching live — communities land here first.</span>
             )}
           </div>
           <div style={{ marginTop: "auto", fontSize: 13.5, color: "var(--muted)", lineHeight: 1.5, borderTop: "1px solid var(--border)", paddingTop: 14 }}>

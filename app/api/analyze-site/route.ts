@@ -45,6 +45,38 @@ const AnalysisSchema = z.object({
     .describe(
       "Real phrases you found people actually typing or saying via web_search — search queries, forum post titles, or complaint language — never invented. 2-6 words each, e.g. 'dock scheduling spreadsheet mess'. These seed the next stage's lead search, so make them the actual words real people use, not marketing language.",
     ),
+  nicheKey: z
+    .string()
+    .describe(
+      "A short lowercase kebab-case slug naming the BUYER+PROBLEM niche, not this specific company — e.g. 'retail-investing-newsletter' or 'warehouse-dock-scheduling'. Two different companies selling to the same buyer about the same problem must produce the SAME slug, because this is a shared cache key for community resolution. 2-4 words.",
+    ),
+  problemPhrases: z
+    .array(z.string())
+    .min(3)
+    .max(8)
+    .describe(
+      "Short phrases (2-6 words) a sufferer would type while COMPLAINING about this problem, in their own words, never marketing language — e.g. 'trucks stacking up at receiving'. Used as literal community search queries, so favour natural spoken phrasing over jargon.",
+    ),
+  seekingPhrases: z
+    .array(z.string())
+    .min(3)
+    .max(8)
+    .describe(
+      "Short phrases (2-6 words) someone would type when ACTIVELY LOOKING for a solution — e.g. 'dock scheduling software recommendations' or 'alternative to spreadsheet scheduling'. These find people ready to buy, so they matter most.",
+    ),
+  negativeTerms: z
+    .array(z.string())
+    .min(2)
+    .max(8)
+    .describe(
+      "Words/phrases whose presence in a post signals it is NOT a buyer — vendor marketing, press-release, or affiliate language specific to this space (e.g. 'our platform', 'book a demo', 'sponsored'). Used to discard noise before scoring.",
+    ),
+  relevanceWindowDays: z
+    .number()
+    .int()
+    .describe(
+      "How many days old a post can be and still be a live lead IN THIS NICHE. Fast-moving markets (finance, crypto, news, hiring, consumer trends) decay in 7-30 days. Durable operational or B2B infrastructure problems stay relevant 90-180 days. Choose from the niche's actual pace, not a default.",
+    ),
 });
 
 function extractReadableText(html: string): string {
@@ -141,7 +173,14 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Analysis failed to parse." }, { status: 502 });
     }
 
-    return NextResponse.json(analysis.parsed_output);
+    // Clamp the model-chosen window to something a search can actually act on: under a week finds
+    // almost nothing in a slow niche, and beyond a year "current signal" stops meaning anything.
+    const out = analysis.parsed_output;
+    return NextResponse.json({
+      ...out,
+      nicheKey: out.nicheKey.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)/g, "") || "general",
+      relevanceWindowDays: Math.min(365, Math.max(7, Math.round(out.relevanceWindowDays))),
+    });
   } catch (err) {
     const message = toUserError(
       "analyze-site",

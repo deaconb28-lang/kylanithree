@@ -72,9 +72,23 @@ function OnboardingInner() {
           buyers={buyers}
           channels={channels}
           category={category}
-          keywords={analysis?.keywords ?? []}
+          analysis={analysis}
           onDone={(seed) => {
-            saveOnboardingResult({ url, whatYouSell, buyers, channels, category, keywords: analysis?.keywords, seed });
+            saveOnboardingResult({
+              url,
+              whatYouSell,
+              buyers,
+              channels,
+              category,
+              keywords: analysis?.keywords,
+              problem: analysis?.problem,
+              nicheKey: analysis?.nicheKey,
+              problemPhrases: analysis?.problemPhrases,
+              seekingPhrases: analysis?.seekingPhrases,
+              negativeTerms: analysis?.negativeTerms,
+              relevanceWindowDays: analysis?.relevanceWindowDays,
+              seed,
+            });
             setStep(6);
           }}
         />
