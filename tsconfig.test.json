@@ -19,6 +19,7 @@
     "lib/htmlText.ts",
     "lib/search/seSites.ts",
     "lib/search/waves.ts",
-    "lib/search/leadScore.ts"
+    "lib/search/leadScore.ts",
+    "lib/search/queries.ts"
   ]
 }

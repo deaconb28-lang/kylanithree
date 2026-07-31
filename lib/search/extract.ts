@@ -9,6 +9,7 @@ import { cheapFilter } from "./filter";
 import { scoreCandidates } from "./score";
 import { settleWithBudget, Trace } from "./trace";
 import { buildPhrasePool, planWave } from "./waves";
+import { toSearchQueries } from "./queries";
 import type { Candidate, LexiconInput, ScoredLead, Venue } from "./types";
 
 // Stages 2-4 for one shard of venues, at one WAVE of the search.
@@ -48,10 +49,13 @@ export async function extractLeads(opts: {
   const phrases = buildPhrasePool(lexicon.seekingPhrases, lexicon.problemPhrases);
   if (phrases.length === 0 || searchable.length === 0) return { leads: [] };
   const { phrases: wavePhrases, page } = planWave(phrases, wave);
+  // Keyword engines, not semantic ones: a six-word phrase matches almost nothing, so search on the
+  // two or three distinctive words it reduces to.
+  const queries = toSearchQueries(wavePhrases);
 
   const jobs: (() => Promise<Candidate[]>)[] = [];
   for (const v of searchable) {
-    for (const phrase of wavePhrases) {
+    for (const phrase of queries) {
       const common = { query: phrase, windowDays: lexicon.relevanceWindowDays, limit: 25, timeoutMs: PER_SOURCE_TIMEOUT_MS, page };
       if (v.id.startsWith("reddit:")) {
         jobs.push(() => searchPostsInSubreddit({ ...common, slug: v.id.slice("reddit:".length) }));

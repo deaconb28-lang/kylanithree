@@ -243,7 +243,14 @@ export async function resolveVenues(opts: {
           const verdict = verdicts.get(v.id);
           return { ...v, fit: verdict?.fit ?? v.fit, note: verdict?.note || v.note };
         });
-      return { out: [...out, ...webVenues, ...extras] };
+      const merged = [...out, ...webVenues, ...extras];
+      // A run with no searchable venue produces no leads by construction. If annotation pruned
+      // everything, keep the highest-ranked communities anyway — a weak venue that gets searched
+      // beats a perfect one that does not exist.
+      if (!merged.some((v) => v.searchable)) {
+        return { out: [...merged, ...alwaysAvailableVenues(lexiconTerms)], note: "annotation left nothing searchable; restored defaults" };
+      }
+      return { out: merged };
     } catch {
       // Annotation is a nice-to-have. If the model call fails the venues are still real and still
       // searchable, so the run continues with unannotated entries rather than collapsing.

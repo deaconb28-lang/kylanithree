@@ -39,7 +39,9 @@ export function lexiconFrom(input: SeedInput): LexiconInput {
     problemPhrases: input.problemPhrases?.length ? input.problemPhrases : keywords,
     seekingPhrases: input.seekingPhrases?.length ? input.seekingPhrases : keywords,
     negativeTerms: input.negativeTerms ?? [],
-    relevanceWindowDays: Math.min(365, Math.max(7, input.relevanceWindowDays ?? 60)),
+    // Floor of 30 days: below that even an active niche community may have nothing in range,
+    // and an empty corpus is indistinguishable from a bad search.
+    relevanceWindowDays: Math.min(365, Math.max(30, input.relevanceWindowDays ?? 60)),
   };
 }
 

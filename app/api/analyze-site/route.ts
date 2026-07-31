@@ -171,7 +171,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({
       ...out,
       nicheKey: out.nicheKey.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)/g, "") || "general",
-      relevanceWindowDays: Math.min(365, Math.max(7, Math.round(out.relevanceWindowDays))),
+      relevanceWindowDays: Math.min(365, Math.max(30, Math.round(out.relevanceWindowDays))),
     });
   } catch (err) {
     const message = toUserError(

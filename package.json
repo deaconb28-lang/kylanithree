@@ -7,7 +7,7 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
-    "test": "tsc -p tsconfig.test.json && node --test lib/search/__tests__/*.test.mjs"
+    "test": "tsc -p tsconfig.test.json && node scripts/fix-test-esm.mjs && node --test lib/search/__tests__/*.test.mjs"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.115.0",
