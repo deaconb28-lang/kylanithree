@@ -143,6 +143,9 @@ export async function searchPostsInSubreddit(opts: {
   windowDays: number;
   limit?: number;
   timeoutMs?: number;
+  // Accepted for signature parity across sources. Reddit paginates by opaque cursor rather than
+  // page number, so deeper waves widen by phrase here instead of by page.
+  page?: number;
 }): Promise<Candidate[]> {
   const { slug, query, windowDays, limit = 25, timeoutMs = 4000 } = opts;
   const json = await redditGet<RedditListing<RawPost>>(

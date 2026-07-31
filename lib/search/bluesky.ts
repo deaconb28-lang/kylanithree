@@ -56,6 +56,9 @@ export async function searchBluesky(opts: {
   windowDays: number;
   limit?: number;
   timeoutMs?: number;
+  // Accepted for parity. Bluesky paginates by cursor, so deeper waves widen by phrase and by a
+  // larger page size rather than by page number.
+  page?: number;
 }): Promise<Candidate[]> {
   const { query, windowDays, limit = 25, timeoutMs = 4000 } = opts;
 

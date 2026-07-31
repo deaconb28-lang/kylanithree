@@ -31,8 +31,9 @@ export async function searchStackExchange(opts: {
   windowDays: number;
   limit?: number;
   timeoutMs?: number;
+  page?: number;
 }): Promise<Candidate[]> {
-  const { site, query, windowDays, limit = 25, timeoutMs = 4000 } = opts;
+  const { site, query, windowDays, limit = 25, timeoutMs = 4000, page = 1 } = opts;
 
   const qs = new URLSearchParams({
     order: "desc",
@@ -42,6 +43,7 @@ export async function searchStackExchange(opts: {
     // `withbody` is required or the response carries titles only, leaving nothing to quote.
     filter: "withbody",
     pagesize: String(Math.min(limit, 50)),
+    page: String(Math.max(1, page)),
     fromdate: String(Math.floor((Date.now() - windowDays * 86_400_000) / 1000)),
   });
   if (process.env.STACKEXCHANGE_KEY) qs.set("key", process.env.STACKEXCHANGE_KEY);

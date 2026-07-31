@@ -16,6 +16,11 @@ import { useNotificationPermission } from "../../lib/useNotificationPermission";
 // leads appear in batches as they confirm and no single request has to fit the whole run inside
 // Vercel's function ceiling.
 const VENUES_PER_SHARD = 3;
+// What a founder is actually asking for when they say "find my buyers" — a batch worth working
+// through, not a token handful. The search widens toward this across successive waves; it never
+// relaxes the quality gate to reach it, so finishing under target is a normal, honest outcome.
+const TARGET_LEADS = 50;
+const MAX_WAVES = 4;
 
 type Phase = "venues" | "leads" | "done";
 
@@ -40,8 +45,7 @@ export default function Step5Search({
   const [phase, setPhase] = useState<Phase>("venues");
   const [venues, setVenues] = useState<Venue[] | null>(null);
   const [leads, setLeads] = useState<ScoredLead[]>([]);
-  const [shardsDone, setShardsDone] = useState(0);
-  const [shardTotal, setShardTotal] = useState(0);
+  const [wave, setWave] = useState(0);
   // Aggregated drop counts across shards, so a zero-lead run can say what actually happened
   // instead of silently handing over an empty dashboard.
   const [drops, setDrops] = useState<Record<string, number>>({});
@@ -128,46 +132,69 @@ export default function Step5Search({
         for (let i = 0; i < searchable.length; i += VENUES_PER_SHARD) {
           shards.push(searchable.slice(i, i + VENUES_PER_SHARD));
         }
-        setShardTotal(shards.length);
 
-        // Fired together, rendered as each resolves. A shard that fails or times out costs its own
-        // venues only — the rest of the run is unaffected, which is the whole point of sharding.
-        await Promise.all(
-          shards.map(async (shard) => {
-            try {
-              const res = await fetch("/api/onboarding/extract-leads", {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ ...searchPayload, venues: shard }),
-              });
-              const { ok, data } = await readJson(res);
-              if (cancelled || !ok) return;
-              const batch = (data as { leads: ScoredLead[] }).leads ?? [];
-              const trace = (data as { trace?: { stages?: { stage: string; candidatesIn: number; drops?: Record<string, number> }[] } }).trace;
-              if (trace?.stages) {
-                setRawSeen((n) => n + (trace.stages?.find((s) => s.stage === "extract:filter")?.candidatesIn ?? 0));
-                setDrops((prev) => {
-                  const next = { ...prev };
-                  for (const s of trace.stages ?? []) {
-                    for (const [reason, count] of Object.entries(s.drops ?? {})) {
-                      if (count > 0) next[reason] = (next[reason] ?? 0) + count;
-                    }
-                  }
-                  return next;
+        // Each wave fans out across every shard in parallel, then the loop decides whether another
+        // is warranted. Stopping early on a wave that adds nothing avoids burning the remaining
+        // budget re-searching ground that is already exhausted.
+        const collected: ScoredLead[] = [];
+        const seenAuthors = new Set<string>();
+
+        for (let wave = 0; wave < MAX_WAVES; wave++) {
+          if (cancelled) return;
+          if (collected.length >= TARGET_LEADS) break;
+          setWave(wave + 1);
+
+          const before = collected.length;
+
+          await Promise.all(
+            shards.map(async (shard) => {
+              try {
+                const res = await fetch("/api/onboarding/extract-leads", {
+                  method: "POST",
+                  headers: { "Content-Type": "application/json" },
+                  body: JSON.stringify({
+                    ...searchPayload,
+                    venues: shard,
+                    wave,
+                    excludeAuthors: [...seenAuthors],
+                  }),
                 });
+                const { ok, data } = await readJson(res);
+                if (cancelled || !ok) return;
+                const batch = (data as { leads: ScoredLead[] }).leads ?? [];
+                const trace = (data as { trace?: { stages?: { stage: string; candidatesIn: number; drops?: Record<string, number> }[] } }).trace;
+                if (trace?.stages) {
+                  setRawSeen((n) => n + (trace.stages ?? []).filter((st) => st.stage.startsWith("extract:filter")).reduce((a, st) => a + st.candidatesIn, 0));
+                  setDrops((prev) => {
+                    const next = { ...prev };
+                    for (const st of trace.stages ?? []) {
+                      for (const [reason, count] of Object.entries(st.drops ?? {})) {
+                        if (count > 0) next[reason] = (next[reason] ?? 0) + count;
+                      }
+                    }
+                    return next;
+                  });
+                }
+                // Author-dedupe across shards and waves — the same person can surface in several
+                // communities and in more than one wave.
+                const added: ScoredLead[] = [];
+                for (const l of batch) {
+                  const key = l.author.toLowerCase();
+                  if (seenAuthors.has(key)) continue;
+                  seenAuthors.add(key);
+                  collected.push(l);
+                  added.push(l);
+                }
+                if (added.length) setLeads((prev) => [...prev, ...added]);
+              } catch {
+                // Swallowed on purpose: a dead shard degrades the result set, it never fails the run.
               }
-              setLeads((prev) => {
-                // Author-dedupe across shards — the same person can surface in two communities.
-                const seen = new Set(prev.map((l) => l.author.toLowerCase()));
-                return [...prev, ...batch.filter((l) => !seen.has(l.author.toLowerCase()))];
-              });
-            } catch {
-              // Swallowed on purpose: a dead shard degrades the result set, it never fails the run.
-            } finally {
-              if (!cancelled) setShardsDone((n) => n + 1);
-            }
-          }),
-        );
+            }),
+          );
+
+          // A wave that produced nothing new means this lexicon and these venues are tapped out.
+          if (collected.length === before) break;
+        }
 
         if (!cancelled) setPhase("done");
       } catch (err) {
@@ -201,8 +228,7 @@ export default function Step5Search({
     setError(null);
     setVenues(null);
     setLeads([]);
-    setShardsDone(0);
-    setShardTotal(0);
+    setWave(0);
     setDrops({});
     setRawSeen(0);
     setPhase("venues");
@@ -220,13 +246,15 @@ export default function Step5Search({
     },
     {
       label:
-        shardTotal > 0
-          ? `Reading real posts inside them (${shardsDone}/${shardTotal} batches)`
+        wave > 0
+          ? `Reading real posts inside them — pass ${wave} of ${MAX_WAVES}`
           : "Reading real posts inside them",
       state: phase === "done" ? "done" : phase === "leads" ? "active" : "pending",
     },
     {
-      label: leads.length ? `Verified ${leads.length} real ${leads.length === 1 ? "person" : "people"} with a live problem` : "Verifying who has a live problem right now",
+      label: leads.length
+        ? `Verified ${leads.length} of up to ${TARGET_LEADS} real ${leads.length === 1 ? "person" : "people"} with a live problem`
+        : "Verifying who has a live problem right now",
       state: phase === "done" ? "done" : leads.length ? "active" : "pending",
     },
   ];

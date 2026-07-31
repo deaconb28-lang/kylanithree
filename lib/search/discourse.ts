@@ -37,12 +37,13 @@ export async function searchDiscourse(opts: {
   query: string;
   limit?: number;
   timeoutMs?: number;
+  page?: number;
 }): Promise<Candidate[]> {
-  const { baseUrl, query, limit = 20, timeoutMs = 4000 } = opts;
+  const { baseUrl, query, limit = 20, timeoutMs = 4000, page = 1 } = opts;
   const origin = originOf(baseUrl);
   if (!origin) return [];
 
-  const res = await fetch(`${origin}/search.json?q=${encodeURIComponent(query)}`, {
+  const res = await fetch(`${origin}/search.json?q=${encodeURIComponent(query)}&page=${Math.max(1, page)}`, {
     headers: {
       Accept: "application/json",
       "User-Agent": process.env.REDDIT_USER_AGENT || "web:app.kylani.lead-search:v1.0",

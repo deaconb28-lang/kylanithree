@@ -8,17 +8,22 @@ import { searchStackExchange } from "./stackexchange";
 import { cheapFilter } from "./filter";
 import { scoreCandidates } from "./score";
 import { settleWithBudget, Trace } from "./trace";
+import { buildPhrasePool, planWave } from "./waves";
 import type { Candidate, LexiconInput, ScoredLead, Venue } from "./types";
 
-// Stage 2-4 for one shard of venues. Kept shard-shaped on purpose: the client fires several of
-// these in parallel so results stream in as each returns, and each individual request stays well
-// inside Vercel's 60s function ceiling instead of one long run racing it.
+// Stages 2-4 for one shard of venues, at one WAVE of the search.
+//
+// A wave is how volume is reached without ever relaxing the quality bar. Wave 0 searches the first
+// few phrases against page 1; if the caller still needs more leads it asks for wave 1, which moves
+// to the next phrases and the next page of results. Widening the net is the only lever pulled —
+// the filter and the scoring gate are identical in every wave, so a bigger number can only ever
+// come from looking in more places, never from accepting weaker matches.
 
 const PER_SOURCE_TIMEOUT_MS = 4000;
-const FANOUT_BUDGET_MS = 6000;
-// Cap what reaches the model. The cheap filter ranks by signal, so this is a "best N", not a
-// truncation of something unsorted.
-const MAX_TO_SCORE = 30;
+const FANOUT_BUDGET_MS = 7000;
+// Cap on what reaches the expensive pass per shard. The cheap filter ranks by signal first, so
+// this is a "best N", not a truncation of something unsorted.
+const MAX_TO_SCORE = 40;
 
 export async function extractLeads(opts: {
   venues: Venue[];
@@ -28,60 +33,40 @@ export async function extractLeads(opts: {
   buyers: { name: string; desc: string }[];
   trace: Trace;
   maxLeads?: number;
+  // Which slice of the phrase pool and which page of results this wave should cover.
+  wave?: number;
+  // Authors already shipped by earlier waves/shards, so a later wave spends its budget on new
+  // people instead of re-surfacing and re-scoring the same ones.
+  excludeAuthors?: string[];
 }): Promise<{ leads: ScoredLead[] }> {
-  const { venues, lexicon, whatYouSell, problem, buyers, trace, maxLeads } = opts;
+  const { venues, lexicon, whatYouSell, problem, buyers, trace, maxLeads, wave = 0, excludeAuthors = [] } = opts;
 
   const searchable = venues.filter((v) => v.searchable);
-  // Two phrases per venue keeps the fan-out wide across communities rather than deep on one, which
-  // matters more for coverage than exhausting every phrase in a single subreddit.
-  const phrases = [...lexicon.seekingPhrases.slice(0, 2), ...lexicon.problemPhrases.slice(0, 2)].filter(Boolean);
 
-  // Dispatch per platform. A venue whose platform has no extractor (Slack, Discord — private and
-  // not searchable from outside) simply contributes no jobs rather than failing the shard.
+  // Interleave seeking and problem phrases so every wave gets a mix of "shopping right now" and
+  // "describing the pain". The previous build sliced this pool down to two entries AFTER
+  // concatenating, which meant problemPhrases were never searched at all.
+  const phrases = buildPhrasePool(lexicon.seekingPhrases, lexicon.problemPhrases);
+  if (phrases.length === 0 || searchable.length === 0) return { leads: [] };
+  const { phrases: wavePhrases, page } = planWave(phrases, wave);
+
   const jobs: (() => Promise<Candidate[]>)[] = [];
   for (const v of searchable) {
-    for (const phrase of phrases.slice(0, 2)) {
+    for (const phrase of wavePhrases) {
+      const common = { query: phrase, windowDays: lexicon.relevanceWindowDays, limit: 25, timeoutMs: PER_SOURCE_TIMEOUT_MS, page };
       if (v.id.startsWith("reddit:")) {
-        const slug = v.id.slice("reddit:".length);
-        jobs.push(() =>
-          searchPostsInSubreddit({
-            slug,
-            query: phrase,
-            windowDays: lexicon.relevanceWindowDays,
-            limit: 25,
-            timeoutMs: PER_SOURCE_TIMEOUT_MS,
-          }),
-        );
+        jobs.push(() => searchPostsInSubreddit({ ...common, slug: v.id.slice("reddit:".length) }));
       } else if (v.id === "hn:all") {
-        jobs.push(() =>
-          searchHackerNews({
-            query: phrase,
-            windowDays: lexicon.relevanceWindowDays,
-            limit: 25,
-            timeoutMs: PER_SOURCE_TIMEOUT_MS,
-          }),
-        );
+        jobs.push(() => searchHackerNews(common));
       } else if (v.id === "lemmy:all") {
-        jobs.push(() =>
-          searchLemmy({
-            query: phrase,
-            windowDays: lexicon.relevanceWindowDays,
-            limit: 20,
-            timeoutMs: PER_SOURCE_TIMEOUT_MS,
-          }),
-        );
+        jobs.push(() => searchLemmy({ ...common, limit: 20 }));
       } else if (v.id === "bsky:all") {
-        jobs.push(() =>
-          searchBluesky({ query: phrase, windowDays: lexicon.relevanceWindowDays, limit: 25, timeoutMs: PER_SOURCE_TIMEOUT_MS }),
-        );
+        jobs.push(() => searchBluesky({ ...common, limit: 50 }));
       } else if (v.id.startsWith("stackexchange:")) {
-        const site = v.id.slice("stackexchange:".length);
-        jobs.push(() =>
-          searchStackExchange({ site, query: phrase, windowDays: lexicon.relevanceWindowDays, limit: 25, timeoutMs: PER_SOURCE_TIMEOUT_MS }),
-        );
+        jobs.push(() => searchStackExchange({ ...common, site: v.id.slice("stackexchange:".length) }));
       } else if (v.id.startsWith("discourse:")) {
         const base = v.url ?? `https://${v.id.slice("discourse:".length)}`;
-        jobs.push(() => searchDiscourse({ baseUrl: base, query: phrase, limit: 20, timeoutMs: PER_SOURCE_TIMEOUT_MS }));
+        jobs.push(() => searchDiscourse({ ...common, baseUrl: base, limit: 20 }));
       } else if (v.id === "x:all") {
         // Returns [] without a token rather than throwing, so a missing X key costs nothing.
         jobs.push(() => searchX({ query: phrase, limit: 25, timeoutMs: PER_SOURCE_TIMEOUT_MS }));
@@ -89,7 +74,7 @@ export async function extractLeads(opts: {
     }
   }
 
-  const raw = await trace.stage("extract:fanout", jobs.length, async () => {
+  const raw = await trace.stage(`extract:fanout:w${wave}`, jobs.length, async () => {
     const { results, timeouts, errors } = await settleWithBudget(jobs, FANOUT_BUDGET_MS);
     const unique = new Map<string, Candidate>();
     for (const c of results) unique.set(c.id, c);
@@ -98,23 +83,20 @@ export async function extractLeads(opts: {
 
   if (raw.length === 0) return { leads: [] };
 
-  const filtered = await trace.stage("extract:filter", raw.length, async () => {
-    const { kept, drops } = cheapFilter(raw, lexicon);
-    return { out: kept, drops };
+  const seen = new Set(excludeAuthors.map((a) => a.toLowerCase()));
+  const fresh = raw.filter((c) => !seen.has(c.author.toLowerCase()));
+
+  const filtered = await trace.stage(`extract:filter:w${wave}`, fresh.length, async () => {
+    const { kept, drops } = cheapFilter(fresh, lexicon);
+    return { out: kept, drops: { ...drops, dupe_author: (drops.dupe_author ?? 0) + (raw.length - fresh.length) } };
   });
 
   if (filtered.length === 0) return { leads: [] };
 
   const toScore = filtered.slice(0, MAX_TO_SCORE);
-  const leads = await trace.stage("extract:score", toScore.length, async () => {
+  const leads = await trace.stage(`extract:score:w${wave}`, toScore.length, async () => {
     try {
-      const { leads: scored, drops } = await scoreCandidates({
-        candidates: toScore,
-        whatYouSell,
-        problem,
-        buyers,
-        maxLeads,
-      });
+      const { leads: scored, drops } = await scoreCandidates({ candidates: toScore, whatYouSell, problem, buyers, maxLeads });
       return { out: scored, drops };
     } catch (err) {
       // Partial results beat a timeout: if scoring falls over, nothing ships from this shard

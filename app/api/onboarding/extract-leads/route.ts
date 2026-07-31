@@ -29,6 +29,11 @@ export async function POST(req: NextRequest) {
       buyers: body.buyers,
       trace,
       maxLeads: body.maxLeads ?? 25,
+      // Which wave of the widening search this request represents, and who has already been
+      // shipped — so a later wave spends its budget finding new people rather than re-scoring
+      // the ones the founder can already see.
+      wave: typeof body.wave === "number" ? body.wave : 0,
+      excludeAuthors: Array.isArray(body.excludeAuthors) ? body.excludeAuthors : [],
     });
     trace.log("onboarding/extract-leads");
     return NextResponse.json({ leads, trace: trace.toJSON() });

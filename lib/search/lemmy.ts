@@ -21,12 +21,13 @@ export async function searchLemmy(opts: {
   windowDays: number;
   limit?: number;
   timeoutMs?: number;
+  page?: number;
 }): Promise<Candidate[]> {
-  const { query, limit = 20, timeoutMs = 4000 } = opts;
+  const { query, limit = 20, timeoutMs = 4000, page = 1 } = opts;
 
   const perInstance = await Promise.allSettled(
     INSTANCES.map(async (base) => {
-      const qs = new URLSearchParams({ q: query, type_: "Posts", sort: "New", limit: String(limit) });
+      const qs = new URLSearchParams({ q: query, type_: "Posts", sort: "New", limit: String(limit), page: String(Math.max(1, page)) });
       const res = await fetch(`${base}/api/v3/search?${qs}`, {
         headers: { "User-Agent": process.env.REDDIT_USER_AGENT || "web:app.kylani.lead-search:v1.0" },
         signal: AbortSignal.timeout(timeoutMs),

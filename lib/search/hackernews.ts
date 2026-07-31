@@ -38,8 +38,9 @@ export async function searchHackerNews(opts: {
   windowDays: number;
   limit?: number;
   timeoutMs?: number;
+  page?: number;
 }): Promise<Candidate[]> {
-  const { query, windowDays, limit = 25, timeoutMs = 4000 } = opts;
+  const { query, windowDays, limit = 25, timeoutMs = 4000, page = 1 } = opts;
   const since = Math.floor((Date.now() - windowDays * 86_400_000) / 1000);
 
   const qs = new URLSearchParams({
@@ -49,6 +50,8 @@ export async function searchHackerNews(opts: {
     tags: "(story,comment)",
     numericFilters: `created_at_i>${since}`,
     hitsPerPage: String(limit),
+    // Algolia pages are 0-indexed; callers count waves from page 1.
+    page: String(Math.max(0, page - 1)),
   });
 
   const res = await fetch(`${ALGOLIA_BASE}?${qs}`, {
