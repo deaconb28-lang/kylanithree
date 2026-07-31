@@ -1,8 +1,10 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import KylaniLogo from "../../components/icons/KylaniLogo";
+import { DROPS, PHASES, STAGES, diagnose, docFor, type Phase } from "../../lib/search/explain";
+import type { DropReason, StageMetric } from "../../lib/search/types";
 
 // Operator page, deliberately absent from every nav. Reachable by typing the URL because the
 // people who need it already know it exists, and the people who don't should never trip over it.
@@ -85,7 +87,9 @@ export default function DiagnosticsPage() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: "{}",
-        signal: AbortSignal.timeout(70_000),
+        // The route budgets itself to 45s and answers, so anything past 55s here means it failed to
+        // honour its own deadline rather than simply being slow.
+        signal: AbortSignal.timeout(55_000),
       });
       setRun(await res.json());
     } catch (e) {
@@ -94,7 +98,7 @@ export default function DiagnosticsPage() {
         // A killed function sends no response at all, so this branch is itself a finding.
         error:
           e instanceof Error && (e.name === "TimeoutError" || e.name === "AbortError")
-            ? "The request was cut off before the server answered — the function is exceeding its time limit. Check that Fluid Compute is enabled on the Vercel project."
+            ? "The server never answered, even though this route is supposed to give up at 45s and return a partial trace. Something is blocking past its own deadline — check the Vercel function logs for this request."
             : String(e),
       });
     } finally {
@@ -113,7 +117,11 @@ export default function DiagnosticsPage() {
     ["Bluesky", (checks.bluesky ?? {}) as Json],
     ["Stack Exchange", (checks.stackExchange ?? {}) as Json],
   ];
-  const runTrace = (run?.trace ?? {}) as { stages?: { stage: string; candidatesIn: number; candidatesOut: number; ms: number; drops?: Record<string, number>; note?: string }[] };
+  const runTrace = (run?.trace ?? {}) as { stages?: StageMetric[] };
+  const stages = useMemo(() => runTrace.stages ?? [], [runTrace.stages]);
+  // An empty stage list is itself a diagnosis — it means the function died before recording
+  // anything, which is what a platform kill looks like from here.
+  const verdict = useMemo(() => (run ? diagnose(stages, Number(run.leadsFound ?? 0)) : null), [run, stages]);
 
   return (
     <div style={{ minHeight: "100vh", background: "var(--paper)", padding: "28px 5vw 80px" }}>
@@ -203,6 +211,64 @@ export default function DiagnosticsPage() {
         )}
 
         <div style={CARD}>
+          <span style={{ fontFamily: "var(--font-outfit)", fontWeight: 700, fontSize: 16 }}>How the search actually works</span>
+          <span style={{ fontSize: 13, color: "var(--muted)", marginTop: -6, lineHeight: 1.55 }}>
+            Every stage below reports candidates in, candidates out, and time spent. Run the test underneath and these
+            same stages fill in with real numbers — a stage with candidates in and zero out is where leads are lost.
+          </span>
+
+          {(["resolve", "extract"] as Phase[]).map((phase) => (
+            <div key={phase} style={{ display: "flex", flexDirection: "column", gap: 10, marginTop: 6 }}>
+              <span style={{ fontFamily: "var(--font-outfit)", fontWeight: 700, fontSize: 14.5 }}>{PHASES[phase].title}</span>
+              <span style={{ fontSize: 13, color: "var(--muted)", lineHeight: 1.55, marginTop: -6 }}>{PHASES[phase].blurb}</span>
+              {STAGES.filter((s) => s.phase === phase).map((s) => {
+                const live = stages.filter((st) => s.match.test(st.stage));
+                const lost = live.length > 0 && live.some((st) => st.candidatesIn > 0 && st.candidatesOut === 0);
+                return (
+                  <details
+                    key={s.title}
+                    style={{
+                      border: `1px solid ${lost ? "var(--ember)" : "var(--border)"}`,
+                      borderRadius: 10,
+                      padding: "9px 12px",
+                      background: lost ? "#FFF8F1" : "transparent",
+                    }}
+                  >
+                    <summary style={{ cursor: "pointer", fontSize: 13.5, display: "flex", gap: 8, alignItems: "baseline", flexWrap: "wrap" }}>
+                      <strong>{s.title}</strong>
+                      {live.map((st, i) => (
+                        <span key={i} style={{ fontSize: 12.5, color: "var(--muted)", fontFamily: "ui-monospace, monospace" }}>
+                          {st.candidatesIn}→
+                          <span style={{ color: st.candidatesIn > 0 && st.candidatesOut === 0 ? "var(--ember)" : "inherit", fontWeight: 700 }}>{st.candidatesOut}</span>
+                          {" · "}
+                          {st.ms}ms
+                        </span>
+                      ))}
+                    </summary>
+                    <div style={{ display: "flex", flexDirection: "column", gap: 6, marginTop: 8, fontSize: 13, lineHeight: 1.55, color: "var(--muted-strong)" }}>
+                      <span>{s.what}</span>
+                      <span>
+                        <strong style={{ color: "var(--ink)" }}>Needs:</strong> {s.needs}
+                      </span>
+                      <span>
+                        <strong style={{ color: "var(--ink)" }}>Zero out means:</strong> {s.zeroMeans}
+                      </span>
+                      {live.map((st, i) =>
+                        st.note ? (
+                          <span key={i} style={{ fontFamily: "ui-monospace, monospace", fontSize: 12, color: "var(--muted)" }}>
+                            {st.stage}: {st.note}
+                          </span>
+                        ) : null,
+                      )}
+                    </div>
+                  </details>
+                );
+              })}
+            </div>
+          ))}
+        </div>
+
+        <div style={CARD}>
           <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
             <span style={{ fontFamily: "var(--font-outfit)", fontWeight: 700, fontSize: 16 }}>Live search test</span>
             <button onClick={testSearch} disabled={running} className="ky-btn-ember" style={{ marginLeft: "auto", padding: "10px 18px", fontSize: 14, border: "none", opacity: running ? 0.6 : 1 }}>
@@ -217,14 +283,57 @@ export default function DiagnosticsPage() {
           {run && (
             <div style={{ display: "flex", flexDirection: "column", gap: 10, marginTop: 4 }}>
               <div style={{ display: "flex", gap: 16, flexWrap: "wrap", fontSize: 14 }}>
-                <span><strong>{String(run.totalMs ?? "—")}ms</strong> total</span>
+                <span>
+                  <strong>{String(run.totalMs ?? "—")}ms</strong> total
+                  {run.budgetMs ? <span style={{ color: "var(--muted)" }}> of {Number(run.budgetMs) / 1000}s budget</span> : null}
+                </span>
                 <span><strong>{String(run.venuesResolved ?? 0)}</strong> venues ({String(run.venuesSearchable ?? 0)} searchable)</span>
                 <span><strong>{String(run.leadsFound ?? 0)}</strong> leads</span>
                 {run.cachedVenues ? <span style={{ color: "var(--muted)" }}>venues from cache</span> : null}
               </div>
+
+              {Boolean(run.hitBudget) && (
+                <span style={{ fontSize: 13.5, color: "var(--ember)", lineHeight: 1.5 }}>
+                  The run used its entire budget and returned early. It still answered — that is the point — but stages
+                  after the cut-off never ran. The stage table shows how far it got.
+                </span>
+              )}
+              {Boolean(run.skipped) && <span style={{ fontSize: 13.5, color: "var(--muted-strong)", lineHeight: 1.5 }}>{String(run.skipped)}</span>}
               {Boolean(run.error) && <span style={{ fontSize: 13.5, color: "var(--ember)", lineHeight: 1.5 }}>{String(run.error)}{run.detail ? ` — ${String(run.detail)}` : ""}</span>}
 
-              {runTrace.stages && runTrace.stages.length > 0 && (
+              {verdict && (
+                <div
+                  style={{
+                    border: `1px solid ${verdict.status === "ok" ? "var(--green)" : verdict.status === "broken" ? "var(--ember)" : "var(--border-strong)"}`,
+                    background: verdict.status === "ok" ? "var(--green-tint)" : verdict.status === "broken" ? "#FFF8F1" : "var(--card-alt)",
+                    borderRadius: 12,
+                    padding: "14px 16px",
+                    display: "flex",
+                    flexDirection: "column",
+                    gap: 7,
+                  }}
+                >
+                  <span style={{ fontFamily: "var(--font-outfit)", fontWeight: 700, fontSize: 15 }}>{verdict.headline}</span>
+                  <span style={{ fontSize: 13.5, color: "var(--muted-strong)", lineHeight: 1.55 }}>{verdict.detail}</span>
+                  {verdict.stage && (
+                    <span style={{ fontSize: 12.5, color: "var(--muted)", fontFamily: "ui-monospace, monospace" }}>
+                      failing stage: {verdict.stage}
+                      {docFor(verdict.stage) ? ` — ${docFor(verdict.stage)!.title}` : ""}
+                    </span>
+                  )}
+                  {verdict.fixes.length > 0 && (
+                    <ul style={{ margin: "2px 0 0", paddingLeft: 18, display: "flex", flexDirection: "column", gap: 4 }}>
+                      {verdict.fixes.map((f) => (
+                        <li key={f} style={{ fontSize: 13, color: "var(--muted-strong)", lineHeight: 1.5 }}>
+                          {f}
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                </div>
+              )}
+
+              {stages.length > 0 && (
                 <div style={{ overflowX: "auto" }}>
                   <table style={{ borderCollapse: "collapse", width: "100%", fontSize: 13 }}>
                     <thead>
@@ -233,24 +342,42 @@ export default function DiagnosticsPage() {
                         <th style={{ padding: "6px 8px" }}>In</th>
                         <th style={{ padding: "6px 8px" }}>Out</th>
                         <th style={{ padding: "6px 8px" }}>Time</th>
-                        <th style={{ padding: "6px 8px" }}>Dropped / note</th>
+                        <th style={{ padding: "6px 8px" }}>Why the difference</th>
                       </tr>
                     </thead>
                     <tbody>
-                      {runTrace.stages.map((st, i) => (
-                        <tr key={i} style={{ borderTop: "1px solid var(--border)" }}>
-                          <td style={{ padding: "6px 8px", fontFamily: "ui-monospace, monospace" }}>{st.stage}</td>
-                          <td style={{ padding: "6px 8px" }}>{st.candidatesIn}</td>
-                          <td style={{ padding: "6px 8px", fontWeight: st.candidatesIn > 0 && st.candidatesOut === 0 ? 700 : 400, color: st.candidatesIn > 0 && st.candidatesOut === 0 ? "var(--ember)" : undefined }}>
-                            {st.candidatesOut}
-                          </td>
-                          <td style={{ padding: "6px 8px", color: st.ms > 10_000 ? "var(--ember)" : "var(--muted)" }}>{st.ms}ms</td>
-                          <td style={{ padding: "6px 8px", color: "var(--muted)" }}>
-                            {Object.entries(st.drops ?? {}).filter(([, n]) => n > 0).map(([r, n]) => `${n} ${r.replace(/_/g, " ")}`).join(", ")}
-                            {st.note ? ` ${st.note}` : ""}
-                          </td>
-                        </tr>
-                      ))}
+                      {stages.map((st, i) => {
+                        const lost = st.candidatesIn > 0 && st.candidatesOut === 0;
+                        const doc = docFor(st.stage);
+                        const drops = Object.entries(st.drops ?? {}).filter(([, n]) => (n ?? 0) > 0) as [DropReason, number][];
+                        return (
+                          <tr key={i} style={{ borderTop: "1px solid var(--border)", background: lost ? "#FFF8F1" : undefined }}>
+                            <td style={{ padding: "6px 8px" }}>
+                              <div style={{ fontWeight: 600 }}>{doc?.title ?? st.stage}</div>
+                              <div style={{ fontFamily: "ui-monospace, monospace", fontSize: 11.5, color: "var(--muted)" }}>{st.stage}</div>
+                            </td>
+                            <td style={{ padding: "6px 8px" }}>{st.candidatesIn}</td>
+                            <td style={{ padding: "6px 8px", fontWeight: lost ? 700 : 400, color: lost ? "var(--ember)" : undefined }}>{st.candidatesOut}</td>
+                            <td style={{ padding: "6px 8px", color: st.ms > 10_000 ? "var(--ember)" : "var(--muted)" }}>{st.ms}ms</td>
+                            <td style={{ padding: "6px 8px", color: "var(--muted)" }}>
+                              {drops.length > 0 && (
+                                <div style={{ display: "flex", flexDirection: "column", gap: 3 }}>
+                                  {drops.map(([reason, n]) => (
+                                    <span key={reason}>
+                                      <strong style={{ color: "var(--ink)" }}>
+                                        {n} {DROPS[reason]?.label ?? reason}
+                                      </strong>
+                                      {DROPS[reason] ? ` — ${DROPS[reason].meaning}` : ""}
+                                    </span>
+                                  ))}
+                                </div>
+                              )}
+                              {st.note && <div style={{ fontFamily: "ui-monospace, monospace", fontSize: 11.5, marginTop: drops.length ? 4 : 0 }}>{st.note}</div>}
+                              {drops.length === 0 && !st.note && lost && doc && <span>{doc.zeroMeans}</span>}
+                            </td>
+                          </tr>
+                        );
+                      })}
                     </tbody>
                   </table>
                 </div>
@@ -279,9 +406,10 @@ export default function DiagnosticsPage() {
         </div>
 
         <span style={{ fontSize: 12.5, color: "var(--muted)", lineHeight: 1.6 }}>
-          A stage showing candidates in but zero out is where leads are being lost. A stage over 10s is at risk of being
-          killed by the platform — if several are red, confirm Fluid Compute is enabled on the Vercel project, since
-          without it functions are capped far below the configured limit.
+          A stage showing candidates in but zero out is where leads are being lost. Every route now budgets itself below
+          the platform&apos;s 60s function ceiling and returns whatever it has when that budget runs out — so a slow run
+          reports a partial trace rather than dying as a 504 with nothing in it. If you ever see a bare connection
+          failure here again, that is a genuine bug, not a slow niche.
         </span>
       </div>
     </div>

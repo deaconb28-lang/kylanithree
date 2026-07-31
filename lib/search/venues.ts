@@ -9,6 +9,7 @@ import { findCommunitiesOnWeb, webSearchProvider } from "./websearch";
 import { isDiscourse } from "./discourse";
 import { pickStackExchangeSites } from "./seSites";
 import { settleWithBudget, withTimeout, type Trace } from "./trace";
+import { Deadline } from "./deadline";
 import { formatMembers, sizeFit, termRelevance } from "./ranking";
 import type { Venue } from "./types";
 
@@ -27,6 +28,8 @@ const VENUE_TTL_DAYS = 30;
 // and the browser reports a connection failure, which is what "couldn't reach the server" was.
 const WEB_DISCOVERY_BUDGET_MS = 12_000;
 const ANNOTATION_BUDGET_MS = 12_000;
+// Kept back so phase 1 always leaves the caller room to respond, even on a fully budgeted run.
+const RESOLVE_RESERVE_MS = 2_000;
 
 // Short hints so the annotation pass can judge the credential-free sources on the same footing as
 // the discovered subreddits, instead of them being kept or dropped by default.
@@ -144,8 +147,13 @@ export async function resolveVenues(opts: {
   lexiconTerms: string[];
   trace: Trace;
   maxVenues?: number;
+  /** The request's clock, so the two model-backed stages here shrink to fit what is actually left. */
+  deadline?: Deadline;
 }): Promise<{ venues: Venue[]; cached: boolean }> {
-  const { nicheKey, buyers, whatYouSell, lexiconTerms, trace, maxVenues = 8 } = opts;
+  const { nicheKey, buyers, whatYouSell, lexiconTerms, trace, maxVenues = 8, deadline } = opts;
+  // Both slow stages run concurrently, so each may claim the same slice of the remaining time.
+  const webBudget = deadline ? deadline.budgetFor(WEB_DISCOVERY_BUDGET_MS, RESOLVE_RESERVE_MS) : WEB_DISCOVERY_BUDGET_MS;
+  const annotateBudget = deadline ? deadline.budgetFor(ANNOTATION_BUDGET_MS, RESOLVE_RESERVE_MS) : ANNOTATION_BUDGET_MS;
 
   // Cache is keyed on the niche, not the user or the URL — two founders selling into the same
   // buyer share venue resolution, which is what makes a warm run effectively instant.
@@ -178,7 +186,7 @@ export async function resolveVenues(opts: {
   // Reddit discovery returning nothing (no credentials, a 403 from a datacenter IP, an outage) is
   // a degraded run, not a failed one — the auth-free sources still carry it.
   if (discovered.length === 0) {
-    const webOnly = await discoverWebForums({ nicheKey, buyers, trace });
+    const webOnly = await withTimeout(discoverWebForums({ nicheKey, buyers, trace }), webBudget, [] as Venue[]);
     const fallback = [...webOnly, ...alwaysAvailableVenues(lexiconTerms)];
     trace.record({
       stage: "venues:reddit-unavailable",
@@ -192,7 +200,7 @@ export async function resolveVenues(opts: {
 
   // Kicked off here but awaited after annotation, so the open-web search overlaps the annotation
   // model call rather than adding its latency on top of it.
-  const webVenuesPromise = withTimeout(discoverWebForums({ nicheKey, buyers, trace }), WEB_DISCOVERY_BUDGET_MS, [] as Venue[]);
+  const webVenuesPromise = withTimeout(discoverWebForums({ nicheKey, buyers, trace }), webBudget, [] as Venue[]);
 
   const ranked = discovered
     .map((s) => ({ sub: s, rank: termRelevance(`${s.name} ${s.description}`, lexiconTerms) * 0.6 + sizeFit(s.subscribers) * 0.4 }))
@@ -225,7 +233,7 @@ export async function resolveVenues(opts: {
         ],
           output_config: { effort: "low", format: zodOutputFormat(AnnotationSchema) },
         }),
-        ANNOTATION_BUDGET_MS,
+        annotateBudget,
         null,
       );
       if (!result) throw new Error("annotation exceeded its budget");

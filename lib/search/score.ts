@@ -44,8 +44,14 @@ export async function scoreCandidates(opts: {
   whatYouSell: string;
   problem: string;
   buyers: { name: string; desc: string }[];
+  /**
+   * Hard ceiling on the model call. This was the one stage in the whole pipeline with no timeout,
+   * which is how a run reached Vercel's 60s function limit and died without sending a response —
+   * every other stage was bounded and this one could take as long as it liked.
+   */
+  timeoutMs?: number;
 }): Promise<ScoreResult> {
-  const { candidates, whatYouSell, problem, buyers } = opts;
+  const { candidates, whatYouSell, problem, buyers, timeoutMs = 25_000 } = opts;
   const drops: Partial<Record<DropReason, number>> = {};
   if (candidates.length === 0) return { leads: [], drops };
 
@@ -85,7 +91,7 @@ export async function scoreCandidates(opts: {
       },
     ],
     output_config: { effort: "low", format: zodOutputFormat(ScoreSchema) },
-  });
+  }, { timeout: timeoutMs });
 
   if (!result.parsed_output) throw new Error("Lead scoring failed to parse.");
 

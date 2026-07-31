@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { extractLeads } from "@/lib/search/extract";
 import { lexiconFrom } from "@/lib/generateCampaignSeed";
 import { Trace } from "@/lib/search/trace";
+import { Deadline } from "@/lib/search/deadline";
 import { toUserError } from "@/lib/apiError";
 import type { Venue } from "@/lib/search/types";
 
@@ -9,6 +10,10 @@ import type { Venue } from "@/lib/search/types";
 // each batch as it lands, which is what produces streaming results without SSE — and keeps every
 // individual request comfortably inside Vercel's function ceiling rather than racing it.
 export const maxDuration = 45;
+
+// See resolve-venues: the shard must finish and answer rather than being killed mid-flight, because
+// a killed function returns nothing the client can render or explain.
+const RUN_BUDGET_MS = 35_000;
 
 export async function POST(req: NextRequest) {
   const body = await req.json();
@@ -20,6 +25,7 @@ export async function POST(req: NextRequest) {
   if (venues.length === 0) return NextResponse.json({ leads: [], runId: null });
 
   const trace = new Trace(body.runId);
+  const deadline = new Deadline(RUN_BUDGET_MS);
   try {
     const { leads } = await extractLeads({
       venues,
@@ -33,6 +39,7 @@ export async function POST(req: NextRequest) {
       // the ones the founder can already see.
       wave: typeof body.wave === "number" ? body.wave : 0,
       excludeAuthors: Array.isArray(body.excludeAuthors) ? body.excludeAuthors : [],
+      deadline,
     });
     trace.log("onboarding/extract-leads");
     return NextResponse.json({ leads, trace: trace.toJSON() });

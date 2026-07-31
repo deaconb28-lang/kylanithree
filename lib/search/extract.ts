@@ -8,6 +8,7 @@ import { searchStackExchange } from "./stackexchange";
 import { cheapFilter } from "./filter";
 import { scoreCandidates } from "./score";
 import { settleWithBudget, Trace } from "./trace";
+import { Deadline } from "./deadline";
 import { buildPhrasePool, planWave } from "./waves";
 import { toSearchQueries } from "./queries";
 import type { Candidate, LexiconInput, ScoredLead, Venue } from "./types";
@@ -22,6 +23,13 @@ import type { Candidate, LexiconInput, ScoredLead, Venue } from "./types";
 
 const PER_SOURCE_TIMEOUT_MS = 4000;
 const FANOUT_BUDGET_MS = 7000;
+const SCORE_BUDGET_MS = 25_000;
+// Below this there is not enough time left for the model to read a batch and answer, so the run
+// returns what it has instead of starting a call that will be cut off mid-flight.
+const SCORE_MIN_MS = 8_000;
+// Held back for serialising the response and writing results — the run must never spend its last
+// millisecond inside a model call.
+const RESPONSE_RESERVE_MS = 2_000;
 // Cap on what reaches the expensive pass per shard. The cheap filter ranks by signal first, so
 // this is a "best N", not a truncation of something unsorted.
 const MAX_TO_SCORE = 40;
@@ -38,8 +46,10 @@ export async function extractLeads(opts: {
   // Authors already shipped by earlier waves/shards, so a later wave spends its budget on new
   // people instead of re-surfacing and re-scoring the same ones.
   excludeAuthors?: string[];
+  /** The request's clock. Without one, stages run to their own budgets and the total is unbounded. */
+  deadline?: Deadline;
 }): Promise<{ leads: ScoredLead[] }> {
-  const { venues, lexicon, whatYouSell, problem, buyers, trace, wave = 0, excludeAuthors = [] } = opts;
+  const { venues, lexicon, whatYouSell, problem, buyers, trace, wave = 0, excludeAuthors = [], deadline } = opts;
 
   const searchable = venues.filter((v) => v.searchable);
 
@@ -78,7 +88,8 @@ export async function extractLeads(opts: {
   }
 
   const raw = await trace.stage(`extract:fanout:w${wave}`, jobs.length, async () => {
-    const { results, timeouts, errors } = await settleWithBudget(jobs, FANOUT_BUDGET_MS);
+    const fanoutMs = deadline ? deadline.budgetFor(FANOUT_BUDGET_MS, RESPONSE_RESERVE_MS) : FANOUT_BUDGET_MS;
+    const { results, timeouts, errors } = await settleWithBudget(jobs, fanoutMs);
     const unique = new Map<string, Candidate>();
     for (const c of results) unique.set(c.id, c);
     return { out: [...unique.values()], drops: { source_timeout: timeouts, source_error: errors } };
@@ -98,8 +109,22 @@ export async function extractLeads(opts: {
 
   const toScore = filtered.slice(0, MAX_TO_SCORE);
   const leads = await trace.stage(`extract:score:w${wave}`, toScore.length, async () => {
+    // Skipping is the honest outcome when there isn't room: starting a call that gets cut off
+    // mid-flight costs the same and returns nothing, and takes the trace down with it.
+    if (deadline && !deadline.hasRoomFor(SCORE_MIN_MS, RESPONSE_RESERVE_MS)) {
+      return {
+        out: [] as ScoredLead[],
+        note: `skipped: ${Math.round(deadline.remaining() / 1000)}s left, needs ${SCORE_MIN_MS / 1000}s`,
+      };
+    }
     try {
-      const { leads: scored, drops } = await scoreCandidates({ candidates: toScore, whatYouSell, problem, buyers });
+      const { leads: scored, drops } = await scoreCandidates({
+        candidates: toScore,
+        whatYouSell,
+        problem,
+        buyers,
+        timeoutMs: deadline ? deadline.budgetFor(SCORE_BUDGET_MS, RESPONSE_RESERVE_MS) : SCORE_BUDGET_MS,
+      });
       return { out: scored, drops };
     } catch (err) {
       // Partial results beat a timeout: if scoring falls over, nothing ships from this shard

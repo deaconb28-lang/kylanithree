@@ -21,6 +21,8 @@
     "lib/search/waves.ts",
     "lib/search/leadScore.ts",
     "lib/search/queries.ts",
-    "lib/relativeTime.ts"
+    "lib/relativeTime.ts",
+    "lib/search/explain.ts",
+    "lib/search/deadline.ts"
   ]
 }

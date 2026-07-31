@@ -3,6 +3,7 @@ import { resolveVenues } from "@/lib/search/venues";
 import { extractLeads } from "@/lib/search/extract";
 import { lexiconFrom, nicheKeyFrom } from "@/lib/generateCampaignSeed";
 import { Trace } from "@/lib/search/trace";
+import { Deadline } from "@/lib/search/deadline";
 import { toUserError } from "@/lib/apiError";
 
 // Runs the real pipeline against a fixed, known-good niche and returns the full trace.
@@ -12,6 +13,12 @@ import { toUserError } from "@/lib/apiError";
 // candidates are being found and dropped, or never found at all — and how long each stage took,
 // which is the number that matters when a function is being killed by the platform.
 export const maxDuration = 60;
+
+// Well under maxDuration. Vercel kills the function AT the ceiling and sends nothing back, so a run
+// that aims for 60s reports 504 and takes its own trace down with it — which is exactly what
+// production was doing. Finishing at 45s with partial results and a readable trace is strictly more
+// useful than a complete run that never arrives.
+const RUN_BUDGET_MS = 45_000;
 
 const SAMPLE = {
   whatYouSell: "A tool that replaces messy spreadsheets for small teams.",
@@ -28,7 +35,7 @@ export async function POST(req: NextRequest) {
   const body = await req.json().catch(() => ({}));
   const input = { ...SAMPLE, ...body, url: body.url ?? "example.com" };
   const trace = new Trace();
-  const startedAt = Date.now();
+  const deadline = new Deadline(RUN_BUDGET_MS);
 
   try {
     const lexicon = lexiconFrom(input);
@@ -38,11 +45,18 @@ export async function POST(req: NextRequest) {
       whatYouSell: input.whatYouSell,
       lexiconTerms: [...lexicon.seekingPhrases, ...lexicon.problemPhrases],
       trace,
+      deadline,
     });
 
     const searchable = venues.filter((v) => v.searchable);
     let leads: Awaited<ReturnType<typeof extractLeads>>["leads"] = [];
-    if (searchable.length > 0) {
+    let skipped: string | null = null;
+
+    if (searchable.length === 0) {
+      skipped = "No searchable venue was resolved, so there was nothing to search inside.";
+    } else if (deadline.expired()) {
+      skipped = `Phase 1 used the whole ${RUN_BUDGET_MS / 1000}s budget — extraction never started.`;
+    } else {
       // One shard, one wave — enough to prove the path end to end without risking the ceiling.
       const result = await extractLeads({
         venues: searchable.slice(0, 3),
@@ -51,6 +65,7 @@ export async function POST(req: NextRequest) {
         problem: input.problem,
         buyers: input.buyers,
         trace,
+        deadline,
       });
       leads = result.leads;
     }
@@ -58,7 +73,10 @@ export async function POST(req: NextRequest) {
     trace.log("diagnostics/run");
     return NextResponse.json({
       ok: true,
-      totalMs: Date.now() - startedAt,
+      totalMs: deadline.elapsed(),
+      budgetMs: RUN_BUDGET_MS,
+      hitBudget: deadline.expired(),
+      skipped,
       venuesResolved: venues.length,
       venuesSearchable: searchable.length,
       venueNames: venues.map((v) => `${v.name}${v.searchable ? "" : " (not searchable)"}`),
@@ -78,7 +96,9 @@ export async function POST(req: NextRequest) {
     return NextResponse.json(
       {
         ok: false,
-        totalMs: Date.now() - startedAt,
+        totalMs: deadline.elapsed(),
+        budgetMs: RUN_BUDGET_MS,
+        hitBudget: deadline.expired(),
         error: toUserError("diagnostics/run", err, "The test run failed."),
         // Unlike a customer-facing route, the raw message is the entire point here.
         detail: err instanceof Error ? err.message.slice(0, 500) : String(err).slice(0, 500),

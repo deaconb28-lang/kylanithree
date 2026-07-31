@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { resolveVenues } from "@/lib/search/venues";
 import { lexiconFrom, nicheKeyFrom } from "@/lib/generateCampaignSeed";
 import { Trace } from "@/lib/search/trace";
+import { Deadline } from "@/lib/search/deadline";
 import { redditAuthMode } from "@/lib/search/reddit";
 import { toUserError } from "@/lib/apiError";
 
@@ -9,6 +10,10 @@ import { toUserError } from "@/lib/apiError";
 // plus one short model pass to prune and annotate, so this returns well inside the budget and the
 // founder sees real communities on screen before lead extraction has even started.
 export const maxDuration = 60;
+
+// Under the platform ceiling on purpose. A function killed AT the ceiling sends no response at all,
+// so the browser reports a connection failure and the trace is lost — the run has to finish itself.
+const RUN_BUDGET_MS = 40_000;
 
 // Unauthenticated: onboarding runs before sign-in.
 export async function POST(req: NextRequest) {
@@ -18,6 +23,7 @@ export async function POST(req: NextRequest) {
   }
 
   const trace = new Trace();
+  const deadline = new Deadline(RUN_BUDGET_MS);
   try {
     const lexicon = lexiconFrom(body);
     const { venues, cached } = await resolveVenues({
@@ -26,10 +32,11 @@ export async function POST(req: NextRequest) {
       whatYouSell: body.whatYouSell,
       lexiconTerms: [...lexicon.seekingPhrases, ...lexicon.problemPhrases],
       trace,
+      deadline,
     });
     trace.record({ stage: "reddit:auth", candidatesIn: 0, candidatesOut: 0, ms: 0, note: redditAuthMode() });
     trace.log("onboarding/resolve-venues");
-    return NextResponse.json({ venues, cached, runId: trace.runId });
+    return NextResponse.json({ venues, cached, runId: trace.runId, trace: trace.toJSON() });
   } catch (err) {
     trace.log("onboarding/resolve-venues");
     const message = toUserError(
