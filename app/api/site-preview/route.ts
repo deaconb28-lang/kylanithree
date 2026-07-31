@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { cleanSiteDescription, cleanSiteTitle } from "@/lib/htmlText";
 
 // Deliberately model-free and fast. Its only job is to put the founder's own site — icon, name,
 // and a real one-line description — on screen within a second of them hitting "Read my product",
@@ -11,25 +12,10 @@ function normalizeUrl(raw: string): string {
   return /^https?:\/\//i.test(trimmed) ? trimmed : `https://${trimmed}`;
 }
 
-function decodeEntities(s: string): string {
-  return s
-    .replace(/&quot;/g, '"')
-    .replace(/&#x27;|&#39;/g, "'")
-    .replace(/&amp;/g, "&")
-    .replace(/&lt;/g, "<")
-    .replace(/&gt;/g, ">")
-    .replace(/&nbsp;/g, " ")
-    .replace(/\s+/g, " ")
-    .trim();
-}
-
 function metaContent(html: string, patterns: RegExp[]): string | null {
   for (const re of patterns) {
     const m = html.match(re);
-    if (m?.[1]) {
-      const value = decodeEntities(m[1]);
-      if (value) return value;
-    }
+    if (m?.[1]?.trim()) return m[1];
   }
   return null;
 }
@@ -60,25 +46,26 @@ export async function POST(req: NextRequest) {
     });
     const html = (await res.text()).slice(0, 60_000);
 
-    const title =
+    const rawTitle =
       metaContent(html, [
         /<meta[^>]+property=["']og:site_name["'][^>]+content=["']([^"']+)["']/i,
         /<meta[^>]+content=["']([^"']+)["'][^>]+property=["']og:site_name["']/i,
         /<title[^>]*>([^<]+)<\/title>/i,
       ]) ?? host;
 
-    const description = metaContent(html, [
+    const rawDescription = metaContent(html, [
       /<meta[^>]+property=["']og:description["'][^>]+content=["']([^"']+)["']/i,
       /<meta[^>]+content=["']([^"']+)["'][^>]+property=["']og:description["']/i,
       /<meta[^>]+name=["']description["'][^>]+content=["']([^"']+)["']/i,
       /<meta[^>]+content=["']([^"']+)["'][^>]+name=["']description["']/i,
     ]);
 
+    const title = cleanSiteTitle(rawTitle, host);
     return NextResponse.json({
       host,
       iconUrl,
-      title: title.slice(0, 80),
-      description: description ? description.slice(0, 180) : null,
+      title,
+      description: cleanSiteDescription(rawDescription, title),
     });
   } catch {
     // A site that blocks bots or times out still has a host and an icon — return what's true

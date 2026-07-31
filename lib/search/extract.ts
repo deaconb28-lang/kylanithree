@@ -1,5 +1,7 @@
 import { searchPostsInSubreddit } from "./reddit";
 import { searchHackerNews } from "./hackernews";
+import { searchLemmy } from "./lemmy";
+import { searchX } from "./x";
 import { cheapFilter } from "./filter";
 import { scoreCandidates } from "./score";
 import { settleWithBudget, Trace } from "./trace";
@@ -56,6 +58,18 @@ export async function extractLeads(opts: {
             timeoutMs: PER_SOURCE_TIMEOUT_MS,
           }),
         );
+      } else if (v.id === "lemmy:all") {
+        jobs.push(() =>
+          searchLemmy({
+            query: phrase,
+            windowDays: lexicon.relevanceWindowDays,
+            limit: 20,
+            timeoutMs: PER_SOURCE_TIMEOUT_MS,
+          }),
+        );
+      } else if (v.id === "x:all") {
+        // Returns [] without a token rather than throwing, so a missing X key costs nothing.
+        jobs.push(() => searchX({ query: phrase, limit: 25, timeoutMs: PER_SOURCE_TIMEOUT_MS }));
       }
     }
   }

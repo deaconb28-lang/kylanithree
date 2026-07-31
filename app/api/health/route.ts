@@ -29,6 +29,7 @@ export async function GET() {
     REDDIT_CLIENT_ID: present("REDDIT_CLIENT_ID"),
     REDDIT_CLIENT_SECRET: present("REDDIT_CLIENT_SECRET"),
     RESEND_API_KEY: present("RESEND_API_KEY"),
+    X_BEARER_TOKEN: present("X_BEARER_TOKEN"),
     // Auth.js derives its callback URL from these when behind a proxy; a wrong value is a very
     // common cause of an OAuth redirect_uri mismatch.
     AUTH_URL: present("AUTH_URL"),
@@ -104,8 +105,25 @@ export async function GET() {
     checks.hackerNews = { reachable: false, ms: Date.now() - hnT0, error: (err instanceof Error ? err.message : String(err)).slice(0, 200) };
   }
 
+  // --- lemmy (auth-free) --------------------------------------------------
+  const lemmyT0 = Date.now();
+  try {
+    const res = await fetch("https://lemmy.world/api/v3/search?q=test&type_=Posts&limit=1", { signal: AbortSignal.timeout(6000) });
+    checks.lemmy = { reachable: res.ok, status: res.status, ms: Date.now() - lemmyT0 };
+  } catch (err) {
+    checks.lemmy = { reachable: false, ms: Date.now() - lemmyT0, error: (err instanceof Error ? err.message : String(err)).slice(0, 200) };
+  }
+
+  checks.x = process.env.X_BEARER_TOKEN
+    ? { enabled: true, note: "X_BEARER_TOKEN present — recent search covers roughly the last 7 days." }
+    : { enabled: false, note: "No X_BEARER_TOKEN. X has no free search API; reading posts requires a paid tier, so this source stays off." };
+
   const mongoOk = (checks.mongo as { ok: boolean }).ok;
-  const anySource = Boolean((checks.reddit as { reachable?: boolean }).reachable || (checks.hackerNews as { reachable?: boolean }).reachable);
+  const anySource = Boolean(
+    (checks.reddit as { reachable?: boolean }).reachable ||
+      (checks.hackerNews as { reachable?: boolean }).reachable ||
+      (checks.lemmy as { reachable?: boolean }).reachable,
+  );
 
   return NextResponse.json(
     {

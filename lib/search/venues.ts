@@ -3,6 +3,7 @@ import { zodOutputFormat } from "@anthropic-ai/sdk/helpers/zod";
 import { getAnthropic } from "../anthropic";
 import { getDb } from "../mongodb";
 import { searchSubreddits, type SubredditResult } from "./reddit";
+import { hasXCredentials } from "./x";
 import { settleWithBudget, type Trace } from "./trace";
 import { formatMembers, sizeFit, termRelevance } from "./ranking";
 import type { Venue } from "./types";
@@ -15,6 +16,14 @@ export { formatMembers, sizeFit } from "./ranking";
 // aspiration in a prompt.
 
 const VENUE_TTL_DAYS = 30;
+
+// Short hints so the annotation pass can judge the credential-free sources on the same footing as
+// the discovered subreddits, instead of them being kept or dropped by default.
+const VENUE_HINTS: Record<string, string> = {
+  "hn:all": "founders, engineers, and technical operators. Keep only if this buyer is plausibly technical or startup-adjacent; drop for consumer, lifestyle, or retail buyers.",
+  "lemmy:all": "federated general-interest communities, Reddit-like in tone and topic spread. Reasonable for most buyers.",
+  "x:all": "short public posts across every topic. Keep if this buyer complains publicly; drop for private or enterprise-only buyers.",
+};
 
 // Always in the candidate pool, and the reason a run still produces leads when Reddit is
 // unavailable — HN needs no registered app, no key, and no approval. The annotation pass decides
@@ -32,6 +41,38 @@ const HACKER_NEWS: Venue = {
   searchable: true,
   rank: 0.5,
 };
+
+const LEMMY: Venue = {
+  id: "lemmy:all",
+  platform: "Forum",
+  name: "Lemmy communities",
+  url: "https://lemmy.world/",
+  members: null,
+  membersLabel: "size unknown",
+  fit: "Untested",
+  note: "Federated, Reddit-shaped communities. Smaller but far less hostile to a genuine reply.",
+  searchable: true,
+  rank: 0.45,
+};
+
+const X_VENUE: Venue = {
+  id: "x:all",
+  platform: "X",
+  name: "X",
+  url: "https://x.com/",
+  members: null,
+  membersLabel: "size unknown",
+  fit: "Untested",
+  note: "Reply in the thread, never a cold DM. Recent posts only — the API covers about a week.",
+  searchable: true,
+  rank: 0.4,
+};
+
+// Sources that need no per-niche discovery. HN and Lemmy are unconditional because they require no
+// credentials at all; X joins them only when a token exists, since it has no free search tier.
+function alwaysAvailableVenues(): Venue[] {
+  return [HACKER_NEWS, LEMMY, ...(hasXCredentials() ? [X_VENUE] : [])];
+}
 
 export interface VenueCacheDoc {
   nicheKey: string;
@@ -98,8 +139,15 @@ export async function resolveVenues(opts: {
   // Reddit discovery returning nothing (no credentials, a 403 from a datacenter IP, an outage) is
   // a degraded run, not a failed one — the auth-free sources still carry it.
   if (discovered.length === 0) {
-    trace.record({ stage: "venues:reddit-unavailable", candidatesIn: 0, candidatesOut: 1, ms: 0, note: "falling back to auth-free venues only" });
-    return { venues: [HACKER_NEWS], cached: false };
+    const fallback = alwaysAvailableVenues();
+    trace.record({
+      stage: "venues:reddit-unavailable",
+      candidatesIn: 0,
+      candidatesOut: fallback.length,
+      ms: 0,
+      note: "Reddit returned nothing (no credentials, blocked IP, or outage) — continuing on auth-free sources",
+    });
+    return { venues: fallback, cached: false };
   }
 
   const ranked = discovered
@@ -126,7 +174,7 @@ export async function resolveVenues(opts: {
               "",
               "Communities (slug — size — description):",
               ...ranked.map((r) => `- ${r.sub.slug} (${formatMembers(r.sub.subscribers)}): ${r.sub.description || "no description"}`),
-              `- hn:all (Hacker News): founders, engineers, and technical operators. Keep ONLY if this buyer is plausibly technical or startup-adjacent; drop it for consumer, lifestyle, retail, or non-technical buyers.`,
+              ...alwaysAvailableVenues().map((v) => `- ${v.id} (${v.name}): ${VENUE_HINTS[v.id] ?? "general audience"}`),
             ].join("\n"),
           },
         ],
@@ -151,8 +199,13 @@ export async function resolveVenues(opts: {
           };
         })
         .slice(0, maxVenues);
-      const hnVerdict = verdicts.get("hn:all");
-      return { out: hnVerdict?.keep === false ? out : [...out, { ...HACKER_NEWS, fit: hnVerdict?.fit ?? HACKER_NEWS.fit, note: hnVerdict?.note || HACKER_NEWS.note }] };
+      const extras = alwaysAvailableVenues()
+        .filter((v) => verdicts.get(v.id)?.keep !== false)
+        .map((v) => {
+          const verdict = verdicts.get(v.id);
+          return { ...v, fit: verdict?.fit ?? v.fit, note: verdict?.note || v.note };
+        });
+      return { out: [...out, ...extras] };
     } catch {
       // Annotation is a nice-to-have. If the model call fails the venues are still real and still
       // searchable, so the run continues with unannotated entries rather than collapsing.
@@ -168,7 +221,7 @@ export async function resolveVenues(opts: {
         searchable: true,
         rank: r.rank,
       }));
-      return { out, note: "annotation failed, using unannotated venues" };
+      return { out: [...out, ...alwaysAvailableVenues()], note: "annotation failed, using unannotated venues" };
     }
   });
 

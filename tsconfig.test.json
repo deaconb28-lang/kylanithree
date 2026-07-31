@@ -15,6 +15,7 @@
     "lib/search/reddit.ts",
     "lib/search/types.ts",
     "lib/search/trace.ts",
-    "lib/search/excerpt.ts"
+    "lib/search/excerpt.ts",
+    "lib/htmlText.ts"
   ]
 }

@@ -4,6 +4,7 @@ import { zodOutputFormat } from "@anthropic-ai/sdk/helpers/zod";
 import { getAnthropic } from "@/lib/anthropic";
 import { toUserError } from "@/lib/apiError";
 import { categoryGuidance } from "@/lib/productCategories";
+import { htmlToText } from "@/lib/htmlText";
 
 // This route combines an external site fetch with a Claude call, which can
 // exceed the platform's default serverless function timeout (10s on Vercel
@@ -80,18 +81,9 @@ const AnalysisSchema = z.object({
 });
 
 function extractReadableText(html: string): string {
-  const withoutNoise = html
-    .replace(/<script[\s\S]*?<\/script>/gi, " ")
-    .replace(/<style[\s\S]*?<\/style>/gi, " ")
-    .replace(/<!--[\s\S]*?-->/g, " ");
-  const text = withoutNoise
-    .replace(/<[^>]+>/g, " ")
-    .replace(/&nbsp;/g, " ")
-    .replace(/&amp;/g, "&")
-    .replace(/&[a-zA-Z#0-9]+;/g, " ")
-    .replace(/\s+/g, " ")
-    .trim();
-  return text.slice(0, 12000);
+  // Previously replaced every entity with a space, which turned "don&#39;t" into "don t" in the
+  // text the persona analysis reads. Decoding properly keeps the founder's own words intact.
+  return htmlToText(html).slice(0, 12000);
 }
 
 function normalizeUrl(raw: string): string {

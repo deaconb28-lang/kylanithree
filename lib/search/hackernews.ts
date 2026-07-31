@@ -1,3 +1,4 @@
+import { collapseWhitespace, decodeHtmlEntities, stripTags } from "../htmlText";
 import type { Candidate } from "./types";
 
 // Hacker News via the public Algolia search API.
@@ -26,21 +27,10 @@ type AlgoliaHit = {
 };
 
 // Algolia returns comment bodies as HTML fragments. Strip to plain text so the scoring stage's
-// verbatim-excerpt check compares against what a human would actually read on the page.
+// verbatim-excerpt check compares against what a human would actually read on the page — a stray
+// undecoded entity there is enough to lose an otherwise good lead.
 function toPlainText(html: string): string {
-  return html
-    .replace(/<\s*br\s*\/?\s*>/gi, "\n")
-    .replace(/<\s*\/p\s*>/gi, "\n")
-    .replace(/<[^>]+>/g, "")
-    .replace(/&quot;/g, '"')
-    .replace(/&#x27;|&#39;/g, "'")
-    .replace(/&amp;/g, "&")
-    .replace(/&lt;/g, "<")
-    .replace(/&gt;/g, ">")
-    .replace(/&nbsp;/g, " ")
-    .replace(/&#x2F;/g, "/")
-    .replace(/[ \t]+/g, " ")
-    .trim();
+  return collapseWhitespace(decodeHtmlEntities(stripTags(html)));
 }
 
 export async function searchHackerNews(opts: {
