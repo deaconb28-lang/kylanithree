@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getDb } from "@/lib/mongodb";
 import { redditAuthMode } from "@/lib/search/reddit";
+import { hasBlueskyCredentials, searchBluesky } from "@/lib/search/bluesky";
 import { webSearchProvider } from "@/lib/search/websearch";
 
 // One request that answers "which piece is actually broken?" — built because three failures at
@@ -9,7 +10,7 @@ import { webSearchProvider } from "@/lib/search/websearch";
 //
 // Never returns a secret. Only presence, lengths, and sanitized error text. Safe to delete once
 // the environment is stable; harmless to leave.
-export const maxDuration = 20;
+export const maxDuration = 30;
 export const dynamic = "force-dynamic";
 
 function present(name: string) {
@@ -134,21 +135,43 @@ export async function GET(req: NextRequest) {
     ? { enabled: true, note: "X_BEARER_TOKEN present — recent search covers roughly the last 7 days." }
     : { enabled: false, note: "No X_BEARER_TOKEN. X has no free search API; reading posts requires a paid tier, so this source stays off." };
 
-  // --- bluesky + stack exchange (both fully open, no key) -----------------
+  // --- bluesky ------------------------------------------------------------
+  // When credentials exist this runs a REAL authenticated search rather than an unauthenticated
+  // probe, because that is the only thing that actually proves the app password works. Sandboxed
+  // development cannot reach bsky.social, so this endpoint is where the credentials get verified.
   const bskyT0 = Date.now();
-  try {
-    const res = await fetch("https://public.api.bsky.app/xrpc/app.bsky.feed.searchPosts?q=test&limit=1", { signal: AbortSignal.timeout(6000) });
+  if (hasBlueskyCredentials()) {
+    try {
+      const posts = await searchBluesky({ query: "spreadsheet", windowDays: 30, limit: 3, timeoutMs: 9000 });
+      checks.bluesky = {
+        credentialed: true,
+        authenticated: true,
+        ms: Date.now() - bskyT0,
+        samplePosts: posts.length,
+        note:
+          posts.length > 0
+            ? "App password works and search returned real posts."
+            : "App password works, but this sample query matched nothing — not an error.",
+      };
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      checks.bluesky = {
+        credentialed: true,
+        authenticated: false,
+        ms: Date.now() - bskyT0,
+        error: message.slice(0, 300),
+        likelyCause: /session failed: 401|Invalid identifier or password/i.test(message)
+          ? "BLUESKY_IDENTIFIER or BLUESKY_APP_PASSWORD is wrong. Use the full handle (e.g. name.bsky.social) and an APP password, not the account password."
+          : /session failed: 429/i.test(message)
+            ? "Rate limited while creating a session. Wait and retry."
+            : "See the raw error above.",
+      };
+    }
+  } else {
     checks.bluesky = {
-      reachable: res.ok,
-      status: res.status,
-      ms: Date.now() - bskyT0,
-      credentialed: Boolean(process.env.BLUESKY_IDENTIFIER && process.env.BLUESKY_APP_PASSWORD),
-      note: res.ok
-        ? "Unauthenticated search works from this IP."
-        : "Unauthenticated search is blocked from this IP (expected). Set BLUESKY_IDENTIFIER and BLUESKY_APP_PASSWORD — a Bluesky account and app password are free.",
+      credentialed: false,
+      note: "Set BLUESKY_IDENTIFIER and BLUESKY_APP_PASSWORD. Unauthenticated search is blocked from datacenter IPs, so this source stays off without them.",
     };
-  } catch (err) {
-    checks.bluesky = { reachable: false, ms: Date.now() - bskyT0, error: (err instanceof Error ? err.message : String(err)).slice(0, 200) };
   }
 
   const seT0 = Date.now();
