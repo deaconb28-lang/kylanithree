@@ -1,4 +1,5 @@
 import { searchPostsInSubreddit } from "./reddit";
+import { searchHackerNews } from "./hackernews";
 import { cheapFilter } from "./filter";
 import { scoreCandidates } from "./score";
 import { settleWithBudget, Trace } from "./trace";
@@ -25,24 +26,37 @@ export async function extractLeads(opts: {
 }): Promise<{ leads: ScoredLead[] }> {
   const { venues, lexicon, whatYouSell, problem, buyers, trace, maxLeads } = opts;
 
-  const searchable = venues.filter((v) => v.searchable && v.id.startsWith("reddit:"));
+  const searchable = venues.filter((v) => v.searchable);
   // Two phrases per venue keeps the fan-out wide across communities rather than deep on one, which
   // matters more for coverage than exhausting every phrase in a single subreddit.
   const phrases = [...lexicon.seekingPhrases.slice(0, 2), ...lexicon.problemPhrases.slice(0, 2)].filter(Boolean);
 
+  // Dispatch per platform. A venue whose platform has no extractor (Slack, Discord — private and
+  // not searchable from outside) simply contributes no jobs rather than failing the shard.
   const jobs: (() => Promise<Candidate[]>)[] = [];
   for (const v of searchable) {
-    const slug = v.id.slice("reddit:".length);
     for (const phrase of phrases.slice(0, 2)) {
-      jobs.push(() =>
-        searchPostsInSubreddit({
-          slug,
-          query: phrase,
-          windowDays: lexicon.relevanceWindowDays,
-          limit: 25,
-          timeoutMs: PER_SOURCE_TIMEOUT_MS,
-        }),
-      );
+      if (v.id.startsWith("reddit:")) {
+        const slug = v.id.slice("reddit:".length);
+        jobs.push(() =>
+          searchPostsInSubreddit({
+            slug,
+            query: phrase,
+            windowDays: lexicon.relevanceWindowDays,
+            limit: 25,
+            timeoutMs: PER_SOURCE_TIMEOUT_MS,
+          }),
+        );
+      } else if (v.id === "hn:all") {
+        jobs.push(() =>
+          searchHackerNews({
+            query: phrase,
+            windowDays: lexicon.relevanceWindowDays,
+            limit: 25,
+            timeoutMs: PER_SOURCE_TIMEOUT_MS,
+          }),
+        );
+      }
     }
   }
 

@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import OnboardingChrome from "./OnboardingChrome";
 import ScanningWindow from "./ScanningWindow";
+import SiteBadge, { useSitePreview } from "./SiteBadge";
 import type { SiteAnalysis } from "../../lib/types";
 import type { ProductCategory } from "../../lib/productCategories";
 import { useNotificationPermission } from "../../lib/useNotificationPermission";
@@ -42,6 +43,9 @@ export default function Step2Reading({
   // wait, so permission is already resolved by the time the slower real lead search starts and
   // that screen doesn't need to interrupt again (it only re-asks if this was skipped or dismissed).
   const { permission: notifyPermission, request: requestNotifications } = useNotificationPermission();
+  // Resolves in well under a second, so the founder sees their own site while the much slower
+  // analysis is still running.
+  const preview = useSitePreview(url);
 
   useEffect(() => {
     const start = Date.now();
@@ -157,6 +161,8 @@ export default function Step2Reading({
         <h1 style={{ fontFamily: "var(--font-outfit)", fontWeight: 800, fontSize: "clamp(26px,4vw,44px)", lineHeight: 1.06, letterSpacing: "-.03em", margin: 0 }}>
           Working out what you sell and who has the problem.
         </h1>
+
+        <SiteBadge url={url} preview={preview} />
 
         <ScanningWindow label={`${url} · ${seconds}s`} />
 

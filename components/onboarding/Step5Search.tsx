@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import OnboardingChrome from "./OnboardingChrome";
 import ScanningWindow from "./ScanningWindow";
+import SiteBadge, { useSitePreview } from "./SiteBadge";
 import type { ProductCategory } from "../../lib/productCategories";
 import type { GeneratedSeed } from "../../lib/generateCampaignSeed";
 import type { ScoredLead, Venue } from "../../lib/search/types";
@@ -46,6 +47,7 @@ export default function Step5Search({
   const advancedRef = useRef(false);
   const notifiedRef = useRef(false);
   const { permission: notifyPermission, request: requestNotifications } = useNotificationPermission();
+  const preview = useSitePreview(url);
 
   const searchPayload = useMemo(
     () => ({
@@ -234,6 +236,10 @@ export default function Step5Search({
             <span style={{ width: 9, height: 9, borderRadius: 999, background: "var(--ember)", animation: "kyPulse 1.6s ease-in-out infinite" }} />
             Searching for real {(buyers[0]?.name || "buyers").toLowerCase()} right now
           </div>
+
+          {/* Kylani's own read of the site once it exists — the site's meta description is only a
+              placeholder until then. */}
+          <SiteBadge url={url} preview={preview} description={analysis?.siteSummary ?? null} compact />
           <div style={{ display: "flex", alignItems: "center", gap: 22, flexWrap: "wrap" }}>
             <div style={{ display: "flex", alignItems: "baseline", gap: 18, flexWrap: "wrap" }}>
               <span style={{ fontFamily: "var(--font-outfit)", fontWeight: 800, fontSize: "clamp(48px,7vw,92px)", lineHeight: 0.9, letterSpacing: "-.045em", fontVariantNumeric: "tabular-nums" }}>

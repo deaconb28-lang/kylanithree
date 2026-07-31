@@ -16,6 +16,23 @@ export { formatMembers, sizeFit } from "./ranking";
 
 const VENUE_TTL_DAYS = 30;
 
+// Always in the candidate pool, and the reason a run still produces leads when Reddit is
+// unavailable — HN needs no registered app, no key, and no approval. The annotation pass decides
+// whether it is actually relevant to this buyer; for a consumer or lifestyle niche it will be
+// dropped, which is correct.
+const HACKER_NEWS: Venue = {
+  id: "hn:all",
+  platform: "Hacker News",
+  name: "Hacker News",
+  url: "https://news.ycombinator.com/",
+  members: null,
+  membersLabel: "size unknown",
+  fit: "Untested",
+  note: "Comment threads, not posts — answer someone's question rather than announcing anything.",
+  searchable: true,
+  rank: 0.5,
+};
+
 export interface VenueCacheDoc {
   nicheKey: string;
   venues: Venue[];
@@ -78,7 +95,12 @@ export async function resolveVenues(opts: {
     };
   });
 
-  if (discovered.length === 0) return { venues: [], cached: false };
+  // Reddit discovery returning nothing (no credentials, a 403 from a datacenter IP, an outage) is
+  // a degraded run, not a failed one — the auth-free sources still carry it.
+  if (discovered.length === 0) {
+    trace.record({ stage: "venues:reddit-unavailable", candidatesIn: 0, candidatesOut: 1, ms: 0, note: "falling back to auth-free venues only" });
+    return { venues: [HACKER_NEWS], cached: false };
+  }
 
   const ranked = discovered
     .map((s) => ({ sub: s, rank: termRelevance(`${s.name} ${s.description}`, lexiconTerms) * 0.6 + sizeFit(s.subscribers) * 0.4 }))
@@ -102,8 +124,9 @@ export async function resolveVenues(opts: {
               `Product: ${whatYouSell}`,
               `Buyers: ${buyers.map((b) => `${b.name} — ${b.desc}`).join(" | ")}`,
               "",
-              "Subreddits:",
+              "Communities (slug — size — description):",
               ...ranked.map((r) => `- ${r.sub.slug} (${formatMembers(r.sub.subscribers)}): ${r.sub.description || "no description"}`),
+              `- hn:all (Hacker News): founders, engineers, and technical operators. Keep ONLY if this buyer is plausibly technical or startup-adjacent; drop it for consumer, lifestyle, retail, or non-technical buyers.`,
             ].join("\n"),
           },
         ],
@@ -128,7 +151,8 @@ export async function resolveVenues(opts: {
           };
         })
         .slice(0, maxVenues);
-      return { out };
+      const hnVerdict = verdicts.get("hn:all");
+      return { out: hnVerdict?.keep === false ? out : [...out, { ...HACKER_NEWS, fit: hnVerdict?.fit ?? HACKER_NEWS.fit, note: hnVerdict?.note || HACKER_NEWS.note }] };
     } catch {
       // Annotation is a nice-to-have. If the model call fails the venues are still real and still
       // searchable, so the run continues with unannotated entries rather than collapsing.

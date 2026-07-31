@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import OnboardingChrome from "./OnboardingChrome";
+import SiteBadge, { useSitePreview } from "./SiteBadge";
 import type { SiteAnalysis } from "../../lib/types";
 
 type Buyer = {
@@ -19,11 +20,14 @@ const DEFAULT_SELL = "Describe what you sell in a sentence.";
 
 export default function Step3Buyers({
   analysis,
+  url,
   onDone,
 }: {
   analysis: SiteAnalysis | null;
+  url: string;
   onDone: (whatYouSell: string, buyers: { name: string; desc: string }[]) => void;
 }) {
+  const preview = useSitePreview(url);
   const [buyers, setBuyers] = useState<Buyer[]>(() => (analysis?.buyers ?? []).map((b) => ({ ...b, dropped: false })));
   const [whatYouSell, setWhatYouSell] = useState(analysis?.whatYouSell ?? DEFAULT_SELL);
   const [editingSell, setEditingSell] = useState(false);
@@ -34,6 +38,9 @@ export default function Step3Buyers({
       <div style={{ width: "100%", maxWidth: 980, margin: "0 auto", display: "flex", flexDirection: "column", gap: 26 }}>
         <div style={{ display: "flex", alignItems: "flex-end", justifyContent: "space-between", gap: 40, flexWrap: "wrap" }}>
           <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+            {/* Identity only here — the summary is the subheading directly below, so passing it
+                into the badge as well would print the same sentence twice. */}
+            <SiteBadge url={url} preview={preview} description={null} hideDescription compact />
             <h1 style={{ fontFamily: "var(--font-outfit)", fontWeight: 800, fontSize: "clamp(28px,4vw,40px)", lineHeight: 1.06, letterSpacing: "-.03em", margin: 0 }}>
               Is this your audience?
             </h1>

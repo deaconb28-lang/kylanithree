@@ -57,6 +57,7 @@ function OnboardingInner() {
       return (
         <Step3Buyers
           analysis={analysis}
+          url={url}
           onDone={(finalWhatYouSell, finalBuyers) => {
             setWhatYouSell(finalWhatYouSell);
             setBuyers(finalBuyers);
