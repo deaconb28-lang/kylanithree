@@ -7,6 +7,7 @@ import type { HypothesisDoc, LeadDoc, SuppressionReason } from "../../../lib/col
 import { SUPPRESSION_REASON_LABELS, SUPPRESSION_REASONS } from "../../../lib/suppression";
 import LeadStars from "../../../components/LeadStars";
 import { starsFromTotal, labelFromTotal } from "../../../lib/search/leadScore";
+import { relativeTime } from "../../../lib/relativeTime";
 
 type Lead = LeadDoc & { _id: string };
 type Hypothesis = HypothesisDoc & { _id: string };
@@ -56,9 +57,24 @@ export default function QueuePage() {
 
   const filtered = useMemo(() => {
     if (!leads) return [];
+    // Quality bands first: with everything that qualified now shipping, triage is by score rather
+    // than by scrolling. Persona filters still work for slicing a specific hypothesis.
     if (filter === "all") return leads;
+    if (filter === "hot") return leads.filter((l) => (l.stars ?? 0) >= 4);
+    if (filter === "strong") return leads.filter((l) => (l.stars ?? 0) >= 3);
+    if (filter === "unread") return leads.filter((l) => l.status === "waiting");
     return leads.filter((l) => l.hypothesisKey === filter);
   }, [leads, filter]);
+
+  const scoreOf = (l: Lead) =>
+    typeof l.scoreTotal === "number"
+      ? {
+          total: l.scoreTotal,
+          stars: l.stars ?? starsFromTotal(l.scoreTotal),
+          label: l.scoreLabel ?? labelFromTotal(l.scoreTotal),
+          breakdown: l.scoreBreakdown ?? { intent: 0, confidence: 0, recency: 0, engagement: 0 },
+        }
+      : null;
 
   const primaryHypothesis = hypotheses?.find((h) => h.status === "primary") ?? null;
   const primaryWaitingCount = leads?.filter((l) => l.hypothesisKey === primaryHypothesis?.key && l.status === "waiting").length ?? 0;
@@ -210,16 +226,24 @@ export default function QueuePage() {
         <div className="queue-list" style={{ borderRight: "1px solid var(--border)", display: "flex", flexDirection: "column", overflow: "hidden" }}>
           <div style={{ padding: "26px 26px 18px", display: "flex", flexDirection: "column", gap: 14, borderBottom: "1px solid var(--border)" }}>
             <h1 style={{ fontFamily: "var(--font-outfit)", fontWeight: 800, fontSize: 26, letterSpacing: "-.03em", margin: 0 }}>
-              {leads.length} draft{leads.length === 1 ? "" : "s"}, waiting on you
+              {leads.length} {leads.length === 1 ? "person" : "people"} worth talking to
             </h1>
             <span style={{ fontSize: 14.5, color: "var(--muted)", lineHeight: 1.5 }}>
-              Each one references something real. Approve as many as you like — I&apos;ll space them out under your daily cap.
+              Sorted strongest first. Each one is a real post you can open and read — start at the top.
             </span>
             <div style={{ display: "flex", gap: 8, fontSize: 13.5, flexWrap: "wrap" }}>
-              {[{ key: "all", label: `All ${leads.length}` }, ...(hypotheses ?? [])
+              {[
+                { key: "all", label: `All ${leads.length}` },
+                { key: "hot", label: `★ 4+ · ${leads.filter((l) => (l.stars ?? 0) >= 4).length}` },
+                { key: "strong", label: `★ 3+ · ${leads.filter((l) => (l.stars ?? 0) >= 3).length}` },
+                { key: "unread", label: `Not actioned ${leads.filter((l) => l.status === "waiting").length}` },
+                ...(hypotheses ?? [])
                 .map((h) => ({ key: h.key, count: leads.filter((l) => l.hypothesisKey === h.key).length, name: h.name }))
                 .filter((h) => h.count > 0)
-                .map((h) => ({ key: h.key, label: `${h.name} ${h.count}` }))].map((f) => (
+                  .map((h) => ({ key: h.key, label: `${h.name} ${h.count}` })),
+              ]
+                .filter((f) => !/ 0$/.test(f.label))
+                .map((f) => (
                 <span
                   key={f.key}
                   onClick={() => { setFilter(f.key); setSelected(0); }}
@@ -234,44 +258,54 @@ export default function QueuePage() {
                 >
                   {f.label}
                 </span>
-              ))}
+                ))}
             </div>
-            {campaign && (
-              <div style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 13.5, color: "var(--green)", fontWeight: 600 }}>
-                <span style={{ width: 7, height: 7, borderRadius: 999, background: "var(--green)" }} />
-                Est. ${campaign.revenueBase.toLocaleString()} pipeline across these leads, at current reply-to-close rate
-              </div>
-            )}
           </div>
           <div style={{ flex: 1, overflow: "auto", display: "flex", flexDirection: "column" }}>
             {filtered.map((l, i) => {
               const st = l.status;
+              const sc = scoreOf(l);
+              const actioned = st !== "waiting";
               return (
                 <div
                   key={l._id}
                   onClick={() => selectIndex(i)}
                   style={{
-                    padding: "16px 26px",
+                    padding: "14px 22px",
                     borderBottom: "1px solid var(--border)",
                     display: "flex",
                     flexDirection: "column",
-                    gap: 5,
+                    gap: 6,
                     cursor: "pointer",
-                    opacity: st === "dropped" ? 0.6 : 1,
+                    opacity: st === "dropped" ? 0.5 : 1,
                     background: i === selected ? "#F7F3EE" : "transparent",
                     borderLeft: i === selected ? "2px solid var(--ember)" : "2px solid transparent",
                   }}
                 >
-                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline" }}>
-                    <span style={{ fontSize: 15.5, fontWeight: 600 }}>{l.name}</span>
-                    {st === "approved" || st === "sent" ? (
-                      <span style={{ fontSize: 12.5, color: "var(--green)", fontWeight: 600 }}>{st === "sent" ? "Sent" : "Approved"}</span>
-                    ) : st === "dropped" ? null : (
-                      <span style={{ fontSize: 12.5, color: "var(--muted)" }}>{l.role}</span>
-                    )}
+                  <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                    {/* An unactioned lead gets a dot, the way an unread message does — the fastest
+                        possible read of "have I dealt with this". */}
+                    {!actioned && <span style={{ width: 6, height: 6, borderRadius: 999, background: "var(--ember)", flexShrink: 0 }} />}
+                    <span style={{ fontSize: 15, fontWeight: actioned ? 500 : 700, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+                      {l.name}
+                    </span>
+                    <span style={{ marginLeft: "auto", fontSize: 12, color: "var(--muted)", whiteSpace: "nowrap", flexShrink: 0 }}>
+                      {relativeTime(l.postedAt)}
+                    </span>
                   </div>
-                  <span style={{ fontSize: 14, color: "var(--muted)", lineHeight: 1.5 }}>
-                    {st === "dropped" ? `Dropped — ${l.detail}` : `${l.company} · ${l.detail}`}
+                  {sc && (
+                    <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                      <LeadStars score={sc} size={12} showLabel={false} />
+                      <span style={{ fontSize: 12, color: "var(--muted)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+                        {l.company}
+                      </span>
+                      {st === "sent" && <span style={{ marginLeft: "auto", fontSize: 11.5, color: "var(--green)", fontWeight: 600 }}>Sent</span>}
+                      {st === "approved" && <span style={{ marginLeft: "auto", fontSize: 11.5, color: "var(--green)", fontWeight: 600 }}>Approved</span>}
+                      {st === "dropped" && <span style={{ marginLeft: "auto", fontSize: 11.5, color: "var(--muted)", fontWeight: 600 }}>Dropped</span>}
+                    </div>
+                  )}
+                  <span style={{ fontSize: 13.5, color: "var(--muted)", lineHeight: 1.45, display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden" }}>
+                    {l.excerpt || l.detail}
                   </span>
                 </div>
               );
@@ -297,7 +331,8 @@ export default function QueuePage() {
                 )}
               </div>
               <span style={{ fontSize: 14.5, color: "var(--muted)" }}>
-                {lead.role} · {lead.company} · {lead.email ?? "no email on file"}
+                {lead.role} · found in {lead.company}
+                {lead.postedAt ? ` · posted ${relativeTime(lead.postedAt)}` : ""}
               </span>
             </div>
             <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
@@ -314,16 +349,50 @@ export default function QueuePage() {
             </div>
           </div>
 
-          <div style={{ border: "1px solid var(--border)", borderRadius: 14, background: "var(--card-alt)", padding: "18px 20px", display: "flex", flexDirection: "column", gap: 8 }}>
-            <span style={{ fontSize: 13, color: "var(--muted)", textTransform: "uppercase", letterSpacing: ".07em" }}>Why {lead.name.split(" ")[0]}</span>
-            <span style={{ fontSize: 15.5, lineHeight: 1.6, color: "var(--ink)" }}>{lead.detail}, at {lead.company}. That&apos;s the kind of signal Kylani anchors a message to instead of a cold intro.</span>
+          {/* The evidence, not a description of it. Their own words, verified to be a literal span
+              of the real post, plus the link so any claim here can be checked in one click. */}
+          <div style={{ border: "1px solid var(--border)", borderRadius: 14, background: "var(--card-alt)", padding: "18px 20px", display: "flex", flexDirection: "column", gap: 12 }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
+              <span style={{ fontSize: 13, color: "var(--muted)", textTransform: "uppercase", letterSpacing: ".07em" }}>What they said</span>
+              {lead.intentTier && (
+                <span
+                  style={{
+                    fontSize: 11.5,
+                    fontWeight: 700,
+                    textTransform: "uppercase",
+                    letterSpacing: ".05em",
+                    color: lead.intentTier === "seeking" ? "var(--green)" : "var(--muted)",
+                    background: lead.intentTier === "seeking" ? "var(--green-tint)" : "var(--active-bg)",
+                    padding: "3px 9px",
+                    borderRadius: 999,
+                  }}
+                >
+                  {lead.intentTier === "seeking" ? "Actively looking" : lead.intentTier === "complaining" ? "Describing the problem" : "Adjacent interest"}
+                </span>
+              )}
+            </div>
+            <blockquote style={{ margin: 0, fontSize: 16.5, lineHeight: 1.65, color: "var(--ink)", borderLeft: "3px solid var(--ember)", paddingLeft: 14 }}>
+              {lead.excerpt || lead.detail}
+            </blockquote>
+            <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap", fontSize: 13.5, color: "var(--muted)" }}>
+              {lead.permalink ? (
+                <a href={lead.permalink} target="_blank" rel="noopener noreferrer" style={{ fontWeight: 600 }}>
+                  Read the original post →
+                </a>
+              ) : (
+                <span>No link on file for this one.</span>
+              )}
+              {lead.quoteMeta && <span>{lead.quoteMeta}</span>}
+            </div>
           </div>
 
           <div style={{ border: "1px solid var(--border)", borderRadius: 14, padding: "22px 24px", display: "flex", flexDirection: "column", gap: 16, boxShadow: "0 1px 2px rgba(20,18,15,.04)" }}>
-            <div style={{ display: "flex", gap: 10, fontSize: 14.5, color: "var(--muted)", borderBottom: "1px solid var(--border)", paddingBottom: 12, flexWrap: "wrap" }}>
-              <span style={{ color: "var(--ink)", fontWeight: 600 }}>Subject:</span>
-              <span style={{ color: "var(--ink)" }}>{lead.subject}</span>
-            </div>
+            {lead.subject ? (
+              <div style={{ display: "flex", gap: 10, fontSize: 14.5, color: "var(--muted)", borderBottom: "1px solid var(--border)", paddingBottom: 12, flexWrap: "wrap" }}>
+                <span style={{ color: "var(--ink)", fontWeight: 600 }}>Subject:</span>
+                <span style={{ color: "var(--ink)" }}>{lead.subject}</span>
+              </div>
+            ) : null}
             {editing ? (
               <textarea
                 autoFocus
@@ -332,11 +401,27 @@ export default function QueuePage() {
                 rows={8}
                 style={{ fontSize: 16.5, lineHeight: 1.7, color: "var(--ink)", border: "1px solid var(--border-strong)", borderRadius: 10, padding: 12, fontFamily: "inherit", resize: "vertical" }}
               />
-            ) : (
+            ) : draftBody.trim() ? (
               <div style={{ fontSize: 16.5, lineHeight: 1.7, color: "var(--ink)", display: "flex", flexDirection: "column", gap: 14 }}>
                 {draftBody.split("\n\n").map((p, i) => (
                   <span key={i}>{p}</span>
                 ))}
+              </div>
+            ) : (
+              // Drafts are written on demand rather than during the search, so no draft yet is the
+              // normal state for a fresh lead — not an error, and not something to leave blank.
+              <div style={{ display: "flex", flexDirection: "column", gap: 12, alignItems: "flex-start" }}>
+                <span style={{ fontSize: 15, color: "var(--muted)", lineHeight: 1.6 }}>
+                  No reply written yet. I&apos;ll draft one anchored to what they actually said above.
+                </span>
+                <button
+                  className="ky-btn-ember"
+                  onClick={rewriteWithAi}
+                  disabled={rewriting}
+                  style={{ padding: "12px 20px", fontSize: 15, border: "none", opacity: rewriting ? 0.6 : 1 }}
+                >
+                  {rewriting ? "Writing…" : "✦ Write the reply"}
+                </button>
               </div>
             )}
             {sendError && <span style={{ fontSize: 13, color: "var(--ember)" }}>{sendError}</span>}
@@ -355,8 +440,12 @@ export default function QueuePage() {
                   Save draft
                 </button>
               ) : status === "waiting" ? (
-                <button className="ky-btn-ember" onClick={approve} style={{ padding: "13px 22px", fontSize: 15.5, border: "none" }}>
-                  {lead.email ? "Approve · send today" : "Approve"}
+                <button
+                  className={draftBody.trim() ? "ky-btn-ember" : "ky-btn-outline"}
+                  onClick={approve}
+                  style={{ padding: "13px 22px", fontSize: 15.5, border: draftBody.trim() ? "none" : undefined }}
+                >
+                  {lead.email ? "Approve · send today" : "Mark as handled"}
                 </button>
               ) : (
                 <button className="ky-btn-outline" disabled style={{ padding: "13px 22px", fontSize: 15.5, opacity: 0.6 }}>
@@ -378,7 +467,7 @@ export default function QueuePage() {
               )}
               {status === "waiting" && !editing && (
                 <button className="ky-btn-outline" onClick={drop} style={{ padding: "12px 18px", fontSize: 15.5, fontWeight: 500, color: "var(--muted)" }}>
-                  Drop {lead.name.split(" ")[0]}
+                  Drop
                 </button>
               )}
               {status === "waiting" && !editing && (

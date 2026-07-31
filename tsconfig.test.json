@@ -20,6 +20,7 @@
     "lib/search/seSites.ts",
     "lib/search/waves.ts",
     "lib/search/leadScore.ts",
-    "lib/search/queries.ts"
+    "lib/search/queries.ts",
+    "lib/relativeTime.ts"
   ]
 }
