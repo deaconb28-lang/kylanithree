@@ -2,6 +2,7 @@ import { searchPostsInSubreddit } from "./reddit";
 import { searchHackerNews } from "./hackernews";
 import { searchLemmy } from "./lemmy";
 import { searchX } from "./x";
+import { searchDiscourse } from "./discourse";
 import { cheapFilter } from "./filter";
 import { scoreCandidates } from "./score";
 import { settleWithBudget, Trace } from "./trace";
@@ -67,6 +68,9 @@ export async function extractLeads(opts: {
             timeoutMs: PER_SOURCE_TIMEOUT_MS,
           }),
         );
+      } else if (v.id.startsWith("discourse:")) {
+        const base = v.url ?? `https://${v.id.slice("discourse:".length)}`;
+        jobs.push(() => searchDiscourse({ baseUrl: base, query: phrase, limit: 20, timeoutMs: PER_SOURCE_TIMEOUT_MS }));
       } else if (v.id === "x:all") {
         // Returns [] without a token rather than throwing, so a missing X key costs nothing.
         jobs.push(() => searchX({ query: phrase, limit: 25, timeoutMs: PER_SOURCE_TIMEOUT_MS }));

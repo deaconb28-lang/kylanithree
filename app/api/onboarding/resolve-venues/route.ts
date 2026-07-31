@@ -8,7 +8,7 @@ import { toUserError } from "@/lib/apiError";
 // Stage 1 only. Small and fast by design: subreddit discovery is a handful of parallel API calls
 // plus one short model pass to prune and annotate, so this returns well inside the budget and the
 // founder sees real communities on screen before lead extraction has even started.
-export const maxDuration = 30;
+export const maxDuration = 60;
 
 // Unauthenticated: onboarding runs before sign-in.
 export async function POST(req: NextRequest) {

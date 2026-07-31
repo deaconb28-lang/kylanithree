@@ -4,6 +4,8 @@ import { getAnthropic } from "../anthropic";
 import { getDb } from "../mongodb";
 import { searchSubreddits, type SubredditResult } from "./reddit";
 import { hasXCredentials } from "./x";
+import { findCommunitiesOnWeb, webSearchProvider } from "./websearch";
+import { isDiscourse } from "./discourse";
 import { settleWithBudget, type Trace } from "./trace";
 import { formatMembers, sizeFit, termRelevance } from "./ranking";
 import type { Venue } from "./types";
@@ -139,7 +141,8 @@ export async function resolveVenues(opts: {
   // Reddit discovery returning nothing (no credentials, a 403 from a datacenter IP, an outage) is
   // a degraded run, not a failed one — the auth-free sources still carry it.
   if (discovered.length === 0) {
-    const fallback = alwaysAvailableVenues();
+    const webOnly = await discoverWebForums({ nicheKey, buyers, trace });
+    const fallback = [...webOnly, ...alwaysAvailableVenues()];
     trace.record({
       stage: "venues:reddit-unavailable",
       candidatesIn: 0,
@@ -150,12 +153,17 @@ export async function resolveVenues(opts: {
     return { venues: fallback, cached: false };
   }
 
+  // Kicked off here but awaited after annotation, so the open-web search overlaps the annotation
+  // model call rather than adding its latency on top of it.
+  const webVenuesPromise = discoverWebForums({ nicheKey, buyers, trace });
+
   const ranked = discovered
     .map((s) => ({ sub: s, rank: termRelevance(`${s.name} ${s.description}`, lexiconTerms) * 0.6 + sizeFit(s.subscribers) * 0.4 }))
     .sort((a, b) => b.rank - a.rank)
     .slice(0, maxVenues * 2);
 
   const annotated = await trace.stage("venues:annotate", ranked.length, async () => {
+    const webVenues = await webVenuesPromise;
     try {
       const result = await getAnthropic().messages.parse({
         model: "claude-sonnet-5",
@@ -205,7 +213,7 @@ export async function resolveVenues(opts: {
           const verdict = verdicts.get(v.id);
           return { ...v, fit: verdict?.fit ?? v.fit, note: verdict?.note || v.note };
         });
-      return { out: [...out, ...extras] };
+      return { out: [...out, ...webVenues, ...extras] };
     } catch {
       // Annotation is a nice-to-have. If the model call fails the venues are still real and still
       // searchable, so the run continues with unannotated entries rather than collapsing.
@@ -221,7 +229,7 @@ export async function resolveVenues(opts: {
         searchable: true,
         rank: r.rank,
       }));
-      return { out: [...out, ...alwaysAvailableVenues()], note: "annotation failed, using unannotated venues" };
+      return { out: [...out, ...webVenues, ...alwaysAvailableVenues()], note: "annotation failed, using unannotated venues" };
     }
   });
 
@@ -239,4 +247,61 @@ export async function resolveVenues(opts: {
   }
 
   return { venues: annotated, cached: false };
+}
+
+// Open-web discovery. Every URL a model returns is independently probed before it is treated as a
+// searchable venue, so a hallucinated domain can never reach the founder: a site that really is a
+// Discourse instance becomes a lead source, anything else is surfaced as a place worth joining but
+// explicitly marked unsearchable.
+async function discoverWebForums(opts: {
+  nicheKey: string;
+  buyers: { name: string; desc: string }[];
+  trace: Trace;
+}): Promise<Venue[]> {
+  const { nicheKey, buyers, trace } = opts;
+  if (webSearchProvider() === "none") return [];
+
+  return trace.stage("venues:web", 1, async () => {
+    let found;
+    try {
+      found = await findCommunitiesOnWeb({
+        niche: nicheKey.replace(/-/g, " "),
+        buyer: `${buyers[0]?.name ?? "buyer"} — ${buyers[0]?.desc ?? ""}`,
+      });
+    } catch (err) {
+      return { out: [] as Venue[], note: `web discovery failed: ${err instanceof Error ? err.message : err}` };
+    }
+    if (found.length === 0) return { out: [] as Venue[], note: "no independent communities found" };
+
+    const probed = await Promise.allSettled(
+      found.slice(0, 6).map(async (r) => ({ result: r, discourse: await isDiscourse(r.url) })),
+    );
+
+    const out: Venue[] = [];
+    for (const p of probed) {
+      if (p.status !== "fulfilled") continue;
+      const { result, discourse } = p.value;
+      let host: string;
+      try {
+        host = new URL(result.url.startsWith("http") ? result.url : `https://${result.url}`).host;
+      } catch {
+        continue;
+      }
+      out.push({
+        id: discourse ? `discourse:${host}` : `web:${host}`,
+        platform: "Forum",
+        name: result.title || host,
+        url: result.url,
+        members: null,
+        membersLabel: "size unknown",
+        fit: "Untested",
+        note: discourse
+          ? result.snippet || "Independent forum — reply in existing threads."
+          : `${result.snippet || "Independent community."} Not machine-readable, so worth joining by hand.`,
+        searchable: discourse,
+        rank: discourse ? 0.7 : 0.3,
+      });
+    }
+    return { out, note: `${out.filter((v) => v.searchable).length} of ${out.length} are searchable` };
+  });
 }

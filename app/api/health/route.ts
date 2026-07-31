@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { getDb } from "@/lib/mongodb";
 import { redditAuthMode } from "@/lib/search/reddit";
+import { webSearchProvider } from "@/lib/search/websearch";
 
 // One request that answers "which piece is actually broken?" — built because three failures at
 // once (signup, Google sign-in, empty searches) are usually one or two root causes wearing
@@ -30,6 +31,7 @@ export async function GET() {
     REDDIT_CLIENT_SECRET: present("REDDIT_CLIENT_SECRET"),
     RESEND_API_KEY: present("RESEND_API_KEY"),
     X_BEARER_TOKEN: present("X_BEARER_TOKEN"),
+    BRAVE_SEARCH_API_KEY: present("BRAVE_SEARCH_API_KEY"),
     // Auth.js derives its callback URL from these when behind a proxy; a wrong value is a very
     // common cause of an OAuth redirect_uri mismatch.
     AUTH_URL: present("AUTH_URL"),
@@ -117,6 +119,19 @@ export async function GET() {
   checks.x = process.env.X_BEARER_TOKEN
     ? { enabled: true, note: "X_BEARER_TOKEN present — recent search covers roughly the last 7 days." }
     : { enabled: false, note: "No X_BEARER_TOKEN. X has no free search API; reading posts requires a paid tier, so this source stays off." };
+
+  // --- open-web discovery -------------------------------------------------
+  const provider = webSearchProvider();
+  checks.webSearch = {
+    provider,
+    note:
+      provider === "brave"
+        ? "Brave key present — direct HTTP search, fastest option."
+        : provider === "anthropic"
+          ? "Using the Anthropic web_search tool. No extra vendor needed; slower, but venue discovery is cached 30 days per niche."
+          : "No provider. Independent forums will not be discovered — only Reddit, HN, and Lemmy are searched.",
+    context: "Google Custom Search is closed to new customers and Bing Search was retired in Aug 2025, so Anthropic or Brave are the realistic choices.",
+  };
 
   const mongoOk = (checks.mongo as { ok: boolean }).ok;
   const anySource = Boolean(
