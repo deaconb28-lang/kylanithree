@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { zodOutputFormat } from "@anthropic-ai/sdk/helpers/zod";
 import { getAnthropic } from "../anthropic";
+import { resolveExcerpt } from "./excerpt";
 import type { Candidate, DropReason, IntentTier, ScoredLead } from "./types";
 
 // Stage 4 — the expensive pass, and the only model call in the extraction path. It sees ONLY the
@@ -33,18 +34,6 @@ const ScoreSchema = z.object({
   ),
 });
 
-// Normalizing whitespace only — never case, never punctuation. The excerpt has to be the person's
-// actual words; loosening this check would defeat the point of having it.
-function normalize(s: string) {
-  return s.replace(/\s+/g, " ").trim();
-}
-
-function isVerbatim(excerpt: string, body: string) {
-  const e = normalize(excerpt);
-  if (e.length < 15) return false;
-  return normalize(body).includes(e);
-}
-
 export type ScoreResult = {
   leads: ScoredLead[];
   drops: Partial<Record<DropReason, number>>;
@@ -75,8 +64,9 @@ export async function scoreCandidates(opts: {
       "asking for recommendations, or venting about this exact pain IS a lead. " +
       "Vendors, marketers, and people promoting their own product are never leads. " +
       "The `excerpt` must be copied verbatim from that post's body — character for character, a single continuous " +
-      "span. It is automatically verified against the original text and the lead is discarded if it does not match " +
-      "exactly, so do not paraphrase, tidy, or stitch sentences together. " +
+      "span. It is automatically verified against the original text; if it does not match, your quote is replaced " +
+      "by whichever real sentence is closest, which is usually a worse choice than the one you meant. So copy " +
+      "exactly: do not paraphrase, tidy punctuation, fix typos, or stitch sentences together. " +
       "Return a verdict for every id you were given, in the same order. Be strict: it is far better to keep 5 real " +
       "leads than to pass 20 weak ones.",
     messages: [
@@ -104,19 +94,22 @@ export async function scoreCandidates(opts: {
   for (const v of result.parsed_output.verdicts) {
     const c = byId.get(v.id);
     if (!c) continue;
-    if (!v.keep || v.intentTier === "adjacent") {
+    if (!v.keep) {
       drops.no_intent = (drops.no_intent ?? 0) + 1;
       continue;
     }
-    if (!isVerbatim(v.excerpt, `${c.title}\n${c.body}`)) {
+    const source = `${c.title}\n${c.body}`;
+    let excerpt: string | null = resolveExcerpt(v.excerpt, source);
+    if (!excerpt) {
       drops.excerpt_not_verbatim = (drops.excerpt_not_verbatim ?? 0) + 1;
       continue;
     }
+    excerpt = excerpt.slice(0, 240);
     leads.push({
       ...c,
       intentTier: v.intentTier as IntentTier,
       confidence: Math.max(0, Math.min(1, v.confidence)),
-      excerpt: normalize(v.excerpt).slice(0, 240),
+      excerpt,
       buyerIndex: Number.isInteger(v.buyerIndex) && v.buyerIndex >= 0 && v.buyerIndex < buyers.length ? v.buyerIndex : 0,
     });
   }

@@ -80,14 +80,45 @@ function isAggregator(c: Candidate): boolean {
   return links.some((l) => AGGREGATOR_HOSTS.some((h) => hostOf(l).includes(h)));
 }
 
+const STOPWORDS = new Set([
+  "a", "an", "the", "of", "for", "to", "and", "or", "in", "on", "with", "my", "our", "your", "is", "are", "it",
+  "that", "this", "how", "do", "does", "what", "best", "good", "any", "some", "get", "need", "want", "you", "we",
+]);
+
+// Crude suffix stripping, applied to both sides of every comparison, so "picks"/"picking"/"picked"
+// collapse together. Not linguistically correct — it only has to be consistent.
+function stem(token: string): string {
+  return token.replace(/(ings|ing|ers|er|ed|es|s)$/, "");
+}
+
+function contentTokens(text: string): string[] {
+  const raw = text.toLowerCase().match(/[a-z0-9']+/g) ?? [];
+  return raw.filter((t) => t.length > 2 && !STOPWORDS.has(t)).map(stem);
+}
+
+// Fraction of a phrase's meaningful words that appear anywhere in the post.
+//
+// Emphatically NOT an exact substring test. Reddit and HN search are tokenized and fuzzy, so a
+// post surfaced by the query "stock picking newsletter" very often reads "anyone know a good
+// newsletter for picks?" — no literal substring, obviously the same person. Requiring the exact
+// phrase silently discarded almost every real candidate and was the main reason runs came back
+// empty.
+function phraseCoverage(phrase: string, postTokens: Set<string>): number {
+  const tokens = contentTokens(phrase);
+  if (tokens.length === 0) return 0;
+  return tokens.filter((t) => postTokens.has(t)).length / tokens.length;
+}
+
 // Meaning-level gate. A candidate must both touch the niche's vocabulary AND read as someone
 // speaking about their own situation. One without the other is noise.
 function isKeywordOnly(c: Candidate, lexicon: LexiconInput): boolean {
   const text = `${c.title}\n${c.body}`;
-  const lower = text.toLowerCase();
-  const phrases = [...lexicon.problemPhrases, ...lexicon.seekingPhrases].map((p) => p.toLowerCase());
-  const matches = phrases.filter((p) => p && lower.includes(p)).length;
-  if (matches === 0) return true;
+  const postTokens = new Set(contentTokens(text));
+  const phrases = [...lexicon.problemPhrases, ...lexicon.seekingPhrases].filter(Boolean);
+  // Half the meaningful words of any one phrase is enough to say the post is on-topic; the
+  // first-person and struggle tests below are what actually establish intent.
+  const onTopic = phrases.some((p) => phraseCoverage(p, postTokens) >= 0.5);
+  if (!onTopic) return true;
   return !(FIRST_PERSON.test(text) && QUESTION_OR_STRUGGLE.test(text));
 }
 
@@ -126,7 +157,9 @@ export function cheapFilter(candidates: Candidate[], lexicon: LexiconInput): Fil
       drop(c, "bot");
       continue;
     }
-    if (`${c.title} ${c.body}`.trim().length < 80) {
+    // Low enough to keep a terse but real complaint ("spreadsheet keeps breaking, any ideas?") and
+    // most HN comments, which are frequently short. 80 was cutting real leads.
+    if (`${c.title} ${c.body}`.trim().length < 45) {
       drop(c, "too_short");
       continue;
     }

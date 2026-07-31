@@ -42,6 +42,10 @@ export default function Step5Search({
   const [leads, setLeads] = useState<ScoredLead[]>([]);
   const [shardsDone, setShardsDone] = useState(0);
   const [shardTotal, setShardTotal] = useState(0);
+  // Aggregated drop counts across shards, so a zero-lead run can say what actually happened
+  // instead of silently handing over an empty dashboard.
+  const [drops, setDrops] = useState<Record<string, number>>({});
+  const [rawSeen, setRawSeen] = useState(0);
   const [error, setError] = useState<string | null>(null);
   const [attempt, setAttempt] = useState(0);
   const advancedRef = useRef(false);
@@ -139,6 +143,19 @@ export default function Step5Search({
               const { ok, data } = await readJson(res);
               if (cancelled || !ok) return;
               const batch = (data as { leads: ScoredLead[] }).leads ?? [];
+              const trace = (data as { trace?: { stages?: { stage: string; candidatesIn: number; drops?: Record<string, number> }[] } }).trace;
+              if (trace?.stages) {
+                setRawSeen((n) => n + (trace.stages?.find((s) => s.stage === "extract:filter")?.candidatesIn ?? 0));
+                setDrops((prev) => {
+                  const next = { ...prev };
+                  for (const s of trace.stages ?? []) {
+                    for (const [reason, count] of Object.entries(s.drops ?? {})) {
+                      if (count > 0) next[reason] = (next[reason] ?? 0) + count;
+                    }
+                  }
+                  return next;
+                });
+              }
               setLeads((prev) => {
                 // Author-dedupe across shards — the same person can surface in two communities.
                 const seen = new Set(prev.map((l) => l.author.toLowerCase()));
@@ -172,7 +189,9 @@ export default function Step5Search({
   useEffect(() => {
     if (phase === "done" && !advancedRef.current) {
       advancedRef.current = true;
-      const t = setTimeout(() => onDone({ leads, communities: venues ?? [] }), 1600);
+      // Linger on an empty result so the explanation is actually readable, rather than flashing it
+      // for a beat and dropping them onto a bare dashboard.
+      const t = setTimeout(() => onDone({ leads, communities: venues ?? [] }), leads.length === 0 ? 6500 : 1600);
       return () => clearTimeout(t);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -184,6 +203,8 @@ export default function Step5Search({
     setLeads([]);
     setShardsDone(0);
     setShardTotal(0);
+    setDrops({});
+    setRawSeen(0);
     setPhase("venues");
     advancedRef.current = false;
     notifiedRef.current = false;
@@ -285,7 +306,26 @@ export default function Step5Search({
             </div>
           )}
 
-          {phase === "done" ? (
+          {phase === "done" && leads.length === 0 ? (
+            <div style={{ border: "1px solid var(--border-strong)", borderRadius: 14, padding: "16px 18px", display: "flex", flexDirection: "column", gap: 8, background: "rgba(253,252,250,.86)" }}>
+              <span style={{ fontFamily: "var(--font-outfit)", fontWeight: 700, fontSize: 16 }}>
+                No leads I could stand behind this time.
+              </span>
+              <span style={{ fontSize: 14, color: "var(--muted-strong)", lineHeight: 1.55 }}>
+                {venues && venues.length === 0
+                  ? "I couldn't confirm any communities for this buyer, so there was nowhere to search. Widening the buyer description usually fixes it."
+                  : rawSeen === 0
+                    ? `I searched ${venues?.length ?? 0} ${venues?.length === 1 ? "community" : "communities"} but the sources returned nothing in the last window. That's usually a quiet niche or a window that's too tight.`
+                    : `I read ${rawSeen} recent posts across ${venues?.length ?? 0} ${venues?.length === 1 ? "community" : "communities"}, but none were someone genuinely describing this problem. I'd rather show you nothing than pad the list.`}
+              </span>
+              {Object.keys(drops).length > 0 && (
+                <span style={{ fontSize: 12.5, color: "var(--muted)" }}>
+                  Filtered out: {Object.entries(drops).filter(([, n]) => n > 0).map(([r, n]) => `${n} ${r.replace(/_/g, " ")}`).join(" · ")}
+                </span>
+              )}
+              <span style={{ fontSize: 13.5, color: "var(--muted)" }}>You can keep going — Kylani will search again from inside the app.</span>
+            </div>
+          ) : phase === "done" ? (
             <span style={{ fontSize: 14, color: "var(--muted)" }}>Taking you to your first drafts…</span>
           ) : notifyPermission === "granted" ? (
             <span style={{ fontSize: 14, color: "var(--green)", fontWeight: 600 }}>🔔 I&apos;ll notify you the moment it&apos;s done — feel free to switch tabs.</span>
