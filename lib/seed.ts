@@ -135,6 +135,7 @@ export async function finalizeOnboarding(userId: string, onboarding: OnboardingA
     paused: false,
     revenueBase: 0,
     channels: onboarding.channels,
+    keywords: onboarding.keywords,
     stats: {
       sentToday: 0,
       buyersTotal: generated.leads.length,

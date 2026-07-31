@@ -2,6 +2,7 @@ import { z } from "zod";
 import { zodOutputFormat } from "@anthropic-ai/sdk/helpers/zod";
 import { getAnthropic } from "./anthropic";
 import { categoryGuidance } from "./productCategories";
+import { expandSearchQueries } from "./searchQueries";
 
 const SeedLeadSchema = z.object({
   name: z
@@ -78,18 +79,34 @@ export async function generateCampaignSeed(input: {
     .filter(([, on]) => on)
     .map(([key]) => key);
 
+  const { communityQueries, peopleQueries, totalCandidates } = expandSearchQueries({
+    keywords: input.keywords ?? [],
+    buyers: input.buyers,
+  });
+
   const result = await getAnthropic().messages.parse({
     model: "claude-opus-5",
     max_tokens: 12000,
     thinking: { type: "adaptive" },
-    tools: [{ type: "web_search_20260209", name: "web_search", max_uses: 12 }],
+    tools: [{ type: "web_search_20260209", name: "web_search", max_uses: 16 }],
     system:
       "You are Kylani, a lead-gen assistant. Given a product and its buyer personas, use the web_search tool to actually " +
-      "find REAL posts, threads, and listings from people who match the buyer personas and show a real, current signal " +
-      "of the underlying problem. This is real research, not creative writing — every lead and every community in your " +
-      "output must come from something you actually found via search, with a real quote and, where possible, a real " +
-      "URL. Do not invent people, quotes, companies, or community stats to fill out a list — returning fewer, verified " +
-      "results is strictly better than padding with fabricated ones. " +
+      "find REAL communities and REAL people who match the buyer personas and show a real, current signal of the " +
+      "underlying problem. This is real research, not creative writing — every lead and every community in your output " +
+      "must come from something you actually found via search, with a real quote and, where possible, a real URL. Do " +
+      "not invent people, quotes, companies, or community stats to fill out a list — returning fewer, verified results " +
+      "is strictly better than padding with fabricated ones. " +
+      "WORK IN TWO PHASES, in this order: " +
+      "PHASE 1 — COMMUNITIES FIRST. Before looking for individuals, spend your first several searches finding and " +
+      "confirming real communities: subreddits, forums, Slack/Discord servers, job boards, newsletters where this " +
+      "buyer actually congregates. This tells you WHERE to look next, and populates `communities` directly. " +
+      "PHASE 2 — PEOPLE SECOND. Using what Phase 1 told you (specific subreddit/forum names, confirmed venues), spend " +
+      "the rest of your searches finding actual individual posts, threads, and listings inside those specific venues — " +
+      "this populates `leads`. Searching a named subreddit or forum you just confirmed exists beats a generic search. " +
+      "A candidate pool of real search queries was generated from this product's actual problem language (" +
+      totalCandidates +
+      " combinations total) — a sample from each phase is listed below. Use them as concrete starting points, adapt " +
+      "wording as needed, and don't feel bound to run them verbatim or use only these. " +
       "IMPORTANT — know what's actually searchable: Reddit, public forums, job boards (LinkedIn/Indeed job postings), " +
       "and X/Twitter are publicly indexed, so web_search can surface REAL individual posts, threads, and listings there " +
       "— these are your best sources for actual leads with a quote. Slack and Discord are different: the messages " +
@@ -97,14 +114,13 @@ export async function generateCampaignSeed(input: {
       "(via directories or 'best X Slack communities' roundups) — never expect to find an individual member's post " +
       "inside one. If a Slack/Discord community looks like a fit, add it to `communities`, but source actual `leads` " +
       "from Reddit, forums, job boards, or X instead. " +
-      "Be persistent before concluding there's nothing: if your first search or two on the most obvious channel don't " +
-      "surface anything concrete, don't stop there — try a different keyword phrasing, a different subreddit or forum, " +
-      "a job-board query, or a different buyer persona before giving up on a channel. Spend most of your search budget " +
-      "actually looking, not economizing early; a handful of unproductive searches is expected and fine. Try to cover " +
-      "more than just the single top buyer persona if you have budget left — a real lead for a secondary persona beats " +
-      "a fourth search of the same subreddit for the first one. " +
-      "You have up to 12 searches — use as many as genuinely useful within that budget rather than stopping at the " +
-      "first few. " +
+      "Be persistent before concluding there's nothing: if your first search or two don't surface anything concrete, " +
+      "don't stop there — try a different query from the candidate pool, a different subreddit or forum, or a " +
+      "different buyer persona before giving up. Spend most of your search budget actually looking, not economizing " +
+      "early; a handful of unproductive searches is expected and fine. Try to cover more than just the single top " +
+      "buyer persona if you have budget left — a real lead for a secondary persona beats a fourth search repeating " +
+      "the first one. " +
+      "You have up to 16 searches across both phases — use as many as genuinely useful rather than stopping early. " +
       categoryGuidance(input.category) +
       " Every field has a hard length limit in its description — those are strict maximums, not suggestions. " +
       "Write like sparse UI copy, not a report: short, punchy, no run-on sentences or sub-clauses.",
@@ -117,8 +133,10 @@ export async function generateCampaignSeed(input: {
           `Buyer personas, indices 0-${input.buyers.length - 1} (most likely first): ${input.buyers.map((b, i) => `${i}: ${b.name} — ${b.desc}`).join(" | ")}`,
           `Channels the founder has enabled to search: ${enabledChannels.join(", ") || "email only — search broadly for public posts regardless of platform"}`,
           input.keywords?.length
-            ? `Real phrases people actually use for this problem (found during the earlier site analysis — start your searches from these): ${input.keywords.join(" | ")}`
+            ? `Real phrases people actually use for this problem (found during the earlier site analysis): ${input.keywords.join(" | ")}`
             : null,
+          `PHASE 1 candidate queries — communities: ${communityQueries.join(" | ")}`,
+          `PHASE 2 candidate queries — people: ${peopleQueries.join(" | ")}`,
         ]
           .filter(Boolean)
           .join("\n"),

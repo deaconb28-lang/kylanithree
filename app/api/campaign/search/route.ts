@@ -36,6 +36,7 @@ export async function POST() {
       whatYouSell: campaign.whatYouSell,
       buyers,
       channels: campaign.channels,
+      keywords: campaign.keywords,
     });
 
     const dedupe = {

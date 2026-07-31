@@ -108,6 +108,10 @@ export interface CampaignDoc {
   paused: boolean;
   revenueBase: number;
   channels: Record<string, boolean>;
+  // Real phrases people actually use for this problem, found during onboarding's site analysis —
+  // kept so a later re-search (see /api/campaign/search) can reuse them instead of falling back
+  // to a generic placeholder.
+  keywords?: string[];
   stats: CampaignStats;
   stripe?: StripeConnection;
   subscription?: SubscriptionInfo;
