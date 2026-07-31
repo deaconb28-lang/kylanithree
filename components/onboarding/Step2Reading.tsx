@@ -5,6 +5,7 @@ import OnboardingChrome from "./OnboardingChrome";
 import ScanningWindow from "./ScanningWindow";
 import type { SiteAnalysis } from "../../lib/types";
 import type { ProductCategory } from "../../lib/productCategories";
+import { useNotificationPermission } from "../../lib/useNotificationPermission";
 
 // Paced by real elapsed time rather than a fixed script — a typical real analysis (site fetch +
 // a handful of web searches at low effort) lands around this window. The checklist advances at
@@ -36,6 +37,11 @@ export default function Step2Reading({
   const resultRef = useRef<SiteAnalysis | null>(null);
   const fetchDoneRef = useRef(false);
   const advancedRef = useRef(false);
+
+  // Asked here — the first real wait in onboarding — rather than only on the longer Step5Search
+  // wait, so permission is already resolved by the time the slower real lead search starts and
+  // that screen doesn't need to interrupt again (it only re-asks if this was skipped or dismissed).
+  const { permission: notifyPermission, request: requestNotifications } = useNotificationPermission();
 
   useEffect(() => {
     const start = Date.now();
@@ -175,6 +181,36 @@ export default function Step2Reading({
         <span style={{ fontSize: 14, color: "var(--muted)", maxWidth: 480, lineHeight: 1.55 }}>
           I&apos;ll show you two to four guesses rather than one. The wrong ones are how we find out which one is right.
         </span>
+        {notifyPermission === "default" && (
+          <div
+            style={{
+              display: "flex",
+              alignItems: "center",
+              gap: 14,
+              flexWrap: "wrap",
+              justifyContent: "center",
+              border: "1px solid #F3D9BE",
+              background: "#FFF8F1",
+              borderRadius: 14,
+              padding: "12px 18px",
+              maxWidth: 520,
+            }}
+          >
+            <button
+              onClick={requestNotifications}
+              className="ky-btn-ember"
+              style={{ padding: "10px 18px", fontSize: 14, border: "none", whiteSpace: "nowrap", animation: "kyGlow 2.2s ease-in-out infinite" }}
+            >
+              🔔 Notify me when it&apos;s ready
+            </button>
+            <span style={{ fontSize: 13, color: "var(--muted-strong)", lineHeight: 1.4 }}>
+              The real lead search after this takes longer — turn this on now so you don&apos;t have to babysit either screen.
+            </span>
+          </div>
+        )}
+        {notifyPermission === "granted" && (
+          <span style={{ fontSize: 13.5, color: "var(--green)", fontWeight: 600 }}>🔔 Notifications on — I&apos;ll ping you when things are ready.</span>
+        )}
       </div>
     </OnboardingChrome>
   );

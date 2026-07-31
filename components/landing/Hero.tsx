@@ -65,7 +65,7 @@ export default function Hero() {
       <div style={{ position: "relative", padding: "40px 5vw 90px", display: "grid", gridTemplateColumns: "1fr minmax(320px, 620px)", gap: 56, alignItems: "start" }} className="hero-grid">
         <style>{`@media (max-width: 980px) { .hero-grid { grid-template-columns: 1fr !important; } }`}</style>
 
-        <div style={{ display: "flex", flexDirection: "column", gap: 28 }}>
+        <div style={{ display: "flex", flexDirection: "column", gap: 28, minWidth: 0 }}>
           <div style={{ display: "inline-flex", alignItems: "center", gap: 8, background: "var(--card)", border: "1px solid var(--border)", borderRadius: 999, padding: "6px 14px 6px 7px", width: "fit-content" }}>
             <span style={{ width: 18, height: 18, borderRadius: 999, background: "var(--green)", display: "grid", placeItems: "center", color: "#fff", fontSize: 10, fontWeight: 700 }}>✓</span>
             <span style={{ fontSize: 13, fontWeight: 600 }}>Warm, human outreach — not more AI noise</span>
@@ -98,7 +98,7 @@ export default function Hero() {
                   if (e.key === "Enter") goToOnboarding();
                 }}
                 placeholder={`e.g. ${url}`}
-                style={{ fontSize: 17, color: "var(--ink)", flex: 1, overflow: "hidden", border: "none", outline: "none", background: "transparent", fontFamily: "inherit" }}
+                style={{ fontSize: 17, color: "var(--ink)", flex: 1, minWidth: 0, overflow: "hidden", border: "none", outline: "none", background: "transparent", fontFamily: "inherit" }}
               />
               <button onClick={goToOnboarding} className="ky-btn-ember" style={{ padding: "13px 24px", fontSize: 16, border: "none", whiteSpace: "nowrap" }}>
                 Find my buyers free
@@ -137,6 +137,7 @@ export default function Hero() {
             border: "1px solid var(--border)",
             borderRadius: 16,
             minHeight: 520,
+            minWidth: 0,
             overflow: "hidden",
             display: "flex",
             flexDirection: "column",

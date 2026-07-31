@@ -1,25 +1,27 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import OnboardingChrome from "./OnboardingChrome";
 import ScanningWindow from "./ScanningWindow";
 import type { ProductCategory } from "../../lib/productCategories";
 import type { GeneratedSeed } from "../../lib/generateCampaignSeed";
+import { useNotificationPermission } from "../../lib/useNotificationPermission";
 
-// Generic stages of the real search architecture in lib/generateCampaignSeed.ts — not fake
-// progress, just labels for work that's genuinely happening behind one longer API call. Advanced
-// on a rough time budget rather than real server progress, since the API call itself doesn't
-// stream intermediate steps back. Turning buyer hypotheses into search queries happens
-// synchronously, instantly, the moment this screen mounts (see expandSearchQueries) — it's
-// deliberately not shown as a visible step here, so every stage on screen reads as real-time
-// search work already underway rather than slow setup.
+// Two real phases now (see lib/generateCampaignSeed.ts + the search-communities/search-people
+// routes): communities first, people second, each its own request so it fits comfortably inside
+// Vercel's 60s ceiling instead of racing one long combined call against it. The first stage
+// completes on a real event (the communities fetch resolving) rather than a guess; the remaining
+// three are time-paced within phase 2 the same way the old single-call version paced all four,
+// since the people search itself doesn't stream finer-grained progress back.
 const STAGES = [
   "Matching communities where these buyers actually hang out",
   "Searching Reddit, forums, and job boards for real signal",
   "Cross-checking specific threads and listings it found",
   "Writing first-draft replies anchored to what they said",
 ];
-const SECONDS_PER_STAGE = 8;
+const SECONDS_PER_STAGE = 7;
+
+type Phase = "communities" | "people" | "done";
 
 export default function Step5Search({
   url,
@@ -39,20 +41,18 @@ export default function Step5Search({
   onDone: (seed: GeneratedSeed) => void;
 }) {
   const [seconds, setSeconds] = useState(0);
-  const [seed, setSeed] = useState<GeneratedSeed | null>(null);
+  const secondsRef = useRef(0);
+  const [phase, setPhase] = useState<Phase>("communities");
+  const [phase2StartSecond, setPhase2StartSecond] = useState<number | null>(null);
+  const [communities, setCommunities] = useState<GeneratedSeed["communities"] | null>(null);
+  const [leads, setLeads] = useState<GeneratedSeed["leads"] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [attempt, setAttempt] = useState(0);
   const advancedRef = useRef(false);
   const notifiedRef = useRef(false);
-  const notificationSupported = typeof window !== "undefined" && "Notification" in window;
-  const [notifyPermission, setNotifyPermission] = useState<NotificationPermission | "unsupported">(
-    notificationSupported ? Notification.permission : "unsupported",
-  );
+  const { permission: notifyPermission, request: requestNotifications } = useNotificationPermission();
 
-  const requestNotifications = () => {
-    if (!notificationSupported) return;
-    Notification.requestPermission().then(setNotifyPermission);
-  };
+  const seed: GeneratedSeed | null = useMemo(() => (communities && leads ? { communities, leads } : null), [communities, leads]);
 
   // Fires once, whichever happens first — lets someone actually leave the tab instead of
   // babysitting the timer. Only real if permission is actually "granted"; otherwise this is a
@@ -73,45 +73,66 @@ export default function Step5Search({
   // Real elapsed time — one tick per real second, no compression.
   useEffect(() => {
     const start = Date.now();
-    const id = setInterval(() => setSeconds(Math.floor((Date.now() - start) / 1000)), 1000);
+    const id = setInterval(() => {
+      const next = Math.floor((Date.now() - start) / 1000);
+      secondsRef.current = next;
+      setSeconds(next);
+    }, 1000);
     return () => clearInterval(id);
   }, [attempt]);
 
   useEffect(() => {
     let cancelled = false;
-    fetch("/api/onboarding/search", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ url, whatYouSell, buyers, channels, category, keywords }),
-    })
-      .then(async (res) => {
-        // A response that isn't valid JSON (a platform timeout/gateway error page, not our own
-        // route's own error handling) is a genuinely different failure than a dropped connection
-        // — distinguish them instead of always blaming "the server" for what's really a timeout.
-        let data: { error?: string } | GeneratedSeed;
-        try {
-          data = await res.json();
-        } catch {
-          throw new Error(res.ok ? "PARSE_ERROR" : `HTTP_${res.status}`);
-        }
-        return { ok: res.ok, data };
-      })
-      .then(({ ok, data }) => {
+
+    const parseJson = async (res: Response) => {
+      try {
+        return { ok: res.ok, data: await res.json() };
+      } catch {
+        throw new Error(res.ok ? "PARSE_ERROR" : `HTTP_${res.status}`);
+      }
+    };
+    const timeoutMessage = (err: unknown) =>
+      err instanceof Error && /^(PARSE_ERROR|HTTP_)/.test(err.message)
+        ? "That took longer than expected and timed out. Try again — most searches finish well within a minute."
+        : "Couldn't reach the server — check your connection and try again.";
+
+    (async () => {
+      try {
+        const communitiesRes = await fetch("/api/onboarding/search-communities", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ url, whatYouSell, buyers, channels, category, keywords }),
+        });
+        const { ok: communitiesOk, data: communitiesData } = await parseJson(communitiesRes);
         if (cancelled) return;
-        if (!ok) {
-          setError((data as { error?: string }).error ?? "Couldn't search for real leads right now.");
+        if (!communitiesOk) {
+          setError((communitiesData as { error?: string }).error ?? "Couldn't search for real communities right now.");
           return;
         }
-        setSeed(data as GeneratedSeed);
-      })
-      .catch((err) => {
+        const foundCommunities = (communitiesData as { communities: GeneratedSeed["communities"] }).communities;
+        setCommunities(foundCommunities);
+        setPhase("people");
+        setPhase2StartSecond(secondsRef.current);
+
+        const peopleRes = await fetch("/api/onboarding/search-people", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ url, whatYouSell, buyers, channels, category, keywords, communities: foundCommunities }),
+        });
+        const { ok: peopleOk, data: peopleData } = await parseJson(peopleRes);
         if (cancelled) return;
-        setError(
-          err instanceof Error && /^(PARSE_ERROR|HTTP_)/.test(err.message)
-            ? "That took longer than expected and timed out. Try again — most searches finish well within a minute."
-            : "Couldn't reach the server — check your connection and try again.",
-        );
-      });
+        if (!peopleOk) {
+          setError((peopleData as { error?: string }).error ?? "Couldn't search for real leads right now.");
+          return;
+        }
+        setLeads((peopleData as { leads: GeneratedSeed["leads"] }).leads);
+        setPhase("done");
+      } catch (err) {
+        if (cancelled) return;
+        setError(timeoutMessage(err));
+      }
+    })();
+
     return () => {
       cancelled = true;
     };
@@ -129,13 +150,26 @@ export default function Step5Search({
 
   const retry = () => {
     setError(null);
+    setCommunities(null);
+    setLeads(null);
+    setPhase("communities");
+    setPhase2StartSecond(null);
     advancedRef.current = false;
     notifiedRef.current = false;
     setAttempt((a) => a + 1);
   };
 
   const clock = Math.floor(seconds / 60) + ":" + String(seconds % 60).padStart(2, "0");
-  const stageIndex = seed ? STAGES.length : Math.min(STAGES.length - 1, Math.floor(seconds / SECONDS_PER_STAGE));
+
+  // Stage 0 completes on the real communities-fetch resolving (phase !== "communities"), not a
+  // guess. Stages 1-3 are time-paced from the moment phase 2 actually started, same rationale as
+  // the old single-call version — the people search doesn't stream finer-grained progress back.
+  const phase2Elapsed = phase2StartSecond === null ? 0 : seconds - phase2StartSecond;
+  const stageIndex = seed
+    ? STAGES.length
+    : phase === "communities"
+      ? 0
+      : Math.min(STAGES.length - 1, 1 + Math.floor(phase2Elapsed / SECONDS_PER_STAGE));
 
   if (error) {
     return (
@@ -158,7 +192,7 @@ export default function Step5Search({
       <div style={{ width: "100%", maxWidth: 1100, margin: "0 auto", display: "grid", gridTemplateColumns: "1fr minmax(280px,420px)", gap: 44 }} className="step5-grid">
         <style>{`@media (max-width: 860px) { .step5-grid { grid-template-columns: 1fr !important; } }`}</style>
 
-        <div style={{ display: "flex", flexDirection: "column", gap: 26 }}>
+        <div style={{ display: "flex", flexDirection: "column", gap: 26, minWidth: 0 }}>
           <div style={{ display: "flex", alignItems: "center", gap: 12, fontSize: 15, color: "var(--muted)" }}>
             <span style={{ width: 9, height: 9, borderRadius: 999, background: "var(--ember)", animation: "kyPulse 1.6s ease-in-out infinite" }} />
             Searching for real {(buyers[0]?.name || "buyers").toLowerCase()} right now
@@ -242,15 +276,15 @@ export default function Step5Search({
           )}
         </div>
 
-        <div style={{ background: "var(--card)", border: "1px solid var(--border)", borderRadius: 16, padding: 24, display: "flex", flexDirection: "column", gap: 16, boxShadow: "0 1px 2px rgba(20,18,15,.05), 0 22px 46px -24px rgba(20,18,15,.18)", height: "fit-content" }}>
+        <div style={{ background: "var(--card)", border: "1px solid var(--border)", borderRadius: 16, padding: 24, display: "flex", flexDirection: "column", gap: 16, boxShadow: "0 1px 2px rgba(20,18,15,.05), 0 22px 46px -24px rgba(20,18,15,.18)", height: "fit-content", minWidth: 0 }}>
           <span style={{ fontFamily: "var(--font-outfit)", fontWeight: 700, fontSize: 15, letterSpacing: ".08em", textTransform: "uppercase", color: "var(--muted)" }}>
             Communities found
           </span>
           <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-            {seed ? (
-              seed.communities.length ? (
-                seed.communities.map((c, i) => (
-                  <div key={c.name} className="ky-fade-in" style={{ display: "flex", flexDirection: "column", gap: 4, paddingBottom: 12, borderBottom: i < seed.communities.length - 1 ? "1px solid var(--border)" : "none" }}>
+            {communities ? (
+              communities.length ? (
+                communities.map((c, i) => (
+                  <div key={c.name} className="ky-fade-in" style={{ display: "flex", flexDirection: "column", gap: 4, paddingBottom: 12, borderBottom: i < communities.length - 1 ? "1px solid var(--border)" : "none" }}>
                     <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: 8 }}>
                       <span style={{ fontSize: 15.5, fontWeight: 600 }}>{c.name}</span>
                       <span style={{ fontSize: 13, color: c.fit === "Strong fit" ? "var(--green)" : "var(--muted)", fontWeight: 600, whiteSpace: "nowrap" }}>{c.fit}</span>
