@@ -30,6 +30,7 @@ export async function GET() {
     REDDIT_CLIENT_ID: present("REDDIT_CLIENT_ID"),
     REDDIT_CLIENT_SECRET: present("REDDIT_CLIENT_SECRET"),
     RESEND_API_KEY: present("RESEND_API_KEY"),
+    STACKEXCHANGE_KEY: present("STACKEXCHANGE_KEY"),
     X_BEARER_TOKEN: present("X_BEARER_TOKEN"),
     BRAVE_SEARCH_API_KEY: present("BRAVE_SEARCH_API_KEY"),
     // Auth.js derives its callback URL from these when behind a proxy; a wrong value is a very
@@ -120,6 +121,23 @@ export async function GET() {
     ? { enabled: true, note: "X_BEARER_TOKEN present — recent search covers roughly the last 7 days." }
     : { enabled: false, note: "No X_BEARER_TOKEN. X has no free search API; reading posts requires a paid tier, so this source stays off." };
 
+  // --- bluesky + stack exchange (both fully open, no key) -----------------
+  const bskyT0 = Date.now();
+  try {
+    const res = await fetch("https://public.api.bsky.app/xrpc/app.bsky.feed.searchPosts?q=test&limit=1", { signal: AbortSignal.timeout(6000) });
+    checks.bluesky = { reachable: res.ok, status: res.status, ms: Date.now() - bskyT0 };
+  } catch (err) {
+    checks.bluesky = { reachable: false, ms: Date.now() - bskyT0, error: (err instanceof Error ? err.message : String(err)).slice(0, 200) };
+  }
+
+  const seT0 = Date.now();
+  try {
+    const res = await fetch("https://api.stackexchange.com/2.3/info?site=stackoverflow", { signal: AbortSignal.timeout(6000) });
+    checks.stackExchange = { reachable: res.ok, status: res.status, ms: Date.now() - seT0, keyed: Boolean(process.env.STACKEXCHANGE_KEY) };
+  } catch (err) {
+    checks.stackExchange = { reachable: false, ms: Date.now() - seT0, error: (err instanceof Error ? err.message : String(err)).slice(0, 200) };
+  }
+
   // --- open-web discovery -------------------------------------------------
   const provider = webSearchProvider();
   checks.webSearch = {
@@ -137,7 +155,9 @@ export async function GET() {
   const anySource = Boolean(
     (checks.reddit as { reachable?: boolean }).reachable ||
       (checks.hackerNews as { reachable?: boolean }).reachable ||
-      (checks.lemmy as { reachable?: boolean }).reachable,
+      (checks.lemmy as { reachable?: boolean }).reachable ||
+      (checks.bluesky as { reachable?: boolean }).reachable ||
+      (checks.stackExchange as { reachable?: boolean }).reachable,
   );
 
   return NextResponse.json(

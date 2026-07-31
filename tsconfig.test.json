@@ -16,6 +16,7 @@
     "lib/search/types.ts",
     "lib/search/trace.ts",
     "lib/search/excerpt.ts",
-    "lib/htmlText.ts"
+    "lib/htmlText.ts",
+    "lib/search/seSites.ts"
   ]
 }

@@ -6,6 +6,7 @@ import { searchSubreddits, type SubredditResult } from "./reddit";
 import { hasXCredentials } from "./x";
 import { findCommunitiesOnWeb, webSearchProvider } from "./websearch";
 import { isDiscourse } from "./discourse";
+import { pickStackExchangeSites } from "./seSites";
 import { settleWithBudget, type Trace } from "./trace";
 import { formatMembers, sizeFit, termRelevance } from "./ranking";
 import type { Venue } from "./types";
@@ -22,6 +23,7 @@ const VENUE_TTL_DAYS = 30;
 // Short hints so the annotation pass can judge the credential-free sources on the same footing as
 // the discovered subreddits, instead of them being kept or dropped by default.
 const VENUE_HINTS: Record<string, string> = {
+  "bsky:all": "public short posts, open to everyone and growing. Reasonable for most buyers who complain publicly.",
   "hn:all": "founders, engineers, and technical operators. Keep only if this buyer is plausibly technical or startup-adjacent; drop for consumer, lifestyle, or retail buyers.",
   "lemmy:all": "federated general-interest communities, Reddit-like in tone and topic spread. Reasonable for most buyers.",
   "x:all": "short public posts across every topic. Keep if this buyer complains publicly; drop for private or enterprise-only buyers.",
@@ -57,6 +59,19 @@ const LEMMY: Venue = {
   rank: 0.45,
 };
 
+const BLUESKY: Venue = {
+  id: "bsky:all",
+  platform: "X",
+  name: "Bluesky",
+  url: "https://bsky.app/",
+  members: null,
+  membersLabel: "size unknown",
+  fit: "Untested",
+  note: "Public short posts, fully open API. Reply in thread — never a cold DM.",
+  searchable: true,
+  rank: 0.55,
+};
+
 const X_VENUE: Venue = {
   id: "x:all",
   platform: "X",
@@ -72,8 +87,22 @@ const X_VENUE: Venue = {
 
 // Sources that need no per-niche discovery. HN and Lemmy are unconditional because they require no
 // credentials at all; X joins them only when a token exists, since it has no free search tier.
-function alwaysAvailableVenues(): Venue[] {
-  return [HACKER_NEWS, LEMMY, ...(hasXCredentials() ? [X_VENUE] : [])];
+function alwaysAvailableVenues(lexiconTerms: string[] = []): Venue[] {
+  const seSites = pickStackExchangeSites(lexiconTerms);
+  const seVenues: Venue[] = seSites.map((site) => ({
+    id: `stackexchange:${site}`,
+    platform: "Forum",
+    name: `${site}.stackexchange.com`,
+    url: `https://${site}.stackexchange.com/`,
+    members: null,
+    membersLabel: "size unknown",
+    fit: "Untested",
+    // Every item is a question, which is about as explicit as "actively looking" gets.
+    note: "Answer the question properly first; mention the product only if it genuinely fits.",
+    searchable: true,
+    rank: 0.6,
+  }));
+  return [HACKER_NEWS, LEMMY, BLUESKY, ...seVenues, ...(hasXCredentials() ? [X_VENUE] : [])];
 }
 
 export interface VenueCacheDoc {
@@ -142,7 +171,7 @@ export async function resolveVenues(opts: {
   // a degraded run, not a failed one — the auth-free sources still carry it.
   if (discovered.length === 0) {
     const webOnly = await discoverWebForums({ nicheKey, buyers, trace });
-    const fallback = [...webOnly, ...alwaysAvailableVenues()];
+    const fallback = [...webOnly, ...alwaysAvailableVenues(lexiconTerms)];
     trace.record({
       stage: "venues:reddit-unavailable",
       candidatesIn: 0,
@@ -182,7 +211,7 @@ export async function resolveVenues(opts: {
               "",
               "Communities (slug — size — description):",
               ...ranked.map((r) => `- ${r.sub.slug} (${formatMembers(r.sub.subscribers)}): ${r.sub.description || "no description"}`),
-              ...alwaysAvailableVenues().map((v) => `- ${v.id} (${v.name}): ${VENUE_HINTS[v.id] ?? "general audience"}`),
+              ...alwaysAvailableVenues(lexiconTerms).map((v) => `- ${v.id} (${v.name}): ${VENUE_HINTS[v.id] ?? "topical Q&A — every item is someone explicitly asking for help"}`),
             ].join("\n"),
           },
         ],
@@ -207,7 +236,7 @@ export async function resolveVenues(opts: {
           };
         })
         .slice(0, maxVenues);
-      const extras = alwaysAvailableVenues()
+      const extras = alwaysAvailableVenues(lexiconTerms)
         .filter((v) => verdicts.get(v.id)?.keep !== false)
         .map((v) => {
           const verdict = verdicts.get(v.id);
@@ -229,7 +258,7 @@ export async function resolveVenues(opts: {
         searchable: true,
         rank: r.rank,
       }));
-      return { out: [...out, ...webVenues, ...alwaysAvailableVenues()], note: "annotation failed, using unannotated venues" };
+      return { out: [...out, ...webVenues, ...alwaysAvailableVenues(lexiconTerms)], note: "annotation failed, using unannotated venues" };
     }
   });
 
