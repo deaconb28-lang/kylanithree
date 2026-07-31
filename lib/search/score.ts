@@ -44,9 +44,8 @@ export async function scoreCandidates(opts: {
   whatYouSell: string;
   problem: string;
   buyers: { name: string; desc: string }[];
-  maxLeads?: number;
 }): Promise<ScoreResult> {
-  const { candidates, whatYouSell, problem, buyers, maxLeads = 25 } = opts;
+  const { candidates, whatYouSell, problem, buyers } = opts;
   const drops: Partial<Record<DropReason, number>> = {};
   if (candidates.length === 0) return { leads: [], drops };
 
@@ -114,10 +113,11 @@ export async function scoreCandidates(opts: {
     });
   }
 
-  // Someone actively shopping outranks someone venting; recency breaks ties within a tier. No
-  // padding — if only a handful survive, a handful is what ships.
+  // Every lead that cleared the gate ships, ranked by the same score the founder sees. Truncating
+  // to a fixed count discarded real people for a reason nobody could inspect; ordering by an
+  // explainable score keeps the judgement with the person doing the outreach.
   const tierRank: Record<IntentTier, number> = { seeking: 0, complaining: 1, adjacent: 2 };
   leads.sort((a, b) => tierRank[a.intentTier] - tierRank[b.intentTier] || b.postedAt.getTime() - a.postedAt.getTime());
 
-  return { leads: leads.slice(0, maxLeads), drops };
+  return { leads, drops };
 }

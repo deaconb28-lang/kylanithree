@@ -57,6 +57,7 @@ export async function POST() {
       campaignId: cid,
       buyers,
       generated,
+      relevanceWindowDays: campaign.relevanceWindowDays,
       dedupe,
     });
 

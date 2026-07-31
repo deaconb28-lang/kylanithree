@@ -18,6 +18,7 @@
     "lib/search/excerpt.ts",
     "lib/htmlText.ts",
     "lib/search/seSites.ts",
-    "lib/search/waves.ts"
+    "lib/search/waves.ts",
+    "lib/search/leadScore.ts"
   ]
 }

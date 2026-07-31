@@ -32,14 +32,13 @@ export async function extractLeads(opts: {
   problem: string;
   buyers: { name: string; desc: string }[];
   trace: Trace;
-  maxLeads?: number;
   // Which slice of the phrase pool and which page of results this wave should cover.
   wave?: number;
   // Authors already shipped by earlier waves/shards, so a later wave spends its budget on new
   // people instead of re-surfacing and re-scoring the same ones.
   excludeAuthors?: string[];
 }): Promise<{ leads: ScoredLead[] }> {
-  const { venues, lexicon, whatYouSell, problem, buyers, trace, maxLeads, wave = 0, excludeAuthors = [] } = opts;
+  const { venues, lexicon, whatYouSell, problem, buyers, trace, wave = 0, excludeAuthors = [] } = opts;
 
   const searchable = venues.filter((v) => v.searchable);
 
@@ -96,7 +95,7 @@ export async function extractLeads(opts: {
   const toScore = filtered.slice(0, MAX_TO_SCORE);
   const leads = await trace.stage(`extract:score:w${wave}`, toScore.length, async () => {
     try {
-      const { leads: scored, drops } = await scoreCandidates({ candidates: toScore, whatYouSell, problem, buyers, maxLeads });
+      const { leads: scored, drops } = await scoreCandidates({ candidates: toScore, whatYouSell, problem, buyers });
       return { out: scored, drops };
     } catch (err) {
       // Partial results beat a timeout: if scoring falls over, nothing ships from this shard

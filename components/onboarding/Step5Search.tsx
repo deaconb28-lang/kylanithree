@@ -9,6 +9,8 @@ import type { GeneratedSeed } from "../../lib/generateCampaignSeed";
 import type { ScoredLead, Venue } from "../../lib/search/types";
 import type { SiteAnalysis } from "../../lib/types";
 import { useNotificationPermission } from "../../lib/useNotificationPermission";
+import LeadStars from "../LeadStars";
+import { rankLeads } from "../../lib/search/leadScore";
 
 // Orchestrates the real two-phase pipeline from the client, which is what makes results stream.
 // Venues resolve first and render the moment they land — communities ARE the first result, not a
@@ -237,6 +239,13 @@ export default function Step5Search({
     setAttempt((a) => a + 1);
   };
 
+  // Ranked by the same score the dashboard uses, so the preview is a genuine "best first" list
+  // rather than whichever shard happened to answer earliest.
+  const rankedLeads = useMemo(
+    () => rankLeads(leads, analysis?.relevanceWindowDays ?? 60),
+    [leads, analysis?.relevanceWindowDays],
+  );
+
   const clock = Math.floor(seconds / 60) + ":" + String(seconds % 60).padStart(2, "0");
 
   const stages: { label: string; state: "done" | "active" | "pending" }[] = [
@@ -253,7 +262,7 @@ export default function Step5Search({
     },
     {
       label: leads.length
-        ? `Verified ${leads.length} of up to ${TARGET_LEADS} real ${leads.length === 1 ? "person" : "people"} with a live problem`
+        ? `Verified ${leads.length} real ${leads.length === 1 ? "person" : "people"} — ranked best first`
         : "Verifying who has a live problem right now",
       state: phase === "done" ? "done" : leads.length ? "active" : "pending",
     },
@@ -319,13 +328,13 @@ export default function Step5Search({
               <span style={{ fontFamily: "var(--font-outfit)", fontWeight: 700, fontSize: 15, letterSpacing: ".08em", textTransform: "uppercase", color: "var(--muted)" }}>
                 People found
               </span>
-              {leads.slice(0, 5).map((l) => (
-                <div key={l.id} className="ky-fade-in" style={{ background: "rgba(253,252,250,.86)", border: "1px solid var(--border)", borderRadius: 12, padding: "14px 16px", display: "flex", flexDirection: "column", gap: 6 }}>
-                  <div style={{ display: "flex", alignItems: "baseline", gap: 8, flexWrap: "wrap" }}>
+              {rankedLeads.slice(0, 5).map((l) => (
+                <div key={l.id} className="ky-fade-in" style={{ background: "rgba(253,252,250,.86)", border: "1px solid var(--border)", borderRadius: 12, padding: "14px 16px", display: "flex", flexDirection: "column", gap: 7 }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
                     <span style={{ fontSize: 15, fontWeight: 600 }}>{l.author}</span>
                     <span style={{ fontSize: 13, color: "var(--muted)" }}>{l.venueName}</span>
-                    <span style={{ marginLeft: "auto", fontSize: 11.5, fontWeight: 700, textTransform: "uppercase", letterSpacing: ".05em", color: l.intentTier === "seeking" ? "var(--green)" : "var(--muted)" }}>
-                      {l.intentTier === "seeking" ? "Actively looking" : "Complaining"}
+                    <span style={{ marginLeft: "auto" }}>
+                      <LeadStars score={l.leadScore} />
                     </span>
                   </div>
                   <span style={{ fontSize: 13.5, color: "var(--muted-strong)", lineHeight: 1.5 }}>&ldquo;{l.excerpt}&rdquo;</span>

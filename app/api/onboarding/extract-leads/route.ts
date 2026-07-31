@@ -28,7 +28,6 @@ export async function POST(req: NextRequest) {
       problem: body.problem ?? body.whatYouSell,
       buyers: body.buyers,
       trace,
-      maxLeads: body.maxLeads ?? 25,
       // Which wave of the widening search this request represents, and who has already been
       // shipped — so a later wave spends its budget finding new people rather than re-scoring
       // the ones the founder can already see.

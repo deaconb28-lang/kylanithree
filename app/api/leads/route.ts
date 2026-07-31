@@ -12,6 +12,8 @@ export async function GET(req: NextRequest) {
   if (scope === "today") filter.timeSensitive = true;
   if (scope === "queue") filter.timeSensitive = false;
 
-  const docs = await leads.find(filter).sort({ createdAt: 1 }).toArray();
+  // Best first. scoreTotal descending puts the strongest signal at the top of the queue; createdAt
+  // only breaks ties and keeps ordering stable for older leads written before scoring existed.
+  const docs = await leads.find(filter).sort({ scoreTotal: -1, createdAt: 1 }).toArray();
   return NextResponse.json(docs);
 }

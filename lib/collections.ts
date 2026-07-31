@@ -38,6 +38,13 @@ export interface LeadDoc {
   intentTier?: IntentTier;
   venueId?: string;
   signalScore?: number;
+  // The user-facing quality score (see lib/search/leadScore.ts). Stored rather than recomputed so
+  // the dashboard ranks consistently and the breakdown shown on a lead never drifts from the one
+  // it was ranked by.
+  stars?: number;
+  scoreTotal?: number;
+  scoreLabel?: string;
+  scoreBreakdown?: { intent: number; confidence: number; recency: number; engagement: number };
   createdAt: Date;
   updatedAt: Date;
 }

@@ -5,6 +5,8 @@ import DashboardShell from "../../../components/dashboard/DashboardShell";
 import SearchAgainButton from "../../../components/dashboard/SearchAgainButton";
 import type { HypothesisDoc, LeadDoc, SuppressionReason } from "../../../lib/collections";
 import { SUPPRESSION_REASON_LABELS, SUPPRESSION_REASONS } from "../../../lib/suppression";
+import LeadStars from "../../../components/LeadStars";
+import { starsFromTotal, labelFromTotal } from "../../../lib/search/leadScore";
 
 type Lead = LeadDoc & { _id: string };
 type Hypothesis = HypothesisDoc & { _id: string };
@@ -280,7 +282,20 @@ export default function QueuePage() {
         <div style={{ padding: "32px 5vw", display: "flex", flexDirection: "column", gap: 20, boxSizing: "border-box", maxWidth: 900 }}>
           <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 20, flexWrap: "wrap" }}>
             <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-              <span style={{ fontFamily: "var(--font-outfit)", fontWeight: 700, fontSize: 24, letterSpacing: "-.02em" }}>{lead.name}</span>
+              <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
+                <span style={{ fontFamily: "var(--font-outfit)", fontWeight: 700, fontSize: 24, letterSpacing: "-.02em" }}>{lead.name}</span>
+                {typeof lead.scoreTotal === "number" && (
+                  <LeadStars
+                    size={16}
+                    score={{
+                      total: lead.scoreTotal,
+                      stars: lead.stars ?? starsFromTotal(lead.scoreTotal),
+                      label: lead.scoreLabel ?? labelFromTotal(lead.scoreTotal),
+                      breakdown: lead.scoreBreakdown ?? { intent: 0, confidence: 0, recency: 0, engagement: 0 },
+                    }}
+                  />
+                )}
+              </div>
               <span style={{ fontSize: 14.5, color: "var(--muted)" }}>
                 {lead.role} · {lead.company} · {lead.email ?? "no email on file"}
               </span>

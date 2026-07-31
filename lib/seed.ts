@@ -1,5 +1,6 @@
 import { Campaigns, Communities, Findings, Hypotheses, Leads, Suppressions, type CampaignDoc } from "./collections";
 import { generateCampaignSeed, type GeneratedSeed } from "./generateCampaignSeed";
+import { scoreLead } from "./search/leadScore";
 
 export function slugify(text: string) {
   return text.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)/g, "") || "buyer";
@@ -29,10 +30,11 @@ export async function persistGeneratedSeed(params: {
   campaignId: string;
   buyers: { name: string }[];
   generated: GeneratedSeed;
+  relevanceWindowDays?: number;
   dedupe?: { authors: Set<string>; communityNames: Set<string> };
 }): Promise<{ insertedLeads: number; insertedCommunities: number }> {
   const now = new Date();
-  const { userId, campaignId: cid, buyers, generated, dedupe } = params;
+  const { userId, campaignId: cid, buyers, generated, dedupe, relevanceWindowDays = 60 } = params;
 
   // Dedupe by AUTHOR, not by URL — one person is one lead however many posts or venues surfaced
   // them. URL-keyed dedupe let the same person in twice from two different threads.
@@ -50,6 +52,7 @@ export async function persistGeneratedSeed(params: {
     await leadsCol.insertMany(
       leadsToInsert.map((l) => {
         const buyer = buyers[l.buyerIndex] ?? buyers[0];
+        const score = scoreLead({ ...l, relevanceWindowDays });
         return {
           userId,
           campaignId: cid,
@@ -74,6 +77,10 @@ export async function persistGeneratedSeed(params: {
           intentTier: l.intentTier,
           venueId: l.venueId,
           signalScore: l.confidence,
+          stars: score.stars,
+          scoreTotal: score.total,
+          scoreLabel: score.label,
+          scoreBreakdown: score.breakdown,
           createdAt: now,
           updatedAt: now,
         };
@@ -183,7 +190,7 @@ export async function finalizeOnboarding(userId: string, onboarding: OnboardingA
   // generated.leads/communities can legitimately be empty — generateCampaignSeed only returns
   // real, verified search results now rather than a fabricated quota, so a fresh campaign may
   // start with zero of either.
-  await persistGeneratedSeed({ userId, campaignId: cid, buyers: onboarding.buyers, generated });
+  await persistGeneratedSeed({ userId, campaignId: cid, buyers: onboarding.buyers, generated, relevanceWindowDays: onboarding.relevanceWindowDays });
 
   const hypothesesCol = await Hypotheses();
   await hypothesesCol.insertMany(
