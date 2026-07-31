@@ -1,13 +1,46 @@
 import type { Candidate } from "./types";
 
-// Bluesky via the public AT Protocol AppView. No key, no registration, no approval, no account —
-// the search endpoint is genuinely open, which makes this the closest legitimate substitute for
-// the short-form public complaints that Reddit and X would otherwise supply.
+// Bluesky via the AT Protocol. This is the closest legitimate substitute for the short-form
+// public complaints that Reddit and X would otherwise supply — the same class of signal, obtained
+// through a door the platform actually leaves open rather than by scraping one that is shut.
 //
-// Deliberately chosen over scraping a platform that has denied access: this is the same class of
-// signal, obtained through a door the platform actually leaves open.
+// It does need a session: searchPosts answers 403 unauthenticated from a datacenter IP, which was
+// confirmed against production rather than assumed. A Bluesky account and an app password are free
+// and take a minute, so the cost is setup friction, not money or approval.
 
-const PUBLIC_APPVIEW = "https://public.api.bsky.app";
+const PDS = "https://bsky.social";
+
+// searchPosts returns 403 unauthenticated from a datacenter IP — confirmed against production, not
+// assumed. A session fixes it, and a Bluesky account plus an app password are free and take a
+// minute to create, so this stays a legitimate source rather than something to work around.
+// Without credentials the source reports itself unavailable instead of silently contributing zero.
+type TokenCache = { jwt: string; expiresAt: number };
+let tokenCache: TokenCache | null = null;
+
+export function hasBlueskyCredentials() {
+  return Boolean(process.env.BLUESKY_IDENTIFIER && process.env.BLUESKY_APP_PASSWORD);
+}
+
+async function getSessionJwt(): Promise<string | null> {
+  if (!hasBlueskyCredentials()) return null;
+  if (tokenCache && tokenCache.expiresAt > Date.now() + 60_000) return tokenCache.jwt;
+
+  const res = await fetch(`${PDS}/xrpc/com.atproto.server.createSession`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      identifier: process.env.BLUESKY_IDENTIFIER,
+      password: process.env.BLUESKY_APP_PASSWORD,
+    }),
+    signal: AbortSignal.timeout(8000),
+  });
+  if (!res.ok) throw new Error(`Bluesky session failed: ${res.status}`);
+  const json = (await res.json()) as { accessJwt?: string };
+  if (!json.accessJwt) throw new Error("Bluesky session response had no accessJwt");
+  // Access tokens are short-lived; refresh well inside their window rather than tracking exp.
+  tokenCache = { jwt: json.accessJwt, expiresAt: Date.now() + 60 * 60 * 1000 };
+  return tokenCache.jwt;
+}
 
 type BskyPost = {
   uri?: string;
@@ -35,8 +68,11 @@ export async function searchBluesky(opts: {
     since: new Date(Date.now() - windowDays * 86_400_000).toISOString(),
   });
 
-  const res = await fetch(`${PUBLIC_APPVIEW}/xrpc/app.bsky.feed.searchPosts?${qs}`, {
-    headers: { Accept: "application/json" },
+  const jwt = await getSessionJwt();
+  if (!jwt) return [];
+
+  const res = await fetch(`${PDS}/xrpc/app.bsky.feed.searchPosts?${qs}`, {
+    headers: { Accept: "application/json", Authorization: `Bearer ${jwt}` },
     signal: AbortSignal.timeout(timeoutMs),
   });
   if (!res.ok) throw new Error(`Bluesky search failed: ${res.status}`);

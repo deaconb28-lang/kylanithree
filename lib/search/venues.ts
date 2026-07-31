@@ -4,6 +4,7 @@ import { getAnthropic } from "../anthropic";
 import { getDb } from "../mongodb";
 import { searchSubreddits, type SubredditResult } from "./reddit";
 import { hasXCredentials } from "./x";
+import { hasBlueskyCredentials } from "./bluesky";
 import { findCommunitiesOnWeb, webSearchProvider } from "./websearch";
 import { isDiscourse } from "./discourse";
 import { pickStackExchangeSites } from "./seSites";
@@ -102,7 +103,7 @@ function alwaysAvailableVenues(lexiconTerms: string[] = []): Venue[] {
     searchable: true,
     rank: 0.6,
   }));
-  return [HACKER_NEWS, LEMMY, BLUESKY, ...seVenues, ...(hasXCredentials() ? [X_VENUE] : [])];
+  return [HACKER_NEWS, LEMMY, ...(hasBlueskyCredentials() ? [BLUESKY] : []), ...seVenues, ...(hasXCredentials() ? [X_VENUE] : [])];
 }
 
 export interface VenueCacheDoc {

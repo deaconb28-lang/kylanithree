@@ -7,6 +7,13 @@ import clientPromise, { getDb } from "./lib/mongodb";
 
 export const { handlers, auth, signIn, signOut } = NextAuth({
   adapter: MongoDBAdapter(clientPromise, { databaseName: "kylani" }),
+  // Vercel terminates TLS at its proxy, so the origin Auth.js should use lives in the forwarded
+  // host header, not in VERCEL_URL — which is a per-DEPLOYMENT hostname
+  // (kylani-8us1c5o0c-kylani.vercel.app) that changes on every push and can never be registered
+  // in Google Console. Without this, the OAuth redirect_uri never matches what Google has on file
+  // and sign-in fails at the callback. Set AUTH_URL to the canonical origin as well to remove any
+  // remaining ambiguity.
+  trustHost: true,
   // Credentials sign-in can't hydrate a database session (Auth.js persists
   // no session row for it), so the whole app runs on JWT sessions instead.
   session: { strategy: "jwt" },

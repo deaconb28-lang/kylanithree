@@ -1,4 +1,4 @@
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import { getDb } from "@/lib/mongodb";
 import { redditAuthMode } from "@/lib/search/reddit";
 import { webSearchProvider } from "@/lib/search/websearch";
@@ -17,7 +17,7 @@ function present(name: string) {
   return { set: Boolean(v && v.length > 0), length: v ? v.length : 0 };
 }
 
-export async function GET() {
+export async function GET(req: NextRequest) {
   const checks: Record<string, unknown> = {};
 
   // --- env presence -------------------------------------------------------
@@ -31,6 +31,8 @@ export async function GET() {
     REDDIT_CLIENT_SECRET: present("REDDIT_CLIENT_SECRET"),
     RESEND_API_KEY: present("RESEND_API_KEY"),
     STACKEXCHANGE_KEY: present("STACKEXCHANGE_KEY"),
+    BLUESKY_IDENTIFIER: present("BLUESKY_IDENTIFIER"),
+    BLUESKY_APP_PASSWORD: present("BLUESKY_APP_PASSWORD"),
     X_BEARER_TOKEN: present("X_BEARER_TOKEN"),
     BRAVE_SEARCH_API_KEY: present("BRAVE_SEARCH_API_KEY"),
     // Auth.js derives its callback URL from these when behind a proxy; a wrong value is a very
@@ -71,13 +73,24 @@ export async function GET() {
   // --- google oauth wiring ------------------------------------------------
   // Auth.js only ever calls back to <origin>/api/auth/callback/google. If that exact string is
   // not in the Google Console's Authorized redirect URIs, sign-in fails at the redirect.
-  const origin = process.env.AUTH_URL || process.env.NEXTAUTH_URL || (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : null);
+  // Derived from the ACTUAL request host, because that is what Auth.js uses with trustHost — an
+  // env-var guess here was misleading, since VERCEL_URL is a per-deployment hostname.
+  const forwardedHost = req.headers.get("x-forwarded-host") || req.headers.get("host");
+  const configuredOrigin = process.env.AUTH_URL || process.env.NEXTAUTH_URL || null;
+  const liveOrigin = configuredOrigin || (forwardedHost ? `https://${forwardedHost}` : null);
+  const deploymentOrigin = process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : null;
   checks.googleOAuth = {
     clientIdSet: Boolean(process.env.GOOGLE_CLIENT_ID),
     clientSecretSet: Boolean(process.env.GOOGLE_CLIENT_SECRET),
     authSecretSet: Boolean(process.env.AUTH_SECRET),
-    expectedRedirectUri: origin ? `${origin}/api/auth/callback/google` : "unknown — set AUTH_URL to your canonical https origin",
-    note: "This exact URI must appear in Google Cloud Console → Credentials → Authorized redirect URIs.",
+    requestHost: forwardedHost,
+    authUrlConfigured: configuredOrigin,
+    redirectUriForThisRequest: liveOrigin ? `${liveOrigin}/api/auth/callback/google` : "unknown",
+    warning:
+      !configuredOrigin && deploymentOrigin
+        ? `AUTH_URL is not set. Auth.js will follow whichever host the browser used, and a visit to the per-deployment URL (${deploymentOrigin}) produces a redirect_uri Google cannot have registered, because that hostname changes every deploy. Set AUTH_URL to your canonical origin.`
+        : null,
+    note: "Whichever URI is listed above must appear verbatim in Google Cloud Console → Credentials → Authorized redirect URIs.",
   };
 
   // --- reddit -------------------------------------------------------------
@@ -125,7 +138,15 @@ export async function GET() {
   const bskyT0 = Date.now();
   try {
     const res = await fetch("https://public.api.bsky.app/xrpc/app.bsky.feed.searchPosts?q=test&limit=1", { signal: AbortSignal.timeout(6000) });
-    checks.bluesky = { reachable: res.ok, status: res.status, ms: Date.now() - bskyT0 };
+    checks.bluesky = {
+      reachable: res.ok,
+      status: res.status,
+      ms: Date.now() - bskyT0,
+      credentialed: Boolean(process.env.BLUESKY_IDENTIFIER && process.env.BLUESKY_APP_PASSWORD),
+      note: res.ok
+        ? "Unauthenticated search works from this IP."
+        : "Unauthenticated search is blocked from this IP (expected). Set BLUESKY_IDENTIFIER and BLUESKY_APP_PASSWORD — a Bluesky account and app password are free.",
+    };
   } catch (err) {
     checks.bluesky = { reachable: false, ms: Date.now() - bskyT0, error: (err instanceof Error ? err.message : String(err)).slice(0, 200) };
   }
