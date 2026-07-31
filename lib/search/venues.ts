@@ -8,7 +8,7 @@ import { hasBlueskyCredentials } from "./bluesky";
 import { findCommunitiesOnWeb, webSearchProvider } from "./websearch";
 import { isDiscourse } from "./discourse";
 import { pickStackExchangeSites } from "./seSites";
-import { settleWithBudget, type Trace } from "./trace";
+import { settleWithBudget, withTimeout, type Trace } from "./trace";
 import { formatMembers, sizeFit, termRelevance } from "./ranking";
 import type { Venue } from "./types";
 
@@ -20,6 +20,13 @@ export { formatMembers, sizeFit } from "./ranking";
 // aspiration in a prompt.
 
 const VENUE_TTL_DAYS = 30;
+
+// Every stage is bounded so the worst case stays comfortably inside Vercel's function ceiling.
+// Reddit discovery 4.5s + max(web discovery, annotation) 12s ≈ 17s, leaving generous headroom even
+// if a model call runs long. Exceeding the ceiling is not a slow response — the function is killed
+// and the browser reports a connection failure, which is what "couldn't reach the server" was.
+const WEB_DISCOVERY_BUDGET_MS = 12_000;
+const ANNOTATION_BUDGET_MS = 12_000;
 
 // Short hints so the annotation pass can judge the credential-free sources on the same footing as
 // the discovered subreddits, instead of them being kept or dropped by default.
@@ -185,7 +192,7 @@ export async function resolveVenues(opts: {
 
   // Kicked off here but awaited after annotation, so the open-web search overlaps the annotation
   // model call rather than adding its latency on top of it.
-  const webVenuesPromise = discoverWebForums({ nicheKey, buyers, trace });
+  const webVenuesPromise = withTimeout(discoverWebForums({ nicheKey, buyers, trace }), WEB_DISCOVERY_BUDGET_MS, [] as Venue[]);
 
   const ranked = discovered
     .map((s) => ({ sub: s, rank: termRelevance(`${s.name} ${s.description}`, lexiconTerms) * 0.6 + sizeFit(s.subscribers) * 0.4 }))
@@ -193,9 +200,9 @@ export async function resolveVenues(opts: {
     .slice(0, maxVenues * 2);
 
   const annotated = await trace.stage("venues:annotate", ranked.length, async () => {
-    const webVenues = await webVenuesPromise;
     try {
-      const result = await getAnthropic().messages.parse({
+      const result = await withTimeout(
+        getAnthropic().messages.parse({
         model: "claude-sonnet-5",
         max_tokens: 2000,
         system:
@@ -216,8 +223,12 @@ export async function resolveVenues(opts: {
             ].join("\n"),
           },
         ],
-        output_config: { effort: "low", format: zodOutputFormat(AnnotationSchema) },
-      });
+          output_config: { effort: "low", format: zodOutputFormat(AnnotationSchema) },
+        }),
+        ANNOTATION_BUDGET_MS,
+        null,
+      );
+      if (!result) throw new Error("annotation exceeded its budget");
       const verdicts = new Map((result.parsed_output?.venues ?? []).map((v) => [v.slug.toLowerCase(), v]));
       const out = ranked
         .filter((r) => verdicts.get(r.sub.slug.toLowerCase())?.keep !== false)
@@ -243,7 +254,7 @@ export async function resolveVenues(opts: {
           const verdict = verdicts.get(v.id);
           return { ...v, fit: verdict?.fit ?? v.fit, note: verdict?.note || v.note };
         });
-      const merged = [...out, ...webVenues, ...extras];
+      const merged = [...out, ...(await webVenuesPromise), ...extras];
       // A run with no searchable venue produces no leads by construction. If annotation pruned
       // everything, keep the highest-ranked communities anyway — a weak venue that gets searched
       // beats a perfect one that does not exist.
@@ -266,7 +277,7 @@ export async function resolveVenues(opts: {
         searchable: true,
         rank: r.rank,
       }));
-      return { out: [...out, ...webVenues, ...alwaysAvailableVenues(lexiconTerms)], note: "annotation failed, using unannotated venues" };
+      return { out: [...out, ...(await webVenuesPromise), ...alwaysAvailableVenues(lexiconTerms)], note: "annotation unavailable; venues are real but unannotated" };
     }
   });
 

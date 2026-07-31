@@ -18,6 +18,11 @@ import { rankLeads } from "../../lib/search/leadScore";
 // leads appear in batches as they confirm and no single request has to fit the whole run inside
 // Vercel's function ceiling.
 const VENUES_PER_SHARD = 3;
+// Client-side ceilings, set just under each route's own. A function killed by the platform never
+// sends a response, so the browser reports a generic connection failure — indistinguishable from
+// being offline unless we time out first and say which one it was.
+const VENUES_TIMEOUT_MS = 50_000;
+const EXTRACT_TIMEOUT_MS = 50_000;
 // What a founder is actually asking for when they say "find my buyers" — a batch worth working
 // through, not a token handful. The search widens toward this across successive waves; it never
 // relaxes the quality gate to reach it, so finishing under target is a normal, honest outcome.
@@ -113,6 +118,7 @@ export default function Step5Search({
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify(searchPayload),
+          signal: AbortSignal.timeout(VENUES_TIMEOUT_MS),
         });
         const { ok: venuesOk, data: venuesData } = await readJson(venuesRes);
         if (cancelled) return;
@@ -160,6 +166,7 @@ export default function Step5Search({
                     wave,
                     excludeAuthors: [...seenAuthors],
                   }),
+                  signal: AbortSignal.timeout(EXTRACT_TIMEOUT_MS),
                 });
                 const { ok, data } = await readJson(res);
                 if (cancelled || !ok) return;
@@ -201,9 +208,14 @@ export default function Step5Search({
         if (!cancelled) setPhase("done");
       } catch (err) {
         if (cancelled) return;
+        // An aborted request and a killed serverless function both surface as a failed fetch, so
+        // name the likely cause rather than blaming the connection for a server-side timeout.
+        const timedOut =
+          err instanceof Error &&
+          (err.name === "TimeoutError" || err.name === "AbortError" || /^(PARSE_ERROR|HTTP_5)/.test(err.message));
         setError(
-          err instanceof Error && /^(PARSE_ERROR|HTTP_)/.test(err.message)
-            ? "That took longer than expected and timed out. Try again — most searches finish well within a minute."
+          timedOut
+            ? "The search ran longer than the server allows and was cut off. Try again — and if it keeps happening, /diagnostics will show which stage is slow."
             : "Couldn't reach the server — check your connection and try again.",
         );
       }

@@ -84,3 +84,18 @@ export async function settleWithBudget<T>(
   }
   return { results, timeouts, errors };
 }
+
+// Resolves to `fallback` if the work outruns its budget. Vercel kills a function that exceeds its
+// maxDuration and the client sees a connection failure rather than a response, so every stage that
+// calls a model or a third party needs a ceiling well inside the platform's own.
+export async function withTimeout<T>(work: Promise<T>, ms: number, fallback: T): Promise<T> {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const guard = new Promise<T>((resolve) => {
+    timer = setTimeout(() => resolve(fallback), ms);
+  });
+  try {
+    return await Promise.race([work, guard]);
+  } finally {
+    if (timer) clearTimeout(timer);
+  }
+}
