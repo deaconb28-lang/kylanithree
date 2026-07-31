@@ -18,7 +18,7 @@ type Buyer = {
 const DEFAULT_SUMMARY = "I read your site and matched it against a few real buyers — correct anything that's off.";
 const DEFAULT_SELL = "Describe what you sell in a sentence.";
 
-export default function Step3Buyers({
+export default function StepBuyers({
   analysis,
   url,
   onDone,

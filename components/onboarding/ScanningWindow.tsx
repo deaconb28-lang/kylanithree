@@ -1,6 +1,6 @@
 "use client";
 
-// A small animated "reading" visual shared by Step2Reading and Step5Search — a browser-window
+// A small animated "reading" visual shared by StepReading and StepSearch — a browser-window
 // mockup with shimmering skeleton lines and a scanning beam sweeping through them on loop. Purely
 // decorative (respects prefers-reduced-motion), gives the wait something to look at beyond a
 // checklist and a spinner.

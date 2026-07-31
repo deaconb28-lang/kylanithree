@@ -1,12 +1,9 @@
-import type { ProductCategory } from "./productCategories";
 import type { GeneratedSeed } from "./generateCampaignSeed";
 
 export type OnboardingResult = {
   url: string;
   whatYouSell: string;
   buyers: { name: string; desc: string }[];
-  channels: Record<string, boolean>;
-  category?: ProductCategory;
   keywords?: string[];
   // Carried across the sign-in redirect so finalize stores the same lexicon the search actually
   // used — a later re-search then reuses it rather than re-deriving a coarser one.
@@ -16,7 +13,7 @@ export type OnboardingResult = {
   seekingPhrases?: string[];
   negativeTerms?: string[];
   relevanceWindowDays?: number;
-  // The real, already-completed lead search from Step5Search — see lib/seed.ts's
+  // The real, already-completed lead search from StepSearch — see lib/seed.ts's
   // finalizeOnboarding, which persists this instead of searching again post-signin.
   seed?: GeneratedSeed;
 };

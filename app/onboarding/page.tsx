@@ -2,85 +2,76 @@
 
 import { Suspense, useState } from "react";
 import { useSearchParams } from "next/navigation";
-import Step1Url from "../../components/onboarding/Step1Url";
-import Step2Reading from "../../components/onboarding/Step2Reading";
-import Step3Buyers from "../../components/onboarding/Step3Buyers";
-import Step5Search from "../../components/onboarding/Step5Search";
-import Step6Complete from "../../components/onboarding/Step6Complete";
+import StepUrl from "../../components/onboarding/StepUrl";
+import StepReading from "../../components/onboarding/StepReading";
+import StepBuyers from "../../components/onboarding/StepBuyers";
+import StepSearch from "../../components/onboarding/StepSearch";
+import StepDone from "../../components/onboarding/StepDone";
 import type { SiteAnalysis } from "../../lib/types";
-import type { ProductCategory } from "../../lib/productCategories";
 import { saveOnboardingResult } from "../../lib/onboardingStorage";
-import { CHANNELS } from "../../lib/data";
 
-// Onboarding no longer asks where to reach people — every matched channel starts on, same as the
-// "Turn on all matched" default, and founders adjust it afterward from the real Channels page.
-const DEFAULT_CHANNELS: Record<string, boolean> = Object.fromEntries(CHANNELS.map((c) => [c.key, c.matched]));
+// The whole product in four screens: paste a URL, read the site, correct who it's for, go find
+// them. Anything that wasn't one of those four things has been taken out — a product-category
+// picker and a notes box on the first screen (both guesses made before Kylani had read anything),
+// and a channel-toggle step whose answer no search route ever read. Channels are still a real
+// setting, just one you adjust from the Channels page once you're in and have something to adjust.
+
+type Step = "url" | "reading" | "buyers" | "search" | "done";
 
 function OnboardingInner() {
   const params = useSearchParams();
   const prefilledUrl = params.get("url");
 
-  const [step, setStep] = useState(prefilledUrl ? 2 : 1);
-  const [url, setUrl] = useState(prefilledUrl || "dockside.app");
-  const [note, setNote] = useState("");
-  const [category, setCategory] = useState<ProductCategory>("app");
+  const [step, setStep] = useState<Step>(prefilledUrl ? "reading" : "url");
+  const [url, setUrl] = useState(prefilledUrl ?? "");
   const [analysis, setAnalysis] = useState<SiteAnalysis | null>(null);
   const [whatYouSell, setWhatYouSell] = useState("");
   const [buyers, setBuyers] = useState<{ name: string; desc: string }[]>([]);
-  const channels = DEFAULT_CHANNELS;
 
   switch (step) {
-    case 1:
+    case "url":
       return (
-        <Step1Url
-          onSubmit={(submittedUrl, submittedNote, submittedCategory) => {
+        <StepUrl
+          onSubmit={(submittedUrl) => {
             setUrl(submittedUrl);
-            setNote(submittedNote);
-            setCategory(submittedCategory);
-            setStep(2);
+            setStep("reading");
           }}
         />
       );
-    case 2:
+    case "reading":
       return (
-        <Step2Reading
+        <StepReading
           url={url}
-          note={note}
-          category={category}
           onDone={(result) => {
             setAnalysis(result);
-            setStep(3);
+            setStep("buyers");
           }}
         />
       );
-    case 3:
+    case "buyers":
       return (
-        <Step3Buyers
+        <StepBuyers
           analysis={analysis}
           url={url}
           onDone={(finalWhatYouSell, finalBuyers) => {
             setWhatYouSell(finalWhatYouSell);
             setBuyers(finalBuyers);
-            setStep(5);
+            setStep("search");
           }}
         />
       );
-    case 5:
+    case "search":
       return (
-        <Step5Search
+        <StepSearch
           url={url}
           whatYouSell={whatYouSell}
           buyers={buyers}
-          channels={channels}
-          category={category}
           analysis={analysis}
           onDone={(seed) => {
             saveOnboardingResult({
               url,
               whatYouSell,
               buyers,
-              channels,
-              category,
               keywords: analysis?.keywords,
               problem: analysis?.problem,
               nicheKey: analysis?.nicheKey,
@@ -90,12 +81,12 @@ function OnboardingInner() {
               relevanceWindowDays: analysis?.relevanceWindowDays,
               seed,
             });
-            setStep(6);
+            setStep("done");
           }}
         />
       );
     default:
-      return <Step6Complete />;
+      return <StepDone />;
   }
 }
 

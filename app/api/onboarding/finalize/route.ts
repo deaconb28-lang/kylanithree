@@ -16,7 +16,7 @@ export async function POST(req: NextRequest) {
   if (userId instanceof NextResponse) return userId;
 
   const body = (await req.json()) as Partial<OnboardingAnswers>;
-  if (!body.url || !body.whatYouSell || !Array.isArray(body.buyers) || !body.channels) {
+  if (!body.url || !body.whatYouSell || !Array.isArray(body.buyers)) {
     return NextResponse.json({ error: "Incomplete onboarding data." }, { status: 400 });
   }
 
@@ -26,8 +26,6 @@ export async function POST(req: NextRequest) {
       whatYouSell: body.whatYouSell,
       problem: body.problem,
       buyers: body.buyers,
-      channels: body.channels,
-      category: body.category,
       keywords: body.keywords,
       nicheKey: body.nicheKey,
       problemPhrases: body.problemPhrases,

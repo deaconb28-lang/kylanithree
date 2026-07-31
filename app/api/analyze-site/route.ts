@@ -3,7 +3,6 @@ import { z } from "zod";
 import { zodOutputFormat } from "@anthropic-ai/sdk/helpers/zod";
 import { getAnthropic } from "@/lib/anthropic";
 import { toUserError } from "@/lib/apiError";
-import { categoryGuidance } from "@/lib/productCategories";
 import { htmlToText } from "@/lib/htmlText";
 
 // This route combines an external site fetch with a Claude call, which can
@@ -94,7 +93,7 @@ function normalizeUrl(raw: string): string {
 // Intentionally unauthenticated: onboarding runs before sign-in, so this
 // route can't gate on a session yet.
 export async function POST(req: NextRequest) {
-  const { url, note, category } = await req.json();
+  const { url } = await req.json();
   if (!url || typeof url !== "string") {
     return NextResponse.json({ error: "A URL is required." }, { status: 400 });
   }
@@ -109,7 +108,7 @@ export async function POST(req: NextRequest) {
     const html = await res.text();
     pageText = extractReadableText(html);
   } catch {
-    // Fall through with empty pageText — Claude reasons from the URL + note alone.
+    // Fall through with empty pageText — Claude reasons from the URL and web search alone.
   }
 
   try {
@@ -137,8 +136,15 @@ export async function POST(req: NextRequest) {
         "top one the tag 'Most likely' (null for the rest). You're working under a tight time budget — run a handful " +
         "of targeted searches across all three parts (aim for 3-4, never more than 6), not an exhaustive " +
         "investigation. " +
-        categoryGuidance(category) +
-        " Every field has a hard length limit in its description — " +
+        // Onboarding used to ask the founder to pick a product category up front and fed a canned
+        // paragraph of guidance per category into this prompt. That was a guess made before Kylani had
+        // read anything; with web_search available the model works the framing out from real evidence.
+        "Decide for yourself whether the buyer is an individual consumer archetype or a job title at a " +
+        "company, and search whichever public spaces that kind of buyer actually uses — take whichever " +
+        "framing the evidence supports rather than defaulting to B2B. For a consumer product describe " +
+        "personas as archetypes with a lifestyle or interest descriptor ('Busy parent', 'Vinyl " +
+        "collector'); for a business product use named job titles with a company type and size. " +
+        "Every field has a hard length limit in its description — " +
         "treat those as strict maximums, not suggestions. Write like sparse UI copy, not a report: short, punchy, no " +
         "run-on sentences.",
       messages: [
@@ -146,13 +152,10 @@ export async function POST(req: NextRequest) {
           role: "user",
           content: [
             `Site: ${target}`,
-            note ? `Founder's notes: ${note}` : null,
             pageText
               ? `Page text (may be partial/truncated):\n${pageText}`
-              : "The page could not be fetched — search the web for this URL/company before falling back to inferring from the URL and any notes alone.",
-          ]
-            .filter(Boolean)
-            .join("\n\n"),
+              : "The page could not be fetched — search the web for this URL/company before falling back to inferring from the URL alone.",
+          ].join("\n\n"),
         },
       ],
       output_config: {

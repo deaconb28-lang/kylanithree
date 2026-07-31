@@ -36,7 +36,6 @@ export async function POST() {
       whatYouSell: campaign.whatYouSell,
       problem: campaign.problem,
       buyers,
-      channels: campaign.channels,
       keywords: campaign.keywords,
       nicheKey: campaign.nicheKey,
       problemPhrases: campaign.problemPhrases,

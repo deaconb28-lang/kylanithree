@@ -4,7 +4,6 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import OnboardingChrome from "./OnboardingChrome";
 import ScanningWindow from "./ScanningWindow";
 import SiteBadge, { useSitePreview } from "./SiteBadge";
-import type { ProductCategory } from "../../lib/productCategories";
 import type { GeneratedSeed } from "../../lib/generateCampaignSeed";
 import type { ScoredLead, Venue } from "../../lib/search/types";
 import type { SiteAnalysis } from "../../lib/types";
@@ -31,20 +30,16 @@ const MAX_WAVES = 4;
 
 type Phase = "venues" | "leads" | "done";
 
-export default function Step5Search({
+export default function StepSearch({
   url,
   whatYouSell,
   buyers,
-  channels,
-  category,
   analysis,
   onDone,
 }: {
   url: string;
   whatYouSell: string;
   buyers: { name: string; desc: string }[];
-  channels: Record<string, boolean>;
-  category: ProductCategory;
   analysis: SiteAnalysis | null;
   onDone: (seed: GeneratedSeed) => void;
 }) {
@@ -64,14 +59,14 @@ export default function Step5Search({
   const { permission: notifyPermission, request: requestNotifications } = useNotificationPermission();
   const preview = useSitePreview(url);
 
+  // Exactly what the two search routes read, and nothing else. `channels` and `category` used to
+  // ride along in here and neither route ever looked at them.
   const searchPayload = useMemo(
     () => ({
       url,
       whatYouSell,
       problem: analysis?.problem,
       buyers,
-      channels,
-      category,
       keywords: analysis?.keywords,
       nicheKey: analysis?.nicheKey,
       problemPhrases: analysis?.problemPhrases,
@@ -79,7 +74,7 @@ export default function Step5Search({
       negativeTerms: analysis?.negativeTerms,
       relevanceWindowDays: analysis?.relevanceWindowDays,
     }),
-    [url, whatYouSell, buyers, channels, category, analysis],
+    [url, whatYouSell, buyers, analysis],
   );
 
   useEffect(() => {

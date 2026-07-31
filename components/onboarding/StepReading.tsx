@@ -5,7 +5,6 @@ import OnboardingChrome from "./OnboardingChrome";
 import ScanningWindow from "./ScanningWindow";
 import SiteBadge, { useSitePreview } from "./SiteBadge";
 import type { SiteAnalysis } from "../../lib/types";
-import type { ProductCategory } from "../../lib/productCategories";
 import { useNotificationPermission } from "../../lib/useNotificationPermission";
 
 // Paced by real elapsed time rather than a fixed script — a typical real analysis (site fetch +
@@ -20,15 +19,11 @@ const ITEMS = [
   { text: "Drafting buyer hypotheses for you to correct", atSecond: 17 },
 ];
 
-export default function Step2Reading({
+export default function StepReading({
   url,
-  note,
-  category,
   onDone,
 }: {
   url: string;
-  note: string;
-  category: ProductCategory;
   onDone: (analysis: SiteAnalysis) => void;
 }) {
   const [seconds, setSeconds] = useState(0);
@@ -39,7 +34,7 @@ export default function Step2Reading({
   const fetchDoneRef = useRef(false);
   const advancedRef = useRef(false);
 
-  // Asked here — the first real wait in onboarding — rather than only on the longer Step5Search
+  // Asked here — the first real wait in onboarding — rather than only on the longer StepSearch
   // wait, so permission is already resolved by the time the slower real lead search starts and
   // that screen doesn't need to interrupt again (it only re-asks if this was skipped or dismissed).
   const { permission: notifyPermission, request: requestNotifications } = useNotificationPermission();
@@ -60,7 +55,7 @@ export default function Step2Reading({
     fetch("/api/analyze-site", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ url, note, category }),
+      body: JSON.stringify({ url }),
     })
       .then(async (res) => {
         let data: { error?: string } | SiteAnalysis;

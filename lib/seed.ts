@@ -1,6 +1,7 @@
 import { Campaigns, Communities, Findings, Hypotheses, Leads, Suppressions, type CampaignDoc } from "./collections";
 import { generateCampaignSeed, type GeneratedSeed } from "./generateCampaignSeed";
 import { scoreLead } from "./search/leadScore";
+import { CHANNELS } from "./data";
 
 export function slugify(text: string) {
   return text.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)/g, "") || "buyer";
@@ -116,13 +117,17 @@ export async function persistGeneratedSeed(params: {
   return { insertedLeads: leadsToInsert.length, insertedCommunities: communitiesToInsert.length };
 }
 
+// Onboarding no longer asks where to reach people — every matched channel starts on and the
+// founder adjusts it from the real Channels page once they have leads in front of them to adjust
+// it for. Owning the default here rather than in the client also means the answer can't arrive
+// missing or malformed from a stale session.
+const DEFAULT_CHANNELS: Record<string, boolean> = Object.fromEntries(CHANNELS.map((c) => [c.key, c.matched]));
+
 export type OnboardingAnswers = {
   url: string;
   whatYouSell: string;
   problem?: string;
   buyers: { name: string; desc: string }[];
-  channels: Record<string, boolean>;
-  category?: string;
   keywords?: string[];
   // The lexicon from analyze-site — stored on the campaign so a later re-search reuses the same
   // vocabulary and niche cache rather than re-deriving a coarser one from `keywords` alone.
@@ -131,7 +136,7 @@ export type OnboardingAnswers = {
   seekingPhrases?: string[];
   negativeTerms?: string[];
   relevanceWindowDays?: number;
-  // Populated when Step5Search already ran the real lead search during onboarding (the normal
+  // Populated when StepSearch already ran the real lead search during onboarding (the normal
   // path) — finalizeOnboarding then just persists it instead of searching a second time. Falls
   // back to searching here itself if a client ever arrives without one (e.g. an old session).
   seed?: GeneratedSeed;
@@ -147,7 +152,7 @@ export async function finalizeOnboarding(userId: string, onboarding: OnboardingA
     // Already seeded (e.g. a duplicate call) — just keep the product info current, don't regenerate leads.
     await campaigns.updateOne(
       { userId },
-      { $set: { productUrl: onboarding.url, whatYouSell: onboarding.whatYouSell, channels: onboarding.channels, updatedAt: new Date() } },
+      { $set: { productUrl: onboarding.url, whatYouSell: onboarding.whatYouSell, updatedAt: new Date() } },
     );
     return { campaign: await campaigns.findOne({ userId }), isNew: false };
   }
@@ -163,7 +168,7 @@ export async function finalizeOnboarding(userId: string, onboarding: OnboardingA
     dailyCap: 30,
     paused: false,
     revenueBase: 0,
-    channels: onboarding.channels,
+    channels: DEFAULT_CHANNELS,
     keywords: onboarding.keywords,
     problem: onboarding.problem,
     nicheKey: onboarding.nicheKey,

@@ -10,7 +10,7 @@ const CONFETTI = Array.from({ length: 26 }).map((_, i) => ({
   delay: ((i * 63) % 700) + "ms",
 }));
 
-export default function Step6Complete() {
+export default function StepDone() {
   return (
     <OnboardingChrome>
       <div style={{ position: "absolute", inset: 0, overflow: "hidden", pointerEvents: "none" }}>

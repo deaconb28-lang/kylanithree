@@ -4,7 +4,7 @@ import { Trace } from "./search/trace";
 import type { LexiconInput, RunTrace, ScoredLead, Venue } from "./search/types";
 
 // Thin orchestrator over the real pipeline in lib/search/*. The onboarding flow does NOT call this
-// — Step5Search drives resolve-venues and extract-leads as separate parallel requests so venues
+// — StepSearch drives resolve-venues and extract-leads as separate parallel requests so venues
 // render immediately and leads stream in behind them. This exists for the non-interactive callers
 // (the "search again" action, and finalizeOnboarding's fallback when a client arrives with no
 // pre-computed seed), where one call returning one result is the simpler contract.
@@ -20,8 +20,6 @@ export type SeedInput = {
   whatYouSell: string;
   problem?: string;
   buyers: { name: string; desc: string }[];
-  channels: Record<string, boolean>;
-  category?: string;
   keywords?: string[];
   nicheKey?: string;
   problemPhrases?: string[];
@@ -47,7 +45,7 @@ export function lexiconFrom(input: SeedInput): LexiconInput {
 
 export function nicheKeyFrom(input: SeedInput): string {
   if (input.nicheKey) return input.nicheKey;
-  const basis = `${input.buyers[0]?.name ?? "buyer"}-${input.keywords?.[0] ?? input.category ?? "general"}`;
+  const basis = `${input.buyers[0]?.name ?? "buyer"}-${input.keywords?.[0] ?? "general"}`;
   return basis.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)/g, "") || "general";
 }
 

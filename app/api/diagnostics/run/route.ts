@@ -17,7 +17,6 @@ const SAMPLE = {
   whatYouSell: "A tool that replaces messy spreadsheets for small teams.",
   problem: "Teams outgrow spreadsheets and lose track of work.",
   buyers: [{ name: "Operations manager", desc: "Runs day-to-day process at a small company and owns the spreadsheets." }],
-  channels: { reddit: true, forums: true },
   nicheKey: "spreadsheet-replacement-smallteam",
   problemPhrases: ["spreadsheet keeps breaking", "outgrown our spreadsheet", "tracking work in spreadsheets"],
   seekingPhrases: ["spreadsheet alternative", "project tracking tool", "replace our spreadsheet"],
