@@ -22,6 +22,18 @@ const CHANNELS_NAV: { key: Surface; href: string; label: string; Icon: typeof To
   { key: "suppressed", href: "/app/suppressed", label: "Suppressed", Icon: SuppressedIcon },
 ];
 
+/**
+ * The discover run waiting to be attached to this account, if the sign-in redirect carried one.
+ *
+ * Read from the URL rather than a router hook so it is available during the very first render —
+ * the shell has to know NOT to let a page underneath fetch before the claim lands, for exactly the
+ * reason the finalize gate exists: whichever request wins the race decides what the founder sees.
+ */
+function claimIdFromUrl(): string | null {
+  if (typeof window === "undefined") return null;
+  return new URLSearchParams(window.location.search).get("claim");
+}
+
 export default function DashboardShell({
   active,
   bottom,
@@ -47,7 +59,7 @@ export default function DashboardShell({
   // mount and race its own /api/leads or /api/campaign fetch against the finalize call below —
   // those routes auto-seed generic demo data the instant they see no campaign yet, which used to
   // beat the (much slower, AI-backed) finalize call and silently strand real accounts on demo data.
-  const [ready, setReady] = useState(() => !readOnboardingResult());
+  const [ready, setReady] = useState(() => !readOnboardingResult() && !claimIdFromUrl());
   const [finalizeError, setFinalizeError] = useState<string | null>(null);
   const [retrying, setRetrying] = useState(false);
   const [needsOnboarding, setNeedsOnboarding] = useState(false);
@@ -114,9 +126,32 @@ export default function DashboardShell({
       .finally(() => setRetrying(false));
   };
 
+  const attemptClaim = (searchId: string) => {
+    fetch(`/api/discover/${searchId}/claim`, { method: "POST" })
+      .then((r) => r.json().then((data) => ({ ok: r.ok, data })))
+      .then(({ ok, data }) => {
+        if (!ok) {
+          setFinalizeError(data.error ?? "Couldn't save that search to your account.");
+          return;
+        }
+        // Drop the parameter once it has been used, so a reload is a plain page load rather than a
+        // second claim — harmless, since the claim is idempotent, but pointless work on every visit.
+        window.history.replaceState(null, "", window.location.pathname);
+        setReady(true);
+        loadCounts();
+        loadCampaign();
+        loadSuppressedCount();
+      })
+      .catch(() => setFinalizeError("Couldn't reach the server."))
+      .finally(() => setRetrying(false));
+  };
+
   useEffect(() => {
     const pending = readOnboardingResult();
-    if (pending) {
+    const claimId = claimIdFromUrl();
+    if (claimId) {
+      attemptClaim(claimId);
+    } else if (pending) {
       attemptFinalize(pending);
     } else {
       loadCounts();
@@ -127,6 +162,13 @@ export default function DashboardShell({
   }, []);
 
   const retry = () => {
+    const claimId = claimIdFromUrl();
+    if (claimId) {
+      setRetrying(true);
+      setFinalizeError(null);
+      attemptClaim(claimId);
+      return;
+    }
     const pending = readOnboardingResult();
     if (!pending) return;
     setRetrying(true);
@@ -139,7 +181,9 @@ export default function DashboardShell({
       <div style={{ width: "100%", minHeight: "100vh", display: "grid", placeItems: "center", background: "var(--card)" }}>
         <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 14, maxWidth: 420, textAlign: "center", padding: "0 24px" }}>
           <KylaniLogo size={30} />
-          <span style={{ fontFamily: "var(--font-outfit)", fontWeight: 700, fontSize: 18 }}>Couldn&apos;t build your campaign.</span>
+          <span style={{ fontFamily: "var(--font-outfit)", fontWeight: 700, fontSize: 18 }}>
+            {claimIdFromUrl() ? "Couldn't save your search." : "Couldn't build your campaign."}
+          </span>
           <span style={{ fontSize: 14, color: "var(--muted)", lineHeight: 1.6 }}>{finalizeError}</span>
           <button
             className="ky-btn-ember"

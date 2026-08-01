@@ -211,6 +211,8 @@ export default function DiagnosticsPage() {
           </>
         )}
 
+        <FlowComparison reloadKey={reloadKey} />
+
         <div style={CARD}>
           <span style={{ fontFamily: "var(--font-outfit)", fontWeight: 700, fontSize: 16 }}>How the search actually works</span>
           <span style={{ fontSize: 13, color: "var(--muted)", marginTop: -6, lineHeight: 1.55 }}>
@@ -413,6 +415,120 @@ export default function DiagnosticsPage() {
           failure here again, that is a genuine bug, not a slow niche.
         </span>
       </div>
+    </div>
+  );
+}
+
+type FlowReportJson = {
+  flow: string;
+  runs: number;
+  medianTimeToFirstLeadMs: number | null;
+  medianTimeToInteractionMs: number | null;
+  medianTimeToCompleteMs: number | null;
+  funnel: { name: string; visitors: number; dropOffPct: number | null }[];
+  correctionRate: number | null;
+  degradedRate: number | null;
+};
+
+const secs = (ms: number | null) => (ms === null ? "—" : `${(ms / 1000).toFixed(1)}s`);
+
+/**
+ * The two onboarding flows, measured against each other.
+ *
+ * Both are reported even when one has no traffic, because an empty column is itself the finding —
+ * it means nobody is being routed there and the comparison is not yet meaningful. Medians rather
+ * than means throughout: one person who left a tab open for an hour should not move the headline.
+ */
+function FlowComparison({ reloadKey }: { reloadKey: number }) {
+  const [data, setData] = useState<{ discover: FlowReportJson; legacy: FlowReportJson } | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    fetch("/api/diagnostics/flows")
+      .then((r) => r.json())
+      .then((d) => {
+        if (cancelled) return;
+        if (d.error) setError(d.error);
+        else setData(d);
+      })
+      .catch((e) => {
+        if (!cancelled) setError(e instanceof Error ? e.message : String(e));
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [reloadKey]);
+
+  const flows = data ? ([data.discover, data.legacy] as const) : null;
+
+  return (
+    <div style={CARD}>
+      <span style={{ fontFamily: "var(--font-outfit)", fontWeight: 700, fontSize: 16 }}>Onboarding, old vs new</span>
+      <span style={{ fontSize: 13, color: "var(--muted)", marginTop: -6, lineHeight: 1.55 }}>
+        Last 30 days. <code>discover</code> is the one-screen flow; <code>legacy</code> is the four-step one, still
+        reachable at <code>/onboarding?flow=legacy</code>. Both report time-to-first-lead from the same moment — the
+        browser clock, starting when the URL was submitted — so the two columns are actually comparable.
+      </span>
+
+      {error && <span style={{ fontSize: 13.5, color: "var(--ember)" }}>{error}</span>}
+      {!flows && !error && <span style={{ fontSize: 13.5, color: "var(--muted)" }}>Loading…</span>}
+
+      {flows && (
+        <div style={{ overflowX: "auto" }}>
+          <table style={{ borderCollapse: "collapse", width: "100%", fontSize: 13.5, minWidth: 420 }}>
+            <thead>
+              <tr>
+                <th style={{ textAlign: "left", padding: "6px 10px 6px 0", color: "var(--muted)", fontWeight: 600 }} />
+                {flows.map((f) => (
+                  <th key={f.flow} style={{ textAlign: "right", padding: "6px 0 6px 14px", fontFamily: "ui-monospace, monospace" }}>
+                    {f.flow}
+                  </th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {(
+                [
+                  ["Runs started", (f: FlowReportJson) => String(f.runs)],
+                  ["Time to first lead", (f: FlowReportJson) => secs(f.medianTimeToFirstLeadMs)],
+                  ["Time to first interaction", (f: FlowReportJson) => secs(f.medianTimeToInteractionMs)],
+                  ["Time to search complete", (f: FlowReportJson) => secs(f.medianTimeToCompleteMs)],
+                  ["Corrected the inference", (f: FlowReportJson) => (f.correctionRate === null ? "—" : `${f.correctionRate}%`)],
+                  ["Ran degraded", (f: FlowReportJson) => (f.degradedRate === null ? "—" : `${f.degradedRate}%`)],
+                ] as [string, (f: FlowReportJson) => string][]
+              ).map(([label, get]) => (
+                <tr key={label}>
+                  <td style={{ padding: "6px 10px 6px 0", borderTop: "1px solid var(--border)", color: "var(--muted)" }}>{label}</td>
+                  {flows.map((f) => (
+                    <td key={f.flow} style={{ padding: "6px 0 6px 14px", borderTop: "1px solid var(--border)", textAlign: "right", fontVariantNumeric: "tabular-nums", fontWeight: 600 }}>
+                      {get(f)}
+                    </td>
+                  ))}
+                </tr>
+              ))}
+              {flows[0].funnel.map((step, i) => (
+                <tr key={step.name}>
+                  <td style={{ padding: "6px 10px 6px 0", borderTop: "1px solid var(--border)", color: "var(--muted)", fontFamily: "ui-monospace, monospace", fontSize: 12.5 }}>
+                    {step.name}
+                  </td>
+                  {flows.map((f) => {
+                    const s = f.funnel[i];
+                    return (
+                      <td key={f.flow} style={{ padding: "6px 0 6px 14px", borderTop: "1px solid var(--border)", textAlign: "right", fontVariantNumeric: "tabular-nums" }}>
+                        {s.visitors}
+                        {s.dropOffPct !== null && s.dropOffPct > 0 && (
+                          <span style={{ color: "var(--ember)", marginLeft: 6, fontSize: 12 }}>−{s.dropOffPct}%</span>
+                        )}
+                      </td>
+                    );
+                  })}
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
     </div>
   );
 }

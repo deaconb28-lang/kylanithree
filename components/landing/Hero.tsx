@@ -1,11 +1,13 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { useHeroDemo } from "./useHeroDemo";
 import { useUrlCycle } from "./useUrlCycle";
 import KylaniLogo from "../icons/KylaniLogo";
+import { markFlowStart, trackClient } from "../../lib/discover/clientTrack";
+import { resolveFlow } from "../../lib/discover/flag";
 
 const STAGE_LABELS = ["Reading five pages, pricing, changelog", "", "", ""];
 
@@ -17,6 +19,10 @@ export default function Hero() {
 
   const [shake, setShake] = useState(false);
 
+  useEffect(() => {
+    trackClient("landing_view", { flow: resolveFlow() });
+  }, []);
+
   const goToOnboarding = () => {
     // The rotating placeholder is only ever a hint, never a real submission — the demo cycling
     // through dockside.app/fathom.dev/etc. used to get silently submitted as the URL if someone
@@ -27,6 +33,9 @@ export default function Hero() {
       setTimeout(() => setShake(false), 500);
       return;
     }
+    // The clock the whole comparison rests on starts here, at the submission, not when a route
+    // eventually begins working.
+    markFlowStart();
     router.push(`/onboarding?url=${encodeURIComponent(value)}`);
   };
 

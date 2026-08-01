@@ -1,8 +1,11 @@
 "use client";
 
-import { Suspense, useState } from "react";
+import { Suspense, useEffect, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import StepUrl from "../../components/onboarding/StepUrl";
+import StepStart from "../../components/onboarding/StepStart";
+import { resolveFlow } from "../../lib/discover/flag";
+import { markFlowStart, sinceFlowStart, trackClient } from "../../lib/discover/clientTrack";
 import StepReading from "../../components/onboarding/StepReading";
 import StepBuyers from "../../components/onboarding/StepBuyers";
 import StepSearch from "../../components/onboarding/StepSearch";
@@ -21,18 +24,32 @@ type Step = "url" | "reading" | "buyers" | "search" | "done";
 function OnboardingInner() {
   const params = useSearchParams();
   const prefilledUrl = params.get("url");
+  const flow = resolveFlow(params.get("flow"));
 
+  // Everything below this line is the old four-screen flow, kept behind the flag so the two can be
+  // compared on the same events rather than replaced on faith. /onboarding stays the one entry URL
+  // in both cases, so no link on the site has to know which flow is live.
   const [step, setStep] = useState<Step>(prefilledUrl ? "reading" : "url");
   const [url, setUrl] = useState(prefilledUrl ?? "");
   const [analysis, setAnalysis] = useState<SiteAnalysis | null>(null);
   const [whatYouSell, setWhatYouSell] = useState("");
   const [buyers, setBuyers] = useState<{ name: string; desc: string }[]>([]);
 
+  // Arriving with the URL already filled in means the landing page was the submission; the legacy
+  // flow has no route that would otherwise record it.
+  useEffect(() => {
+    if (flow === "legacy" && prefilledUrl) trackClient("url_submitted", { flow: "legacy" });
+  }, [flow, prefilledUrl]);
+
+  if (flow === "discover") return <StepStart prefilledUrl={prefilledUrl} />;
+
   switch (step) {
     case "url":
       return (
         <StepUrl
           onSubmit={(submittedUrl) => {
+            markFlowStart();
+            trackClient("url_submitted", { flow: "legacy" });
             setUrl(submittedUrl);
             setStep("reading");
           }}
@@ -68,6 +85,7 @@ function OnboardingInner() {
           buyers={buyers}
           analysis={analysis}
           onDone={(seed) => {
+            trackClient("search_complete", { flow: "legacy", ms: sinceFlowStart() });
             saveOnboardingResult({
               url,
               whatYouSell,

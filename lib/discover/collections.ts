@@ -25,6 +25,12 @@ export interface DiscoverLead {
   /** Why this person matched, in plain terms, for the card. */
   matchedFor: string[];
   score: number;
+  /**
+   * Real platform engagement on the evidence post, when the source reported it. Absent on a pass-1
+   * lead because neither the corpus nor the shallow search carries it — and absent is the honest
+   * answer there, rather than a zero that would read as "nobody replied".
+   */
+  engagement?: { score: number; numComments: number };
   /** Which pass first surfaced them. Never shown to the user; used for shallow-survival only. */
   foundInPass: Pass;
   /** Filled by pass 2 enrichment; absent on a pass-1 lead and that is fine. */
@@ -55,6 +61,8 @@ export interface SearchDoc {
   };
   /** Fields the user corrected in place. Drives the correction-rate metric. */
   corrections?: { field: string; from: string; to: string; at: Date }[];
+  /** Set by the correction route; how an in-flight run notices it should adopt the new keywords. */
+  correctedAt?: Date;
 
   leads: DiscoverLead[];
   /** Person fingerprints surfaced by pass 1, kept so shallow survival is computable at the end. */

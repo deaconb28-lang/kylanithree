@@ -9,6 +9,7 @@ import type { SiteAnalysis } from "../../lib/types";
 import { useNotificationPermission } from "../../lib/useNotificationPermission";
 import LeadStars from "../LeadStars";
 import { rankLeads } from "../../lib/search/leadScore";
+import { sinceFlowStart, trackClient } from "../../lib/discover/clientTrack";
 
 // Orchestrates the real two-phase pipeline from the client, which is what makes results stream.
 // Venues resolve first and render the moment they land — communities ARE the first result, not a
@@ -61,6 +62,9 @@ export default function StepSearch({
   const [attempt, setAttempt] = useState(0);
   const advancedRef = useRef(false);
   const notifiedRef = useRef(false);
+  // Time-to-first-lead for the legacy side of the comparison. Measured here rather than server-side
+  // because this flow's search is spread across several routes with no run row to hang a clock on.
+  const firstLeadRef = useRef(false);
   const { permission: notifyPermission, request: requestNotifications } = useNotificationPermission();
   const preview = useSitePreview(url);
 
@@ -195,7 +199,13 @@ export default function StepSearch({
                   collected.push(l);
                   added.push(l);
                 }
-                if (added.length) setLeads((prev) => [...prev, ...added]);
+                if (added.length) {
+                  if (!firstLeadRef.current) {
+                    firstLeadRef.current = true;
+                    trackClient("first_lead_shown", { flow: "legacy", ms: sinceFlowStart() });
+                  }
+                  setLeads((prev) => [...prev, ...added]);
+                }
               } catch {
                 // Swallowed on purpose: a dead shard degrades the result set, it never fails the run.
               }

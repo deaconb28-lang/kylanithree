@@ -37,6 +37,7 @@
     "lib/ingest/sources/hackernews.ts",
     "lib/ingest/classify.ts",
     "lib/discover/merge.ts",
-    "lib/discover/collections.ts"
+    "lib/discover/collections.ts",
+    "lib/discover/rerank.ts"
   ]
 }
