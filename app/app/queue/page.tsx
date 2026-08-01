@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { Suspense, useEffect, useMemo, useState } from "react";
+import { useSearchParams } from "next/navigation";
 import DashboardShell from "../../../components/dashboard/DashboardShell";
 import SearchAgainButton from "../../../components/dashboard/SearchAgainButton";
 import type { HypothesisDoc, LeadDoc, SuppressionReason } from "../../../lib/collections";
@@ -13,13 +14,16 @@ type Lead = LeadDoc & { _id: string };
 type Hypothesis = HypothesisDoc & { _id: string };
 type Campaign = { dailyCap: number; revenueBase: number; stats: { sentToday: number } };
 
-export default function QueuePage() {
+function QueueInner() {
+  // Home's segment cards deep-link straight into one buyer's leads ("Review 5 waiting"), so the
+  // filter has to be addressable rather than local-only state.
+  const initialFilter = useSearchParams().get("filter") ?? "all";
   const [leads, setLeads] = useState<Lead[] | null>(null);
   const [hypotheses, setHypotheses] = useState<Hypothesis[] | null>(null);
   const [campaign, setCampaign] = useState<Campaign | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [attempt, setAttempt] = useState(0);
-  const [filter, setFilter] = useState<string>("all");
+  const [filter, setFilter] = useState<string>(initialFilter);
   const [selected, setSelected] = useState(0);
   const [editing, setEditing] = useState(false);
   const [draftEdits, setDraftEdits] = useState<Record<string, string>>({});
@@ -539,5 +543,13 @@ export default function QueuePage() {
         </div>
       </div>
     </DashboardShell>
+  );
+}
+
+export default function QueuePage() {
+  return (
+    <Suspense fallback={null}>
+      <QueueInner />
+    </Suspense>
   );
 }
