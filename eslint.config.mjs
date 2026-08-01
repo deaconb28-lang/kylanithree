@@ -12,6 +12,11 @@ const eslintConfig = defineConfig([
     "out/**",
     "build/**",
     "next-env.d.ts",
+    // Compiled output, not source. `.worker-build` is CommonJS emitted by tsc for the Railway
+    // worker and `.test-build` is the offline test build — linting either just reports on the
+    // compiler's own output.
+    ".worker-build/**",
+    ".test-build/**",
   ]),
 ]);
 

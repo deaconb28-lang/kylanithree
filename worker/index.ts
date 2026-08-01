@@ -203,13 +203,77 @@ async function seedSources(): Promise<void> {
   log(`registry seeded with ${seeds.length} source(s)`);
 }
 
+/**
+ * Validates the connection string SHAPE before the driver ever tries to use it.
+ *
+ * Worth doing because the failure modes are otherwise indistinguishable from a network problem:
+ * point the worker at an Atlas SQL / Data Federation endpoint and every write fails with a
+ * server-selection timeout, which reads exactly like Atlas Network Access blocking the IP. That is
+ * an hour of debugging the wrong thing.
+ */
+function describeMongoUriProblem(uri: string): string | null {
+  // atlas-sql-*.a.query.mongodb.net is the Atlas SQL / Data Federation endpoint, meant for BI tools
+  // and SQL clients. It is not the cluster, it is read-oriented, and the worker does nothing but
+  // write — bulkWrite, createIndex, upserts.
+  if (/atlas-sql-|\.query\.mongodb\.net/i.test(uri)) {
+    return (
+      "this is an Atlas SQL / Data Federation endpoint, not a cluster connection string. " +
+      "The worker only writes, and that endpoint cannot accept writes. Use Atlas > your cluster > " +
+      "Connect > Drivers, which gives a mongodb+srv:// string."
+    );
+  }
+  if (/mongodb\.net/i.test(uri) && !uri.startsWith("mongodb+srv://")) {
+    return (
+      "an Atlas host needs the mongodb+srv:// scheme so the driver can discover the replica set. " +
+      "A plain mongodb:// against an Atlas hostname will not resolve."
+    );
+  }
+  // No credentials between the scheme and the host.
+  const afterScheme = uri.replace(/^mongodb(\+srv)?:\/\//, "");
+  if (!afterScheme.includes("@")) {
+    return "no username or password in the string — authentication will fail. Copy the full string from Atlas > Connect > Drivers.";
+  }
+  if (/<password>|<db_password>|<user>/i.test(uri)) {
+    return "the placeholder <password> is still in the string — replace it with the real database user's password.";
+  }
+  return null;
+}
+
 async function main(): Promise<void> {
-  if (!process.env.MONGODB_URI) throw new Error("MONGODB_URI is not set.");
+  // Every missing variable at once, not just the first — a crash loop that reveals one problem per
+  // deploy is a miserable way to configure a service.
+  const uri = process.env.MONGODB_URI;
+  if (!uri) {
+    throw new Error("MONGODB_URI is not set. Add it in Railway > this service > Variables.");
+  }
+  const uriProblem = describeMongoUriProblem(uri);
+  if (uriProblem) {
+    throw new Error(`MONGODB_URI looks wrong — ${uriProblem}`);
+  }
   if (!process.env.ANTHROPIC_API_KEY) log("WARNING: ANTHROPIC_API_KEY is not set — crawling will run, classification will not.");
+  if (!process.env.VOYAGE_API_KEY) log("WARNING: VOYAGE_API_KEY is not set — documents will be stored without embeddings, so retrieval stays lexical-only. They are backfilled automatically once the key is added.");
 
   log("worker starting");
-  await ensureIngestIndexes();
-  await seedSources();
+  try {
+    await ensureIngestIndexes();
+    await seedSources();
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    // A server-selection timeout here is almost always one of three things, and the driver's own
+    // message names none of them.
+    if (/server selection|ENOTFOUND|ETIMEDOUT|querySrv/i.test(message)) {
+      throw new Error(
+        `cannot reach MongoDB (${message}). Most likely, in order: (1) Atlas > Network Access does ` +
+          `not allow Railway's egress IPs — Railway does not egress from Vercel's, so an entry that ` +
+          `works for the app does not cover this; (2) the cluster is paused; (3) the connection ` +
+          `string points somewhere other than the cluster.`,
+      );
+    }
+    if (/authentication failed|bad auth/i.test(message)) {
+      throw new Error(`MongoDB rejected the credentials (${message}). Check the database user's password in the connection string.`);
+    }
+    throw err;
+  }
   log("indexes ensured, sources seeded");
 
   // SIGTERM is how Railway asks a service to stop. Finishing the current tick rather than dying
