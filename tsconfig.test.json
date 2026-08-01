@@ -27,6 +27,10 @@
     "lib/search/extract.ts",
     "lib/credits/fingerprint.ts",
     "lib/credits/rateCard.ts",
-    "lib/credits/estimate.ts"
+    "lib/credits/estimate.ts",
+    "lib/search/intent.ts",
+    "lib/search/rrf.ts",
+    "lib/search/finalScore.ts",
+    "lib/search/queryPlan.ts"
   ]
 }

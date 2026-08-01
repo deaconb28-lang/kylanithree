@@ -12,6 +12,8 @@ import { settleWithBudget, Trace } from "./trace";
 import { Deadline } from "./deadline";
 import { buildPhrasePool, planWave } from "./waves";
 import { toSearchQueries } from "./queries";
+import { fallbackPlan, type PlannedQuery } from "./queryPlan";
+import { lexicalGate, normalizeForIntent } from "./intent";
 import type { Candidate, LexiconInput, ScoredLead, Venue } from "./types";
 
 // Stages 2-4 for one shard of venues, at one WAVE of the search.
@@ -34,6 +36,9 @@ const RESPONSE_RESERVE_MS = 2_000;
 // Cap on what reaches the expensive pass per shard. The cheap filter ranks by signal first, so
 // this is a "best N", not a truncation of something unsorted.
 const MAX_TO_SCORE = 40;
+// How many planned queries each wave adds on top of the lexicon phrases. Spreading the plan across
+// waves rather than firing all 16-19 at once keeps a single wave's fan-out inside its budget.
+const PLANNED_PER_WAVE = 3;
 
 // Takes the best N while keeping as many DIFFERENT communities represented as possible.
 //
@@ -82,6 +87,8 @@ export async function extractLeads(opts: {
   excludeAuthors?: string[];
   /** The request's clock. Without one, stages run to their own budgets and the total is unbounded. */
   deadline?: Deadline;
+  /** Planned queries from the query planner. Falls back to the lexicon when absent. */
+  plan?: PlannedQuery[];
 }): Promise<{ leads: ScoredLead[] }> {
   const { venues, lexicon, whatYouSell, problem, buyers, trace, wave = 0, excludeAuthors = [], deadline } = opts;
 
@@ -95,7 +102,14 @@ export async function extractLeads(opts: {
   const { phrases: wavePhrases, page } = planWave(phrases, wave);
   // Keyword engines, not semantic ones: a six-word phrase matches almost nothing, so search on the
   // two or three distinctive words it reduces to.
-  const queries = toSearchQueries(wavePhrases);
+  //
+  // The planned queries widen this considerably: an incumbent name phrased as dissatisfaction
+  // ("Airtable alternative") finds people the founder's own problem vocabulary never will, because
+  // sufferers describe symptoms and name incumbents — not categories. Fan-out is where volume comes
+  // from; see docs/search-architecture.md §5.2.
+  const planned = opts.plan?.length ? opts.plan : fallbackPlan({ seekingPhrases: lexicon.seekingPhrases, problemPhrases: lexicon.problemPhrases });
+  const plannedForWave = planned.slice(wave * PLANNED_PER_WAVE, (wave + 1) * PLANNED_PER_WAVE).map((q) => q.text);
+  const queries = [...new Set([...toSearchQueries(wavePhrases), ...plannedForWave])];
 
   const jobs: (() => Promise<Candidate[]>)[] = [];
   for (const v of searchable) {
@@ -140,7 +154,19 @@ export async function extractLeads(opts: {
 
   const filtered = await trace.stage(`extract:filter:w${wave}`, fresh.length, async () => {
     const { kept, drops } = cheapFilter(fresh, lexicon);
-    return { out: kept, drops: { ...drops, dupe_author: (drops.dupe_author ?? 0) + (raw.length - fresh.length) } };
+    // Stage 1 of the intent cascade, applied after the existing structural filter. Microseconds,
+    // no model call, and it removes gratitude, promos and supply-side posts that would otherwise
+    // each consume a slot in the expensive pass.
+    const gated: Candidate[] = [];
+    let noIntent = 0;
+    for (const c of kept) {
+      if (lexicalGate(normalizeForIntent(`${c.title} ${c.body}`)).passed) gated.push(c);
+      else noIntent += 1;
+    }
+    return {
+      out: gated,
+      drops: { ...drops, dupe_author: (drops.dupe_author ?? 0) + (raw.length - fresh.length), no_intent: (drops.no_intent ?? 0) + noIntent },
+    };
   });
 
   if (filtered.length === 0) return { leads: [] };
