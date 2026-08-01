@@ -14,7 +14,7 @@ function initialsFor(name: string) {
 const REASON_COLORS: Record<SuppressionReason, { color: string; background: string }> = {
   unsubscribed: { color: "var(--muted)", background: "var(--border)" },
   existing_customer: { color: "var(--green)", background: "var(--green-tint)" },
-  bounced: { color: "#A8431C", background: "#FBE4CE" },
+  bounced: { color: "var(--ember-dark)", background: "var(--attention)" },
 };
 
 export default function SuppressedPage() {
@@ -128,7 +128,7 @@ export default function SuppressedPage() {
           </div>
         ) : (
           <div style={{ border: "1px solid var(--border)", borderRadius: 16, overflow: "hidden", background: "var(--card)" }}>
-            <div style={{ display: "flex", alignItems: "center", gap: 16, padding: "10px 24px", borderBottom: "1px solid var(--border)", background: "var(--card-alt)", fontSize: 12, fontWeight: 700, letterSpacing: ".05em", textTransform: "uppercase", color: "#A39C90" }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 16, padding: "10px 24px", borderBottom: "1px solid var(--border)", background: "var(--card-alt)", fontSize: 12, fontWeight: 700, letterSpacing: ".05em", textTransform: "uppercase", color: "var(--muted)" }}>
               <span style={{ width: 30, flexShrink: 0 }} />
               <span style={{ width: 200, flexShrink: 0 }}>Contact</span>
               <span style={{ width: 150, flexShrink: 0 }}>Reason</span>

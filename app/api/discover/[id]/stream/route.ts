@@ -117,6 +117,9 @@ export async function GET(req: NextRequest, ctx: { params: Promise<{ id: string 
         await recordNicheCommunities(fast.nicheKey, searchable.map((v) => v.id));
 
         await searches.updateOne({ searchId }, { $set: { communitiesTotal: searchable.length } });
+        // The venue list, not just its length: the screen draws the actual map of where it is
+        // looking, and a founder recognising "r/logistics" on it is most of why the wait works.
+        sse(controller, { event: "venues", data: { venues: searchable.map((v) => ({ id: v.id, name: v.name, platform: v.platform })) } });
         sse(controller, { event: "progress", data: { communitiesTotal: searchable.length, communitiesScanned: 0 } });
         await narrate(`Scanning ${searchable.length} ${searchable.length === 1 ? "community" : "communities"}`);
 
@@ -139,6 +142,7 @@ export async function GET(req: NextRequest, ctx: { params: Promise<{ id: string 
           }
 
           const shard = searchable.slice(i, i + SHARD);
+          sse(controller, { event: "progress", data: { scanningIds: shard.map((v) => v.id) } });
           try {
             const { leads: found } = await extractLeads({
               venues: shard,
@@ -185,7 +189,15 @@ export async function GET(req: NextRequest, ctx: { params: Promise<{ id: string 
 
           const scanned = Math.min(i + SHARD, searchable.length);
           await searches.updateOne({ searchId }, { $set: { communitiesScanned: scanned } }).catch(() => {});
-          sse(controller, { event: "progress", data: { communitiesScanned: scanned, communitiesTotal: searchable.length } });
+          sse(controller, {
+            event: "progress",
+            data: {
+              communitiesScanned: scanned,
+              communitiesTotal: searchable.length,
+              scanningIds: [],
+              scannedIds: searchable.slice(0, scanned).map((v) => v.id),
+            },
+          });
         }
 
         const hitBudget = deadline.expired();

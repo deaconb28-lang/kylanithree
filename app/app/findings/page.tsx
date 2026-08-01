@@ -190,7 +190,7 @@ export default function FindingsPage() {
                   gap: 40,
                   alignItems: "center",
                   flexWrap: "wrap",
-                  boxShadow: "0 1px 2px rgba(20,18,15,.05), 0 24px 50px -26px rgba(20,18,15,.18)",
+                  boxShadow: "var(--lift-3)",
                 }}
               >
                 <p style={{ margin: 0, fontFamily: "var(--font-outfit)", fontWeight: 700, fontSize: "clamp(22px, 2.4vw, 32px)", lineHeight: 1.2, letterSpacing: "-.025em", flex: "2 1 400px" }}>

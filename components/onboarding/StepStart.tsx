@@ -86,6 +86,7 @@ export default function StepStart({ prefilledUrl }: { prefilledUrl?: string | nu
 
         <form onSubmit={(e) => { e.preventDefault(); submit(); }} style={{ width: "100%", maxWidth: 620 }}>
           <div
+            className="ky-field ky-field-stack"
             style={{
               display: "flex",
               gap: 10,
@@ -94,7 +95,7 @@ export default function StepStart({ prefilledUrl }: { prefilledUrl?: string | nu
               borderRadius: 14,
               padding: "9px 9px 9px 22px",
               alignItems: "center",
-              boxShadow: "0 1px 2px rgba(20,18,15,.06), 0 16px 34px -18px rgba(20,18,15,.2)",
+              boxShadow: "var(--lift-2)",
             }}
           >
             <input
@@ -109,7 +110,7 @@ export default function StepStart({ prefilledUrl }: { prefilledUrl?: string | nu
               type="submit"
               className="ky-btn-ember"
               disabled={!value.trim() || starting}
-              style={{ padding: "13px 26px", fontSize: 16, border: "none", opacity: value.trim() && !starting ? 1 : 0.5, cursor: value.trim() && !starting ? "pointer" : "default", whiteSpace: "nowrap" }}
+              style={{ padding: "13px 26px", fontSize: 16, whiteSpace: "nowrap" }}
             >
               {starting ? "Starting…" : "Find my buyers"}
             </button>

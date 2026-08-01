@@ -78,7 +78,7 @@ export default function LeadStars({
             padding: "11px 13px",
             fontSize: 12,
             lineHeight: 1.5,
-            boxShadow: "0 12px 30px -10px rgba(20,18,15,.5)",
+            boxShadow: "var(--lift-3)",
             cursor: "default",
           }}
         >

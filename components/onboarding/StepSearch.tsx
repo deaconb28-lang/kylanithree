@@ -10,6 +10,7 @@ import { useNotificationPermission } from "../../lib/useNotificationPermission";
 import LeadStars from "../LeadStars";
 import { rankLeads } from "../../lib/search/leadScore";
 import { sinceFlowStart, trackClient } from "../../lib/discover/clientTrack";
+import SearchField, { type FieldVenue } from "../discover/SearchField";
 
 // Orchestrates the real two-phase pipeline from the client, which is what makes results stream.
 // Venues resolve first and render the moment they land — communities ARE the first result, not a
@@ -276,6 +277,16 @@ export default function StepSearch({
     [leads, analysis?.relevanceWindowDays],
   );
 
+  const field: FieldVenue[] = useMemo(
+    () => (venues ?? []).filter((v) => v.searchable).map((v) => ({ id: v.id, name: v.name, platform: v.platform })),
+    [venues],
+  );
+  const hitsByVenue = useMemo(() => {
+    const counts: Record<string, number> = {};
+    for (const l of leads) counts[l.venueName] = (counts[l.venueName] ?? 0) + 1;
+    return counts;
+  }, [leads]);
+
   const clock = Math.floor(seconds / 60) + ":" + String(seconds % 60).padStart(2, "0");
 
   const stages: { label: string; state: "done" | "active" | "pending" }[] = [
@@ -335,9 +346,9 @@ export default function StepSearch({
             <span style={{ fontSize: 17, color: "var(--muted)" }}>{phase === "done" ? "search complete" : "elapsed — this is a real, live search"}</span>
           </div>
 
-          <div style={{ background: "rgba(253,252,250,.86)", border: "1px solid var(--border)", borderRadius: 14, padding: 8, display: "flex", flexDirection: "column", gap: 2 }}>
+          <div style={{ background: "var(--card-veil)", border: "1px solid var(--border)", borderRadius: 14, padding: 8, display: "flex", flexDirection: "column", gap: 2 }}>
             {stages.map((s) => (
-              <div key={s.label} style={{ display: "flex", alignItems: "center", gap: 12, padding: "13px 14px", borderRadius: 10, background: s.state === "active" ? "#F7F3EE" : "transparent", opacity: s.state === "pending" ? 0.45 : 1 }}>
+              <div key={s.label} style={{ display: "flex", alignItems: "center", gap: 12, padding: "13px 14px", borderRadius: 10, background: s.state === "active" ? "var(--wash-active)" : "transparent", opacity: s.state === "pending" ? 0.45 : 1 }}>
                 {s.state === "done" ? (
                   <span style={{ width: 18, height: 18, borderRadius: 999, background: "var(--green)", display: "grid", placeItems: "center", color: "#fff", fontSize: 11, fontWeight: 700, flexShrink: 0 }}>✓</span>
                 ) : s.state === "active" ? (
@@ -356,7 +367,7 @@ export default function StepSearch({
                 People found
               </span>
               {rankedLeads.slice(0, 5).map((l) => (
-                <div key={l.id} className="ky-fade-in" style={{ background: "rgba(253,252,250,.86)", border: "1px solid var(--border)", borderRadius: 12, padding: "14px 16px", display: "flex", flexDirection: "column", gap: 7 }}>
+                <div key={l.id} className="ky-fade-in" style={{ background: "var(--card-veil)", border: "1px solid var(--border)", borderRadius: 12, padding: "14px 16px", display: "flex", flexDirection: "column", gap: 7 }}>
                   <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
                     <span style={{ fontSize: 15, fontWeight: 600 }}>{l.author}</span>
                     <span style={{ fontSize: 13, color: "var(--muted)" }}>{l.venueName}</span>
@@ -371,7 +382,7 @@ export default function StepSearch({
           )}
 
           {phase === "done" && leads.length === 0 ? (
-            <div style={{ border: "1px solid var(--border-strong)", borderRadius: 14, padding: "16px 18px", display: "flex", flexDirection: "column", gap: 8, background: "rgba(253,252,250,.86)" }}>
+            <div style={{ border: "1px solid var(--border-strong)", borderRadius: 14, padding: "16px 18px", display: "flex", flexDirection: "column", gap: 8, background: "var(--card-veil)" }}>
               <span style={{ fontFamily: "var(--font-outfit)", fontWeight: 700, fontSize: 16 }}>
                 No leads I could stand behind this time.
               </span>
@@ -398,7 +409,7 @@ export default function StepSearch({
           ) : notifyPermission === "unsupported" ? (
             <span style={{ fontSize: 14, color: "var(--muted)" }}>You can leave this tab open — it&apos;ll finish on its own.</span>
           ) : (
-            <div style={{ display: "flex", alignItems: "center", gap: 16, flexWrap: "wrap", border: "1px solid #F3D9BE", background: "#FFF8F1", borderRadius: 14, padding: "14px 18px" }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 16, flexWrap: "wrap", border: "1px solid var(--attention-border)", background: "var(--attention)", borderRadius: 14, padding: "14px 18px" }}>
               <button onClick={requestNotifications} className="ky-btn-ember" style={{ padding: "12px 20px", fontSize: 14.5, border: "none", whiteSpace: "nowrap", animation: "kyGlow 2.2s ease-in-out infinite" }}>
                 🔔 Notify me the second it&apos;s ready
               </button>
@@ -409,10 +420,24 @@ export default function StepSearch({
           )}
         </div>
 
-        <div style={{ background: "var(--card)", border: "1px solid var(--border)", borderRadius: 16, padding: 24, display: "flex", flexDirection: "column", gap: 16, boxShadow: "0 1px 2px rgba(20,18,15,.05), 0 22px 46px -24px rgba(20,18,15,.18)", height: "fit-content", minWidth: 0 }}>
+        <div style={{ background: "var(--card)", border: "1px solid var(--border)", borderRadius: 16, padding: 24, display: "flex", flexDirection: "column", gap: 16, boxShadow: "var(--lift-3)", height: "fit-content", minWidth: 0 }}>
           <span style={{ fontFamily: "var(--font-outfit)", fontWeight: 700, fontSize: 15, letterSpacing: ".08em", textTransform: "uppercase", color: "var(--muted)" }}>
             Communities found
           </span>
+
+          {/* The same map the new flow draws. Every wave fans out across all shards at once here,
+              so during extraction every community really is being searched simultaneously. */}
+          {field.length > 0 && (
+            <SearchField
+              centerLabel={analysis?.nicheKey?.replace(/-/g, " ") ?? "your product"}
+              venues={field}
+              scanningIds={phase === "leads" ? field.map((v) => v.id) : []}
+              scannedIds={phase === "done" ? field.map((v) => v.id) : []}
+              hitsByVenue={hitsByVenue}
+              working={phase !== "done"}
+              compact
+            />
+          )}
           <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
             {venues ? (
               venues.length ? (

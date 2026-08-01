@@ -236,7 +236,7 @@ export default function SettingsPage() {
           <span style={{ fontSize: 14, fontWeight: 600, color: "var(--ink)", whiteSpace: "nowrap" }}>Manage channels →</span>
         </Link>
 
-        <div style={{ border: `1px solid ${campaign.paused ? "var(--border)" : "#E8B4A6"}`, borderRadius: 16, padding: "22px 24px", display: "flex", alignItems: "center", justifyContent: "space-between", gap: 20, flexWrap: "wrap", background: campaign.paused ? "var(--card-alt)" : "var(--card)" }}>
+        <div style={{ border: `1px solid ${campaign.paused ? "var(--border)" : "var(--attention-border)"}`, borderRadius: 16, padding: "22px 24px", display: "flex", alignItems: "center", justifyContent: "space-between", gap: 20, flexWrap: "wrap", background: campaign.paused ? "var(--card-alt)" : "var(--card)" }}>
           <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
             <span style={{ fontFamily: "var(--font-outfit)", fontWeight: 700, fontSize: 17 }}>{campaign.paused ? "Campaign paused" : "Pause this campaign"}</span>
             <span style={{ fontSize: 14, color: "var(--muted)" }}>
@@ -246,7 +246,7 @@ export default function SettingsPage() {
           <button
             onClick={() => patchCampaign({ paused: !campaign.paused })}
             className="ky-btn-outline"
-            style={{ padding: "12px 20px", fontSize: 14.5, fontWeight: 600, color: campaign.paused ? "var(--green)" : "var(--ember)", borderColor: campaign.paused ? "var(--green)" : "#E8B4A6", whiteSpace: "nowrap" }}
+            style={{ padding: "12px 20px", fontSize: 14.5, fontWeight: 600, color: campaign.paused ? "var(--green)" : "var(--ember)", borderColor: campaign.paused ? "var(--green)" : "var(--attention-border)", whiteSpace: "nowrap" }}
           >
             {campaign.paused ? "Resume campaign" : "Pause campaign"}
           </button>

@@ -55,15 +55,15 @@ function PlanCard({
       style={{
         flex: 1,
         minWidth: 280,
-        background: plan === "founder" ? "#FFF8F1" : "var(--card)",
-        border: plan === "founder" ? "1px solid #F3D9BE" : "1px solid var(--border)",
+        background: plan === "founder" ? "var(--attention)" : "var(--card)",
+        border: plan === "founder" ? "1px solid var(--attention-border)" : "1px solid var(--border)",
         borderRadius: 20,
         padding: 28,
         display: "flex",
         flexDirection: "column",
         gap: 16,
         textAlign: "left",
-        boxShadow: "0 1px 2px rgba(20,18,15,.05), 0 26px 54px -26px rgba(20,18,15,.18)",
+        boxShadow: "var(--lift-3)",
       }}
     >
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10 }}>
@@ -239,7 +239,7 @@ function TrialInner() {
             </div>
             <div style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", gap: 12 }}>
               <div style={{ width: 46, height: 46, borderRadius: 999, border: "1.5px solid var(--border-strong)", display: "grid", placeItems: "center" }}>
-                <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="#9C948A" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"><path d="M8 1.6l1.6 3.5 3.8.4-2.8 2.6.8 3.8-3.4-1.9-3.4 1.9.8-3.8-2.8-2.6 3.8-.4z" /></svg>
+                <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="var(--muted)" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"><path d="M8 1.6l1.6 3.5 3.8.4-2.8 2.6.8 3.8-3.4-1.9-3.4 1.9.8-3.8-2.8-2.6 3.8-.4z" /></svg>
               </div>
               <span style={{ fontFamily: "var(--font-outfit)", fontWeight: 700, fontSize: 15.5, color: "var(--muted)" }}>
                 {daysLeft !== null && daysLeft > 0 ? `Trial ends in ${daysLeft} day${daysLeft === 1 ? "" : "s"}` : "Subscribe when ready"}

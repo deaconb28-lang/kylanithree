@@ -51,7 +51,7 @@ export default function Pricing() {
               display: "flex",
               flexDirection: "column",
               gap: 20,
-              boxShadow: t.highlight ? "0 1px 2px rgba(20,18,15,.05), 0 26px 54px -26px rgba(20,18,15,.18)" : "none",
+              boxShadow: t.highlight ? "var(--lift-3)" : "none",
             }}
           >
             <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>

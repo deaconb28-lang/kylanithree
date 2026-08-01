@@ -47,7 +47,7 @@ export default function StepDone() {
           More get added the longer I keep looking.
         </p>
         <div style={{ display: "flex", gap: 12, alignItems: "center", flexWrap: "wrap", justifyContent: "center" }}>
-          <Link href="/app/queue" className="ky-btn-ember" style={{ padding: "16px 30px", fontSize: 17, boxShadow: "0 1px 2px rgba(20,18,15,.12)" }}>
+          <Link href="/app/queue" className="ky-btn-ember" style={{ padding: "16px 30px", fontSize: 17, boxShadow: "var(--lift-1)" }}>
             Read the first drafts
           </Link>
           <span style={{ fontSize: 14.5, color: "var(--muted)" }}>Nothing sends until you approve each one.</span>

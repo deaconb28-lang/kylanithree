@@ -151,7 +151,7 @@ export default function AddToHomeScreen() {
         border: "1px solid var(--border-strong)",
         borderRadius: 16,
         padding: "12px 14px",
-        boxShadow: "0 18px 44px -16px rgba(20,18,15,.42)",
+        boxShadow: "var(--lift-3)",
         animation: "kyRise .32s ease both",
       }}
     >

@@ -13,7 +13,68 @@
   --green: #2f7a56;
   --green-tint: #e9f2ec;
   --active-bg: #f1ebe4;
+  /* A row the eye is currently on. Distinct from --active-bg, which marks a persistent selection
+     in the sidebar; this one is transient — hover, the step in progress, the lead being read. */
+  --wash-active: #f7f3ee;
+  /* Translucent card, for surfaces that sit over the gradient wash and should let it through. */
+  --card-veil: rgba(253, 252, 250, 0.86);
+  /* "Look at this" without "something is wrong" — warmer than a card, cooler than an error. */
+  --attention: #fff8f1;
+  --attention-border: #f3d9be;
+  /* For the inverted surfaces (a card painted --ink). Those flip with the theme automatically, so
+     anything sitting on top of one has to flip with it too, or it inverts into unreadability. */
+  --on-ink-muted: #c9c3b9;
+  --on-ink-accent: #ffb89c;
   --wash: 1;
+
+  /* Elevation as three named steps rather than a bespoke shadow per component. Every surface in
+     the app sits at exactly one of these heights, which is what stops a page from reading as a
+     pile of unrelated boxes. */
+  --lift-1: 0 1px 2px rgba(20, 18, 15, 0.05);
+  --lift-2:
+    0 1px 2px rgba(20, 18, 15, 0.05), 0 12px 28px -16px rgba(20, 18, 15, 0.18);
+  --lift-3:
+    0 1px 2px rgba(20, 18, 15, 0.06), 0 28px 60px -28px rgba(20, 18, 15, 0.26);
+
+  /* One easing for everything that moves. Motion that all decelerates the same way reads as one
+     surface responding, rather than several components each doing their own thing. */
+  --ease: cubic-bezier(0.32, 0.72, 0, 1);
+  --focus: 0 0 0 3px rgba(228, 87, 46, 0.28);
+}
+
+/* Dark mode follows the system rather than adding a control nobody asked for. The palette is
+   rebuilt, not inverted: paper stays the darkest surface and cards sit above it, so the same
+   depth relationships hold and every component keeps working without a single change. */
+@media (prefers-color-scheme: dark) {
+  :root {
+    --ink: #f4f1ec;
+    --paper: #16150f;
+    --card: #201e19;
+    --card-alt: #262420;
+    --border: #322f29;
+    --border-strong: #423e36;
+    --muted: #9a938a;
+    --muted-strong: #c2bbb1;
+    --ember: #ff7a52;
+    --ember-dark: #ff9a79;
+    --ember-tint: #3a2118;
+    --green: #5cbb8b;
+    --green-tint: #1b2d24;
+    --active-bg: #2b2822;
+    --wash-active: #2a2721;
+    --card-veil: rgba(32, 30, 25, 0.88);
+    --attention: #2e2117;
+    --attention-border: #4b3624;
+    --on-ink-muted: #4a443d;
+    --on-ink-accent: #c7431f;
+    /* The pastel gradient washes are built for paper. At full strength on a dark ground they read
+       as haze, so they are dimmed rather than removed — the warmth is still there, just quieter. */
+    --wash: 0.14;
+    --lift-1: 0 1px 2px rgba(0, 0, 0, 0.4);
+    --lift-2: 0 1px 2px rgba(0, 0, 0, 0.4), 0 12px 28px -16px rgba(0, 0, 0, 0.7);
+    --lift-3: 0 1px 2px rgba(0, 0, 0, 0.5), 0 28px 60px -28px rgba(0, 0, 0, 0.8);
+    --focus: 0 0 0 3px rgba(255, 122, 82, 0.36);
+  }
 }
 
 * {
@@ -53,6 +114,43 @@ button {
   color: inherit;
 }
 
+/* Keyboard focus was invisible everywhere: inputs set `outline: none` with nothing in its place,
+   so a keyboard user could not tell where they were. `:focus-visible` puts a real ring back on
+   without bringing the mouse-click outline with it. */
+:focus-visible {
+  outline: none;
+  /* No radius of its own — the ring follows whatever shape the element already is, so a pill
+     button gets a pill ring and a circular one gets a circle. */
+  box-shadow: var(--focus);
+}
+/* Below this width an inline submit leaves the field too narrow to read what you typed, so the
+   button takes its own line rather than squeezing the thing it is submitting. */
+@media (max-width: 560px) {
+  .ky-field-stack {
+    flex-direction: column !important;
+    align-items: stretch !important;
+    padding: 14px !important;
+  }
+  .ky-field-stack > input {
+    padding: 4px 6px 10px;
+  }
+}
+
+.ky-field:focus-within {
+  border-color: var(--ink) !important;
+  box-shadow: var(--lift-2), var(--focus) !important;
+}
+
+::selection {
+  background: var(--ember-tint);
+  color: var(--ink);
+}
+
+/* Numbers that change in place — timers, counts, scores — must not reflow as they tick. */
+.ky-tnum {
+  font-variant-numeric: tabular-nums;
+}
+
 /* ---------- keyframes ---------- */
 @keyframes kyPulse {
   0%,
@@ -85,13 +183,23 @@ button {
     opacity: 0;
   }
 }
-@keyframes kyClickRing {
+/* The search field. A line being walked, and the sweep that says the centre is still working. */
+@keyframes kyLineDraw {
+  0%,
+  100% {
+    stroke-opacity: 0.18;
+  }
+  50% {
+    stroke-opacity: 0.7;
+  }
+}
+@keyframes kyRadar {
   0% {
-    transform: scale(0.6);
-    opacity: 0.9;
+    transform: scale(1);
+    opacity: 0.5;
   }
   100% {
-    transform: scale(1.6);
+    transform: scale(3.2);
     opacity: 0;
   }
 }
@@ -174,42 +282,96 @@ button {
   color: var(--ink);
 }
 
+/* Both buttons are inline-flex and centered so an <a> and a <button> wearing the same class are the
+   same height and their labels sit on the same line — they are used interchangeably throughout. */
+.ky-btn-ember,
+.ky-btn-outline {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  border-radius: 10px;
+  cursor: pointer;
+  text-align: center;
+  /* A finger is about 44px wide. Anything you are meant to tap has to be at least that tall. */
+  min-height: 44px;
+  transition:
+    filter 0.15s var(--ease),
+    transform 0.12s var(--ease),
+    border-color 0.15s var(--ease),
+    box-shadow 0.15s var(--ease);
+}
+
 .ky-btn-ember {
   background: var(--ember);
   color: #fff;
   font-weight: 600;
-  border-radius: 10px;
-  cursor: pointer;
   border: none;
-  transition: filter 0.15s ease;
+  box-shadow: var(--lift-1);
 }
 .ky-btn-ember:hover {
   filter: brightness(0.93);
+  color: #fff;
+}
+/* A press that moves is a press you felt. One pixel is enough. */
+.ky-btn-ember:active,
+.ky-btn-outline:active {
+  transform: translateY(1px);
 }
 
 .ky-btn-outline {
   border: 1px solid var(--border-strong);
-  border-radius: 10px;
-  cursor: pointer;
   background: transparent;
-  transition: border-color 0.15s ease;
 }
 .ky-btn-outline:hover {
   border-color: var(--ink);
 }
 
+/* One disabled treatment for every button, so "you can't do this yet" always looks the same and
+   never silently swallows a click that looked live. */
+.ky-btn-ember:disabled,
+.ky-btn-outline:disabled,
+.ky-btn-ember[aria-disabled="true"],
+.ky-btn-outline[aria-disabled="true"] {
+  opacity: 0.45;
+  cursor: not-allowed;
+  filter: none;
+  transform: none;
+  box-shadow: none;
+}
+
 .ky-card-hover {
   transition:
-    transform 0.25s ease,
-    box-shadow 0.25s ease;
+    transform 0.25s var(--ease),
+    box-shadow 0.25s var(--ease);
 }
 .ky-card-hover:hover {
   transform: translateY(-4px);
-  box-shadow: 0 20px 40px -24px rgba(20, 18, 15, 0.28);
+  box-shadow: var(--lift-3);
 }
 
 .ky-track-row:hover {
   animation-play-state: paused;
+}
+
+/* The gallery wordmarks are flat artwork drawn in dark ink for a light ground — in dark mode they
+   vanish into the page. Nothing can recolour them without destroying the brands (Berth is teal,
+   Salt & Pine has an orange ampersand), so instead each one keeps the surface it was drawn for.
+   Off-white rather than pure white, so the plate belongs to this palette and not a browser default. */
+.ky-logo-plate {
+  border-radius: 14px;
+  padding: 14px 20px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+@media (prefers-color-scheme: dark) {
+  .ky-logo-plate {
+    /* Dimmed from pure paper so a row of plates does not glare out of a dark page; still light
+       enough that dark-ink artwork keeps its intended contrast. */
+    background: #e7e3db;
+    box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.06);
+  }
 }
 
 .ky-marquee-mask {

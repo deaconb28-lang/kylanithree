@@ -35,7 +35,7 @@ export default function StepUrl({ onSubmit }: { onSubmit: (url: string) => void 
               borderRadius: 14,
               padding: "9px 9px 9px 22px",
               alignItems: "center",
-              boxShadow: "0 1px 2px rgba(20,18,15,.06), 0 16px 34px -18px rgba(20,18,15,.2)",
+              boxShadow: "var(--lift-2)",
             }}
           >
             <input

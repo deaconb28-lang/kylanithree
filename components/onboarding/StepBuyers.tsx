@@ -70,7 +70,7 @@ export default function StepBuyers({
             <div
               key={b.key}
               style={{
-                background: b.dropped ? "var(--card-alt)" : b.tag ? "var(--card)" : "rgba(253,252,250,.8)",
+                background: b.dropped ? "var(--card-alt)" : b.tag ? "var(--card)" : "var(--card-veil)",
                 border: b.dropped ? "1px dashed var(--border-strong)" : b.tag ? "1.5px solid var(--ink)" : "1px solid var(--border)",
                 borderRadius: 14,
                 padding: "20px 22px",
@@ -78,7 +78,7 @@ export default function StepBuyers({
                 flexDirection: "column",
                 gap: 10,
                 opacity: b.dropped ? 0.55 : 1,
-                boxShadow: b.tag && !b.dropped ? "0 1px 2px rgba(20,18,15,.05), 0 14px 32px -20px rgba(20,18,15,.16)" : "none",
+                boxShadow: b.tag && !b.dropped ? "var(--lift-2)" : "none",
               }}
               className="buyer-row"
             >

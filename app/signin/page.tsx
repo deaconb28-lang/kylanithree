@@ -77,7 +77,7 @@ function SignInInner() {
             display: "flex",
             flexDirection: "column",
             gap: 18,
-            boxShadow: "0 1px 2px rgba(20,18,15,.05), 0 30px 60px -30px rgba(20,18,15,.2)",
+            boxShadow: "var(--lift-3)",
           }}
         >
           <div style={{ display: "flex", flexDirection: "column", gap: 7, textAlign: "center" }}>
@@ -90,7 +90,7 @@ function SignInInner() {
           </div>
 
           {error && (
-            <div style={{ background: "var(--ember-tint)", border: "1px solid #F3D9BE", borderRadius: 11, padding: "12px 14px", fontSize: 13.5, color: "var(--ink)", lineHeight: 1.5 }}>
+            <div style={{ background: "var(--ember-tint)", border: "1px solid var(--attention-border)", borderRadius: 11, padding: "12px 14px", fontSize: 13.5, color: "var(--ink)", lineHeight: 1.5 }}>
               {error}
             </div>
           )}

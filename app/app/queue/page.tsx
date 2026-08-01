@@ -282,7 +282,7 @@ function QueueInner() {
                     gap: 6,
                     cursor: "pointer",
                     opacity: st === "dropped" ? 0.5 : 1,
-                    background: i === selected ? "#F7F3EE" : "transparent",
+                    background: i === selected ? "var(--wash-active)" : "transparent",
                     borderLeft: i === selected ? "2px solid var(--ember)" : "2px solid transparent",
                   }}
                 >
@@ -390,7 +390,7 @@ function QueueInner() {
             </div>
           </div>
 
-          <div style={{ border: "1px solid var(--border)", borderRadius: 14, padding: "22px 24px", display: "flex", flexDirection: "column", gap: 16, boxShadow: "0 1px 2px rgba(20,18,15,.04)" }}>
+          <div style={{ border: "1px solid var(--border)", borderRadius: 14, padding: "22px 24px", display: "flex", flexDirection: "column", gap: 16, boxShadow: "var(--lift-1)" }}>
             {lead.subject ? (
               <div style={{ display: "flex", gap: 10, fontSize: 14.5, color: "var(--muted)", borderBottom: "1px solid var(--border)", paddingBottom: 12, flexWrap: "wrap" }}>
                 <span style={{ color: "var(--ink)", fontWeight: 600 }}>Subject:</span>
@@ -496,7 +496,7 @@ function QueueInner() {
                         display: "flex",
                         flexDirection: "column",
                         gap: 2,
-                        boxShadow: "0 1px 2px rgba(20,18,15,.05), 0 18px 40px -22px rgba(20,18,15,.25)",
+                        boxShadow: "var(--lift-2)",
                         zIndex: 10,
                         minWidth: 200,
                       }}

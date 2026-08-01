@@ -17,10 +17,12 @@ function Row({ direction, speed }: { direction: "left" | "right"; speed: number 
       >
         {doubled.map((p, i) => (
           <div key={p.name + i} style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 10, flexShrink: 0 }}>
-            <Image src={p.image} alt={p.alt} width={325} height={130} loading={i < 6 ? "eager" : "lazy"} style={{ height: 130, width: "auto", display: "block" }} />
+            <div className="ky-logo-plate">
+              <Image src={p.image} alt={p.alt} width={325} height={130} loading={i < 6 ? "eager" : "lazy"} style={{ height: 130, width: "auto", display: "block" }} />
+            </div>
             <span style={{ display: "inline-flex", alignItems: "center", gap: 5, fontSize: 13, fontWeight: 700, color: "var(--green)", fontVariantNumeric: "tabular-nums", letterSpacing: ".02em" }}>
               <svg width="10" height="10" viewBox="0 0 11 11" style={{ flexShrink: 0 }}>
-                <path d="M5.5 0L11 11H0Z" fill="#2F7A56" />
+                <path d="M5.5 0L11 11H0Z" fill="var(--green)" />
               </svg>
               {p.mrr}
             </span>

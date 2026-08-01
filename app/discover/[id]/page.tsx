@@ -1,11 +1,12 @@
 "use client";
 
-import { use, useCallback, useEffect, useRef, useState } from "react";
+import { use, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import KylaniLogo from "../../../components/icons/KylaniLogo";
 import { relativeTime } from "../../../lib/relativeTime";
 import type { DiscoverLead } from "../../../lib/discover/collections";
 import { anonId as getAnonId, sinceFlowStart, trackClient } from "../../../lib/discover/clientTrack";
+import SearchField, { type FieldVenue } from "../../../components/discover/SearchField";
 
 // The whole onboarding, on one screen.
 //
@@ -22,6 +23,9 @@ export default function DiscoverPage({ params }: { params: Promise<{ id: string 
   const [fast, setFast] = useState<Fast | null>(null);
   const [narration, setNarration] = useState<string[]>([]);
   const [progress, setProgress] = useState({ scanned: 0, total: 0 });
+  const [venues, setVenues] = useState<FieldVenue[]>([]);
+  const [scanningIds, setScanningIds] = useState<string[]>([]);
+  const [scannedIds, setScannedIds] = useState<string[]>([]);
   const [done, setDone] = useState<{ total: number; partial: boolean; message?: string | null } | null>(null);
   const [added, setAdded] = useState<Set<string>>(new Set());
 
@@ -63,9 +67,16 @@ export default function DiscoverPage({ params }: { params: Promise<{ id: string 
       setLeads(payload.leads);
       setAdded(new Set(payload.added));
     });
+    source.addEventListener("venues", (e) => setVenues(JSON.parse((e as MessageEvent).data).venues ?? []));
     source.addEventListener("progress", (e) => {
+      // Partial by design — a mid-shard event carries only `scanningIds`, so each field is applied
+      // only when the server actually sent it rather than reset to zero by the ones it did not.
       const p = JSON.parse((e as MessageEvent).data);
-      setProgress({ scanned: p.communitiesScanned ?? 0, total: p.communitiesTotal ?? 0 });
+      if (p.communitiesTotal !== undefined || p.communitiesScanned !== undefined) {
+        setProgress((prev) => ({ scanned: p.communitiesScanned ?? prev.scanned, total: p.communitiesTotal ?? prev.total }));
+      }
+      if (p.scanningIds) setScanningIds(p.scanningIds);
+      if (p.scannedIds) setScannedIds(p.scannedIds);
     });
     source.addEventListener("complete", (e) => {
       setDone(JSON.parse((e as MessageEvent).data));
@@ -81,6 +92,40 @@ export default function DiscoverPage({ params }: { params: Promise<{ id: string 
   }, [id]);
 
   const working = done === null;
+
+  // Every community on the map, whether the deep pass named it or a pass-1 lead came from it — a
+  // node the founder can already see a person from must not be missing from the picture.
+  const fieldVenues = useMemo(() => {
+    const byName = new Map<string, FieldVenue>();
+    for (const v of venues) byName.set(v.name, v);
+    for (const l of leads) {
+      if (!byName.has(l.venueName)) byName.set(l.venueName, { id: `found:${l.venueName}`, name: l.venueName, platform: l.platform });
+    }
+    return [...byName.values()];
+  }, [venues, leads]);
+
+  const hitsByVenue = useMemo(() => {
+    const counts: Record<string, number> = {};
+    for (const l of leads) counts[l.venueName] = (counts[l.venueName] ?? 0) + 1;
+    return counts;
+  }, [leads]);
+
+  const fieldFor = (compact: boolean) => (
+    <SearchField
+      centerLabel={fast?.nicheKey ? fast.nicheKey.replace(/-/g, " ") : "your product"}
+      venues={fieldVenues}
+      scanningIds={scanningIds}
+      scannedIds={scannedIds}
+      hitsByVenue={hitsByVenue}
+      working={working}
+      compact={compact}
+    />
+  );
+
+  // Before the first person lands there is nothing to rank, so the search itself gets the whole
+  // screen. The moment there is something real to read, it takes the stage and the map steps
+  // aside — the layout follows the content rather than reserving space for a state that has passed.
+  const searching = leads.length === 0;
 
   return (
     <div style={{ minHeight: "100vh", background: "var(--paper)", padding: "24px 5vw 80px" }}>
@@ -98,55 +143,94 @@ export default function DiscoverPage({ params }: { params: Promise<{ id: string 
                 trackClient("save_clicked", { flow: "discover", searchId: id, ms: sinceFlowStart() });
               }}
               className="ky-btn-ember"
-              style={{ marginLeft: "auto", padding: "10px 18px", fontSize: 14.5, border: "none" }}
+              style={{ marginLeft: "auto", padding: "10px 18px", fontSize: 14.5 }}
             >
               Save these {leads.length}
             </Link>
           )}
         </div>
 
-        <div style={{ display: "grid", gridTemplateColumns: "minmax(260px, 320px) 1fr", gap: 26 }} className="dv-grid">
-          <style>{`@media (max-width: 900px) { .dv-grid { grid-template-columns: 1fr !important; } }`}</style>
+        {searching ? (
+          <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 28, textAlign: "center", padding: "clamp(8px,4vh,44px) 0 40px" }}>
+            <h1 style={{ fontFamily: "var(--font-outfit)", fontWeight: 800, fontSize: "clamp(26px,4vw,40px)", letterSpacing: "-.035em", margin: 0, maxWidth: "18ch" }}>
+              {done ? "Nobody's describing this problem right now." : "Looking for people describing this problem"}
+            </h1>
 
-          {/* What Kylani inferred — chips beside the results, never a question in front of them. */}
-          <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
-            <InferencePanel
-              fast={fast}
-              searchId={id}
-              anonId={anonId}
-              onCorrected={() => markInteraction()}
-              onApply={(next, reranked) => {
-                setFast(next);
-                setLeads(reranked);
-              }}
-            />
-            <WorkPanel working={working} narration={narration} progress={progress} leadCount={leads.length} />
-          </div>
+            <div style={{ width: "min(100%, 480px)" }}>{fieldFor(false)}</div>
 
-          <div style={{ display: "flex", flexDirection: "column", gap: 12, minWidth: 0 }}>
-            <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", gap: 12, flexWrap: "wrap" }}>
-              <h1 style={{ fontFamily: "var(--font-outfit)", fontWeight: 800, fontSize: "clamp(22px,3vw,30px)", letterSpacing: "-.03em", margin: 0 }}>
-                {leads.length > 0 ? `${leads.length} ${leads.length === 1 ? "person" : "people"} describing this problem` : "Looking for people describing this problem"}
-              </h1>
-              {working && <span style={{ fontSize: 13.5, color: "var(--muted)" }}>still finding more</span>}
+            <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 8, minHeight: 46 }}>
+              {narration.slice(-2).map((n, i, arr) => (
+                <span key={`${n}-${i}`} className="ky-fade-in" style={{ fontSize: 14, color: i === arr.length - 1 ? "var(--muted-strong)" : "var(--muted)" }}>
+                  {n}
+                </span>
+              ))}
             </div>
 
-            {leads.length === 0 && working && <SkeletonRows />}
+            {fast && (
+              <div style={{ display: "flex", flexWrap: "wrap", gap: 7, justifyContent: "center", maxWidth: 620 }}>
+                {fast.keywords.map((k) => (
+                  <span key={k} style={{ fontSize: 12.5, fontWeight: 600, background: "var(--card)", border: "1px solid var(--border)", padding: "5px 11px", borderRadius: 999 }}>
+                    &ldquo;{k}&rdquo;
+                  </span>
+                ))}
+              </div>
+            )}
 
-            {leads.map((l) => (
-              <LeadCard key={l.personFingerprint} lead={l} isNew={added.has(l.personFingerprint)} pinned={pinned.has(l.personFingerprint)} onInteract={() => markInteraction(l.personFingerprint)} />
-            ))}
-
-            {done && leads.length === 0 && (
-              <div style={{ border: "1px solid var(--border-strong)", borderRadius: 14, padding: "20px 22px", background: "var(--card)" }}>
-                <p style={{ margin: 0, fontSize: 15, lineHeight: 1.6 }}>
-                  {done.message ?? "Nobody in the sources we searched is describing this problem right now."} Correcting the
-                  product description on the left re-runs the search against different words.
+            {done && (
+              <div style={{ border: "1px solid var(--border-strong)", borderRadius: 14, padding: "18px 22px", background: "var(--card)", maxWidth: 560 }}>
+                <p style={{ margin: 0, fontSize: 15, lineHeight: 1.6, color: "var(--muted-strong)" }}>
+                  {done.message ?? "We searched every community above and nobody there is describing it in these words."} Correcting
+                  the description below re-runs the search against different ones.
                 </p>
               </div>
             )}
+
+            <div style={{ width: "min(100%, 460px)" }}>
+              <InferencePanel
+                fast={fast}
+                searchId={id}
+                anonId={anonId}
+                onCorrected={() => markInteraction()}
+                onApply={(next, reranked) => {
+                  setFast(next);
+                  setLeads(reranked);
+                }}
+              />
+            </div>
           </div>
-        </div>
+        ) : (
+          <div style={{ display: "grid", gridTemplateColumns: "minmax(260px, 320px) 1fr", gap: 26 }} className="dv-grid">
+            <style>{`@media (max-width: 900px) { .dv-grid { grid-template-columns: 1fr !important; } }`}</style>
+
+            {/* What Kylani inferred — chips beside the results, never a question in front of them. */}
+            <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+              <InferencePanel
+                fast={fast}
+                searchId={id}
+                anonId={anonId}
+                onCorrected={() => markInteraction()}
+                onApply={(next, reranked) => {
+                  setFast(next);
+                  setLeads(reranked);
+                }}
+              />
+              <WorkPanel working={working} narration={narration} progress={progress} leadCount={leads.length} field={fieldFor(true)} />
+            </div>
+
+            <div style={{ display: "flex", flexDirection: "column", gap: 12, minWidth: 0 }}>
+              <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", gap: 12, flexWrap: "wrap" }} aria-live="polite">
+                <h1 style={{ fontFamily: "var(--font-outfit)", fontWeight: 800, fontSize: "clamp(22px,3vw,30px)", letterSpacing: "-.03em", margin: 0 }}>
+                  {leads.length} {leads.length === 1 ? "person" : "people"} describing this problem
+                </h1>
+                {working && <span style={{ fontSize: 13.5, color: "var(--muted)" }}>still finding more</span>}
+              </div>
+
+              {leads.map((l) => (
+                <LeadCard key={l.personFingerprint} lead={l} isNew={added.has(l.personFingerprint)} pinned={pinned.has(l.personFingerprint)} onInteract={() => markInteraction(l.personFingerprint)} />
+              ))}
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );
@@ -211,7 +295,7 @@ function InferencePanel({
             onClick={() => void save()}
             disabled={saving}
             className="ky-btn-ember"
-            style={{ padding: "8px 14px", fontSize: 13.5, border: "none", alignSelf: "flex-start", opacity: saving ? 0.6 : 1 }}
+            style={{ padding: "8px 14px", fontSize: 13.5, alignSelf: "flex-start" }}
           >
             {saving ? "Searching again…" : "Use this instead"}
           </button>
@@ -249,11 +333,13 @@ function WorkPanel({
   narration,
   progress,
   leadCount,
+  field,
 }: {
   working: boolean;
   narration: string[];
   progress: { scanned: number; total: number };
   leadCount: number;
+  field: React.ReactNode;
 }) {
   return (
     <div style={{ background: "var(--card)", border: "1px solid var(--border)", borderRadius: 14, padding: "16px 18px", display: "flex", flexDirection: "column", gap: 10 }}>
@@ -261,6 +347,10 @@ function WorkPanel({
         {working && <span style={{ width: 8, height: 8, borderRadius: 999, background: "var(--ember)", animation: "kyPulse 1.5s ease-in-out infinite" }} />}
         <span style={{ fontSize: 13.5, fontWeight: 700 }}>{working ? "Working" : "Search complete"}</span>
       </div>
+
+      {/* The same map, at sidebar scale. It stays after the search finishes because it is also the
+          answer to "where did these people come from" — that is not only a loading state. */}
+      <div style={{ margin: "2px 0 4px" }}>{field}</div>
       {progress.total > 0 && (
         <>
           <div style={{ height: 5, borderRadius: 999, background: "var(--border)", overflow: "hidden" }}>
@@ -317,19 +407,5 @@ function LeadCard({ lead, isNew, pinned, onInteract }: { lead: DiscoverLead; isN
         </a>
       </div>
     </div>
-  );
-}
-
-function SkeletonRows() {
-  return (
-    <>
-      {[0, 1, 2].map((i) => (
-        <div key={i} style={{ background: "var(--card)", border: "1px solid var(--border)", borderRadius: 14, padding: "16px 18px", display: "flex", flexDirection: "column", gap: 10, opacity: 1 - i * 0.25 }}>
-          <div style={{ height: 12, width: "38%", borderRadius: 6, background: "var(--card-alt)" }} />
-          <div style={{ height: 10, width: "92%", borderRadius: 5, background: "var(--card-alt)" }} />
-          <div style={{ height: 10, width: "74%", borderRadius: 5, background: "var(--card-alt)" }} />
-        </div>
-      ))}
-    </>
   );
 }

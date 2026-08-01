@@ -32,7 +32,7 @@ export default function ClosingFooter() {
             padding: "8px 8px 8px 20px",
             alignItems: "center",
             width: "min(100%, 520px)",
-            boxShadow: "0 1px 2px rgba(20,18,15,.05), 0 14px 30px -16px rgba(20,18,15,.18)",
+            boxShadow: "var(--lift-2)",
           }}
         >
           <span style={{ fontSize: 17, color: "var(--muted)", flex: 1, textAlign: "left" }}>yourproduct.com</span>

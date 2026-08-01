@@ -23,7 +23,7 @@ export default function AdsComparison() {
         </p>
       </div>
 
-      <div style={{ background: "var(--card)", border: "1px solid var(--border)", borderRadius: 18, padding: 30, display: "flex", flexDirection: "column", gap: 24, boxShadow: "0 1px 2px rgba(20,18,15,.05), 0 26px 54px -26px rgba(20,18,15,.18)" }}>
+      <div style={{ background: "var(--card)", border: "1px solid var(--border)", borderRadius: 18, padding: 30, display: "flex", flexDirection: "column", gap: 24, boxShadow: "var(--lift-3)" }}>
         <span style={{ fontFamily: "var(--font-outfit)", fontWeight: 700, fontSize: 13, letterSpacing: ".09em", textTransform: "uppercase", color: "var(--muted)" }}>
           Where your buyers actually are
         </span>

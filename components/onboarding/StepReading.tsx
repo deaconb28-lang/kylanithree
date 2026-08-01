@@ -158,12 +158,12 @@ export default function StepReading({
 
         <SiteBadge url={url} preview={preview} />
 
-        <div style={{ width: "100%", maxWidth: 620, display: "flex", flexDirection: "column", gap: 2, background: "rgba(253,252,250,.86)", border: "1px solid var(--border)", borderRadius: 14, padding: 8, boxShadow: "0 1px 2px rgba(20,18,15,.05), 0 18px 40px -22px rgba(20,18,15,.18)" }}>
+        <div style={{ width: "100%", maxWidth: 620, display: "flex", flexDirection: "column", gap: 2, background: "var(--card-veil)", border: "1px solid var(--border)", borderRadius: 14, padding: 8, boxShadow: "var(--lift-2)" }}>
           {ITEMS.map((item, i) => {
             const complete = i < done;
             const current = i === done;
             return (
-              <div key={item.text} style={{ display: "flex", alignItems: "center", gap: 12, padding: "13px 14px", borderRadius: 10, background: current ? "#F7F3EE" : "transparent", opacity: i > done ? 0.45 : 1 }}>
+              <div key={item.text} style={{ display: "flex", alignItems: "center", gap: 12, padding: "13px 14px", borderRadius: 10, background: current ? "var(--wash-active)" : "transparent", opacity: i > done ? 0.45 : 1 }}>
                 {complete ? (
                   <span style={{ width: 18, height: 18, borderRadius: 999, background: "var(--green)", display: "grid", placeItems: "center", color: "#fff", fontSize: 11, fontWeight: 700, flexShrink: 0 }}>✓</span>
                 ) : current ? (
@@ -187,8 +187,8 @@ export default function StepReading({
               gap: 14,
               flexWrap: "wrap",
               justifyContent: "center",
-              border: "1px solid #F3D9BE",
-              background: "#FFF8F1",
+              border: "1px solid var(--attention-border)",
+              background: "var(--attention)",
               borderRadius: 14,
               padding: "12px 18px",
               maxWidth: 520,

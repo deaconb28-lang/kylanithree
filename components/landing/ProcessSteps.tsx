@@ -53,7 +53,7 @@ const CARDS = [
     href: "/app/queue",
     dark: true,
     artifact: (
-      <div style={{ border: "1px solid rgba(253,252,250,.18)", borderRadius: 10, background: "rgba(253,252,250,.06)", padding: 12, fontSize: 13, lineHeight: 1.55, color: "var(--card)" }}>
+      <div style={{ border: "1px solid color-mix(in srgb, var(--card) 18%, transparent)", borderRadius: 10, background: "color-mix(in srgb, var(--card) 8%, transparent)", padding: 12, fontSize: 13, lineHeight: 1.55, color: "var(--card)" }}>
         &ldquo;Eli — saw Northline is hiring a receiving clerk…&rdquo;
       </div>
     ),
@@ -106,12 +106,12 @@ export default function ProcessSteps() {
             </span>
             <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
               <span style={{ fontFamily: "var(--font-outfit)", fontWeight: 700, fontSize: 20, letterSpacing: "-.02em", color: c.dark ? "var(--card)" : "inherit" }}>{c.title}</span>
-              <p style={{ margin: 0, fontSize: 14.5, lineHeight: 1.6, color: c.dark ? "#C9C3B9" : "var(--muted)" }}>{c.body}</p>
+              <p style={{ margin: 0, fontSize: 14.5, lineHeight: 1.6, color: c.dark ? "var(--on-ink-muted)" : "var(--muted)" }}>{c.body}</p>
             </div>
             {c.artifact}
             <Link
               href={c.href}
-              style={{ marginTop: "auto", fontSize: 12.5, color: c.dark ? "#FFB89C" : "var(--ember)", fontWeight: 700, textDecoration: "none" }}
+              style={{ marginTop: "auto", fontSize: 12.5, color: c.dark ? "var(--on-ink-accent)" : "var(--ember)", fontWeight: 700, textDecoration: "none" }}
             >
               {c.time}
             </Link>

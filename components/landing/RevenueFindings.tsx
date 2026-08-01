@@ -27,7 +27,7 @@ export default function RevenueFindings() {
           </div>
         </div>
       </div>
-      <div style={{ background: "var(--card)", border: "1px solid var(--border)", borderRadius: 18, padding: 30, display: "flex", flexDirection: "column", gap: 22, boxShadow: "0 1px 2px rgba(20,18,15,.05), 0 26px 54px -26px rgba(20,18,15,.18)" }}>
+      <div style={{ background: "var(--card)", border: "1px solid var(--border)", borderRadius: 18, padding: 30, display: "flex", flexDirection: "column", gap: 22, boxShadow: "var(--lift-3)" }}>
         <span style={{ fontFamily: "var(--font-outfit)", fontWeight: 700, fontSize: 13, letterSpacing: ".09em", textTransform: "uppercase", color: "var(--muted)" }}>Findings · week 3</span>
         <p style={{ margin: 0, fontFamily: "var(--font-outfit)", fontWeight: 700, fontSize: 27, lineHeight: 1.25, letterSpacing: "-.02em" }}>
           You thought you were selling to logistics directors. Operations managers reply six times more often.

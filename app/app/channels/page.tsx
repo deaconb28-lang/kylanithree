@@ -129,7 +129,7 @@ export default function ChannelsPage() {
                 <span style={{ fontFamily: "var(--font-outfit)", fontWeight: 700, fontSize: 15.5, width: 190, flexShrink: 0 }}>{c.name}</span>
                 <span style={{ fontSize: 13.5, color: "var(--muted)", flex: 1, minWidth: 160 }}>{disabled ? "Not matched yet" : c.desc}</span>
                 {disabled ? (
-                  <span style={{ fontSize: 12, fontWeight: 600, color: "#A39C90", whiteSpace: "nowrap" }}>Add once matched</span>
+                  <span style={{ fontSize: 12, fontWeight: 600, color: "var(--muted)", whiteSpace: "nowrap" }}>Add once matched</span>
                 ) : c.required ? (
                   <span style={{ fontSize: 12, fontWeight: 600, color: "var(--green)", whiteSpace: "nowrap" }}>Required</span>
                 ) : (

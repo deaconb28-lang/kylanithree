@@ -402,7 +402,7 @@ export default function MapPage() {
                     <span style={{ fontSize: 14.5, color: "var(--ember)" }}>{stripeSummary.error}</span>
                   </div>
                 ) : (
-                  <div style={{ border: "1.5px solid var(--ember)", borderRadius: 16, padding: 20, display: "flex", flexDirection: "column", gap: 12, background: "var(--card-alt)", boxShadow: "0 1px 2px rgba(20,18,15,.05), 0 16px 34px -22px rgba(228,87,46,.35)" }}>
+                  <div style={{ border: "1.5px solid var(--ember)", borderRadius: 16, padding: 20, display: "flex", flexDirection: "column", gap: 12, background: "var(--card-alt)", boxShadow: "var(--lift-2)" }}>
                     <div style={{ display: "flex", alignItems: "center", gap: 9 }}>
                       <span style={{ width: 7, height: 7, borderRadius: 999, background: "var(--green)", animation: "kyPulse 2s ease-in-out infinite" }} />
                       <span style={{ fontSize: 12, letterSpacing: ".08em", textTransform: "uppercase", color: "var(--muted)", fontWeight: 700 }}>Real revenue · via Stripe</span>

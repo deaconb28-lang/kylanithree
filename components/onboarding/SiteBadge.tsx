@@ -85,7 +85,7 @@ export default function SiteBadge({
         borderRadius: 14,
         padding: compact ? "10px 14px" : "14px 16px",
         textAlign: "left",
-        boxShadow: "0 1px 2px rgba(20,18,15,.05)",
+        boxShadow: "var(--lift-1)",
         minWidth: 0,
       }}
     >

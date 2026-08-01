@@ -234,7 +234,7 @@ export default function DiagnosticsPage() {
                       border: `1px solid ${lost ? "var(--ember)" : "var(--border)"}`,
                       borderRadius: 10,
                       padding: "9px 12px",
-                      background: lost ? "#FFF8F1" : "transparent",
+                      background: lost ? "var(--attention)" : "transparent",
                     }}
                   >
                     <summary style={{ cursor: "pointer", fontSize: 13.5, display: "flex", gap: 8, alignItems: "baseline", flexWrap: "wrap" }}>
@@ -308,7 +308,7 @@ export default function DiagnosticsPage() {
                 <div
                   style={{
                     border: `1px solid ${verdict.status === "ok" ? "var(--green)" : verdict.status === "broken" ? "var(--ember)" : "var(--border-strong)"}`,
-                    background: verdict.status === "ok" ? "var(--green-tint)" : verdict.status === "broken" ? "#FFF8F1" : "var(--card-alt)",
+                    background: verdict.status === "ok" ? "var(--green-tint)" : verdict.status === "broken" ? "var(--attention)" : "var(--card-alt)",
                     borderRadius: 12,
                     padding: "14px 16px",
                     display: "flex",
@@ -354,7 +354,7 @@ export default function DiagnosticsPage() {
                         const doc = docFor(st.stage);
                         const drops = Object.entries(st.drops ?? {}).filter(([, n]) => (n ?? 0) > 0) as [DropReason, number][];
                         return (
-                          <tr key={i} style={{ borderTop: "1px solid var(--border)", background: lost ? "#FFF8F1" : undefined }}>
+                          <tr key={i} style={{ borderTop: "1px solid var(--border)", background: lost ? "var(--attention)" : undefined }}>
                             <td style={{ padding: "6px 8px" }}>
                               <div style={{ fontWeight: 600 }}>{doc?.title ?? st.stage}</div>
                               <div style={{ fontFamily: "ui-monospace, monospace", fontSize: 11.5, color: "var(--muted)" }}>{st.stage}</div>

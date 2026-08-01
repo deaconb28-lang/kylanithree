@@ -34,7 +34,11 @@ export const metadata: Metadata = {
 // The colour behind the status bar once installed. Split from `metadata` because Next 16 wants
 // theme colour and viewport in their own export.
 export const viewport: Viewport = {
-  themeColor: "#efebe5",
+  // Two, so the status bar matches the page rather than staying paper-coloured above a dark app.
+  themeColor: [
+    { media: "(prefers-color-scheme: light)", color: "#efebe5" },
+    { media: "(prefers-color-scheme: dark)", color: "#16150f" },
+  ],
   width: "device-width",
   initialScale: 1,
   // Installed apps should not rubber-band like a web page, but pinch-zoom stays available because

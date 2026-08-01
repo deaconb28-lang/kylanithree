@@ -189,7 +189,7 @@ export default function DashboardShell({
             className="ky-btn-ember"
             disabled={retrying}
             onClick={retry}
-            style={{ padding: "12px 22px", fontSize: 15, border: "none", marginTop: 8, opacity: retrying ? 0.6 : 1 }}
+            style={{ padding: "12px 22px", fontSize: 15, marginTop: 8 }}
           >
             {retrying ? "Retrying…" : "Try again"}
           </button>
@@ -246,7 +246,7 @@ export default function DashboardShell({
     const isActive = key === active;
     return (
       <Link key={key} href={href} className={`ky-sidebar-link${isActive ? " active" : ""}`}>
-        <Icon color={isActive ? "var(--ember)" : "#9C948A"} />
+        <Icon color={isActive ? "var(--ember)" : "var(--muted)"} />
         <span style={{ flex: 1 }}>{label}</span>
         {counts[key] && counts[key] !== "0" && (
           <span
@@ -317,19 +317,19 @@ export default function DashboardShell({
         </div>
 
         <Link href="/app" className={`ky-sidebar-link${active === "home" ? " active" : ""}`}>
-          <HomeIcon color={active === "home" ? "var(--ember)" : "#9C948A"} />
+          <HomeIcon color={active === "home" ? "var(--ember)" : "var(--muted)"} />
           <span style={{ flex: 1 }}>Home</span>
         </Link>
 
         <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-          <span style={{ fontSize: 11, fontWeight: 700, letterSpacing: ".08em", textTransform: "uppercase", color: "#A39C90", padding: "0 12px" }}>
+          <span style={{ fontSize: 11, fontWeight: 700, letterSpacing: ".08em", textTransform: "uppercase", color: "var(--muted)", padding: "0 12px" }}>
             Outreach
           </span>
           <nav style={{ display: "flex", flexDirection: "column", gap: 3 }}>{OUTREACH_NAV.map(renderLink)}</nav>
         </div>
 
         <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-          <span style={{ fontSize: 11, fontWeight: 700, letterSpacing: ".08em", textTransform: "uppercase", color: "#A39C90", padding: "0 12px" }}>
+          <span style={{ fontSize: 11, fontWeight: 700, letterSpacing: ".08em", textTransform: "uppercase", color: "var(--muted)", padding: "0 12px" }}>
             Channels
           </span>
           <nav style={{ display: "flex", flexDirection: "column", gap: 3 }}>{CHANNELS_NAV.map(renderLink)}</nav>
@@ -390,7 +390,7 @@ export default function DashboardShell({
           zIndex: 40,
           justifyContent: "space-between",
           padding: "10px 20px calc(10px + env(safe-area-inset-bottom))",
-          background: "rgba(253,252,250,.94)",
+          background: "var(--card-veil)",
           borderTop: "1px solid var(--border)",
           backdropFilter: "blur(8px)",
         }}

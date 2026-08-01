@@ -115,7 +115,7 @@ export default function TimeStepper() {
           <span style={{ fontSize: 14, color: "var(--muted)", padding: "10px 18px 0" }}>Click a stage to see the actual screen.</span>
         </div>
 
-        <div style={{ background: "var(--card)", border: "1px solid var(--border)", borderRadius: 18, padding: "30px 32px", display: "flex", flexDirection: "column", gap: 20, minHeight: 330, boxShadow: "0 1px 2px rgba(20,18,15,.05), 0 22px 46px -26px rgba(20,18,15,.16)" }}>
+        <div style={{ background: "var(--card)", border: "1px solid var(--border)", borderRadius: 18, padding: "30px 32px", display: "flex", flexDirection: "column", gap: 20, minHeight: 330, boxShadow: "var(--lift-3)" }}>
           <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
             <span style={{ fontSize: 13, letterSpacing: ".08em", textTransform: "uppercase", color: "var(--ember)", fontWeight: 700 }}>{s.k}</span>
             <span style={{ fontFamily: "var(--font-outfit)", fontWeight: 700, fontSize: 28, lineHeight: 1.2, letterSpacing: "-.025em" }}>{s.h}</span>

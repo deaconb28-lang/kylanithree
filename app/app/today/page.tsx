@@ -197,7 +197,7 @@ export default function TodayPage() {
               display: "flex",
               flexDirection: "column",
               gap: 20,
-              boxShadow: "0 1px 2px rgba(20,18,15,.05), 0 26px 54px -26px rgba(20,18,15,.18)",
+              boxShadow: "var(--lift-3)",
             }}
           >
             <div style={{ display: "flex", alignItems: "center", gap: 16, flexWrap: "wrap" }}>

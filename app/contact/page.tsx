@@ -23,7 +23,7 @@ export default function ContactPage() {
           display: "flex",
           flexDirection: "column",
           gap: 10,
-          boxShadow: "0 1px 2px rgba(20,18,15,.05), 0 18px 40px -22px rgba(20,18,15,.18)",
+          boxShadow: "var(--lift-2)",
         }}
       >
         <span style={{ fontSize: 13.5, color: "var(--muted)" }}>Email</span>

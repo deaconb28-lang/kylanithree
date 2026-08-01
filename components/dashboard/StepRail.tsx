@@ -64,7 +64,7 @@ export default function StepRail({ steps }: { steps: Step[] }) {
               borderRadius: 999,
               background: isActive ? "var(--card)" : "transparent",
               border: isActive ? "1px solid var(--border-strong)" : "1px solid transparent",
-              boxShadow: isActive ? "0 1px 2px rgba(20,18,15,.06), 0 10px 22px -14px rgba(20,18,15,.22)" : "none",
+              boxShadow: isActive ? "var(--lift-2)" : "none",
               whiteSpace: "nowrap",
             }}
           >
