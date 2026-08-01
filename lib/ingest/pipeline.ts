@@ -5,6 +5,7 @@ import { lexicalGate } from "../search/intent";
 import { LEXICON_VERSION } from "../search/intent";
 import { personFingerprint } from "../credits/fingerprint";
 import { classifyBatch, needsReview, CLASSIFIER_VERSION, CLASSIFY_BATCH_SIZE, type ClassifyInput } from "./classify";
+import { embed, embeddingInput, hasEmbeddingProvider, EMBED_MODEL, EMBED_BATCH_SIZE } from "./embed";
 
 // normalize -> gate -> store -> classify -> resolve person.
 //
@@ -148,6 +149,7 @@ export type ClassifyStats = {
   leads: number;
   none: number;
   forReview: number;
+  embedded: number;
 };
 
 /**
@@ -159,7 +161,7 @@ export type ClassifyStats = {
 export async function classifyBacklog(opts: { limit?: number; timeoutMs?: number }): Promise<ClassifyStats> {
   const { limit = CLASSIFY_BATCH_SIZE, timeoutMs } = opts;
   const corpus = await Corpus();
-  const stats: ClassifyStats = { considered: 0, classified: 0, leads: 0, none: 0, forReview: 0 };
+  const stats: ClassifyStats = { considered: 0, classified: 0, leads: 0, none: 0, forReview: 0, embedded: 0 };
 
   const pending = await corpus
     .find({ classifierStage: 1 })
@@ -210,7 +212,62 @@ export async function classifyBacklog(opts: { limit?: number; timeoutMs?: number
     });
 
   if (ops.length > 0) await corpus.bulkWrite(ops, { ordered: false });
+
+  // Embed only what turned out to be a lead. A document classified `none` never enters retrieval,
+  // so embedding it would be paying for a vector nothing can ever match against.
+  stats.embedded = await embedClassified(verdicts.filter((v) => v.intentType !== "none").map((v) => v.id));
   return stats;
+}
+
+/**
+ * Writes embeddings for freshly classified leads.
+ *
+ * Failure here is non-fatal by design: the document keeps its classification and simply has no
+ * vector, which degrades that document to lexical-only retrieval rather than losing it. A backfill
+ * pass can pick it up later, which is why this queries for a MISSING embedding rather than tracking
+ * a separate flag.
+ */
+async function embedClassified(documentIds: string[]): Promise<number> {
+  if (documentIds.length === 0 || !hasEmbeddingProvider()) return 0;
+  const corpus = await Corpus();
+  try {
+    const docs = await corpus
+      .find({ _id: { $in: documentIds.map((id) => new ObjectId(id)) }, embedding: { $exists: false } })
+      .toArray();
+    if (docs.length === 0) return 0;
+
+    let written = 0;
+    for (let i = 0; i < docs.length; i += EMBED_BATCH_SIZE) {
+      const batch = docs.slice(i, i + EMBED_BATCH_SIZE);
+      const vectors = await embed({ texts: batch.map(embeddingInput), inputType: "document" });
+      await corpus.bulkWrite(
+        batch.map((d, j) => ({
+          updateOne: { filter: { _id: d._id }, update: { $set: { embedding: vectors[j], embeddingModel: EMBED_MODEL } } },
+        })),
+        { ordered: false },
+      );
+      written += batch.length;
+    }
+    return written;
+  } catch (err) {
+    console.error("[ingest] Embedding failed, documents stay lexical-only:", err instanceof Error ? err.message : err);
+    return 0;
+  }
+}
+
+/**
+ * Backfills embeddings for intent-positive documents that never got one — because the provider was
+ * unset when they were classified, or a batch failed. Safe to run repeatedly.
+ */
+export async function backfillEmbeddings(limit = EMBED_BATCH_SIZE): Promise<number> {
+  if (!hasEmbeddingProvider()) return 0;
+  const corpus = await Corpus();
+  const docs = await corpus
+    .find({ intentType: { $exists: true, $ne: "none" }, embedding: { $exists: false } })
+    .limit(limit)
+    .toArray();
+  if (docs.length === 0) return 0;
+  return embedClassified(docs.map((d) => String(d._id)));
 }
 
 /**

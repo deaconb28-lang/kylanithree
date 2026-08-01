@@ -1,7 +1,10 @@
 import { ObjectId } from "mongodb";
 import { Sources, ensureIngestIndexes, type SourceDoc } from "../lib/ingest/collections";
 import { crawlHackerNews } from "../lib/ingest/sources/hackernews";
-import { classifyBacklog, ingestDocuments, refreshSourceYield } from "../lib/ingest/pipeline";
+import { crawlDiscourse } from "../lib/ingest/sources/discourse";
+import { crawlStackExchange } from "../lib/ingest/sources/stackexchange";
+import { backfillEmbeddings, classifyBacklog, ingestDocuments, refreshSourceYield } from "../lib/ingest/pipeline";
+import { hasEmbeddingProvider } from "../lib/ingest/embed";
 
 // The ingestion worker. Runs on Railway, NOT on Vercel.
 //
@@ -45,16 +48,23 @@ async function pollSource(source: SourceDoc & { _id?: ObjectId }): Promise<void>
   const id = String(source._id);
 
   try {
-    if (source.platform !== "hn") {
-      log(`skip ${source.platform}:${source.identifier} — no crawler implemented yet`);
+    const page =
+      source.platform === "hn"
+        ? await crawlHackerNews({ cursor: source.lastCursor })
+        : source.platform === "discourse"
+          ? await crawlDiscourse({ baseUrl: source.baseUrl ?? `https://${source.identifier}`, cursor: source.lastCursor })
+          : source.platform === "stackexchange"
+            ? await crawlStackExchange({ site: source.identifier, cursor: source.lastCursor })
+            : null;
+
+    if (!page) {
+      log(`skip ${source.platform}:${source.identifier} — no crawler for this platform`);
       return;
     }
-
-    const page = await crawlHackerNews({ cursor: source.lastCursor });
     const stats = await ingestDocuments({ sourceId: id, documents: page.documents });
 
     log(
-      `hn:${source.identifier} fetched=${stats.fetched} stored=${stats.stored} ` +
+      `${source.platform}:${source.identifier} fetched=${stats.fetched} stored=${stats.stored} ` +
         `gate=${stats.droppedGate} short=${stats.droppedShort} lang=${stats.droppedLanguage} dupe=${stats.duplicates}`,
     );
 
@@ -104,12 +114,24 @@ async function tick(): Promise<void> {
     }
   }
 
+  // Catches anything classified while the embedding provider was unset or failing. Without this
+  // those documents would stay lexical-only forever, silently retrievable at half strength.
+  if (hasEmbeddingProvider() && running) {
+    try {
+      const filled = await backfillEmbeddings();
+      if (filled > 0) log(`backfilled ${filled} embedding(s)`);
+    } catch (err) {
+      log(`ERROR backfilling embeddings — ${err instanceof Error ? err.message : err}`);
+    }
+  }
+
   for (let i = 0; i < CLASSIFY_BATCHES_PER_TICK && running; i++) {
     try {
       const stats = await classifyBacklog({});
       if (stats.considered === 0) break;
       log(
-        `classified considered=${stats.considered} leads=${stats.leads} none=${stats.none} review=${stats.forReview}`,
+        `classified considered=${stats.considered} leads=${stats.leads} none=${stats.none} ` +
+          `review=${stats.forReview} embedded=${stats.embedded}`,
       );
     } catch (err) {
       log(`ERROR classifying — ${err instanceof Error ? err.message : err}`);
@@ -121,26 +143,64 @@ async function tick(): Promise<void> {
 async function seedSources(): Promise<void> {
   const sources = await Sources();
   const now = new Date();
-  // M1 is one source. Hacker News is the spec's own starting point and earns it: full backfill,
-  // no auth, no registration, no approval, permissive terms.
-  await sources.updateOne(
-    { platform: "hn", identifier: "all" },
-    {
-      $setOnInsert: {
-        platform: "hn",
-        identifier: "all",
-        accessMethod: "api" as const,
-        baseUrl: "https://hn.algolia.com/api/v1",
-        pollIntervalMinutes: 15,
-        health: "ok" as const,
-        docYield30d: 0,
-        enabled: true,
-        createdAt: now,
-        updatedAt: now,
+  // The seed registry. All three are free, permissive by design, and need no registration —
+  // deliberately NOT Reddit or X, whose terms are enforced by revoking access entirely.
+  //
+  // Stack Exchange sites are chosen to span consumer and professional topics as well as technical
+  // ones: the network is ~180 sites, and treating it as a developer-only source wastes most of it.
+  const seeds: Omit<SourceDoc, "createdAt" | "updatedAt">[] = [
+    { platform: "hn", identifier: "all", accessMethod: "api", baseUrl: "https://hn.algolia.com/api/v1", pollIntervalMinutes: 15, health: "ok", docYield30d: 0, enabled: true },
+    ...[
+      "workplace",
+      "money",
+      "freelancing",
+      "webmasters",
+      "softwarerecs",
+      "productivity",
+      "cooking",
+      "gardening",
+      "photo",
+      "diy",
+    ].map((site) => ({
+      platform: "stackexchange" as const,
+      identifier: site,
+      accessMethod: "api" as const,
+      pollIntervalMinutes: 60,
+      health: "ok" as const,
+      docYield30d: 0,
+      enabled: true,
+    })),
+    // Discourse instances that are public, active, and run by communities that discuss tooling and
+    // process rather than the product hosting the forum.
+    ...[
+      "meta.discourse.org",
+      "forum.obsidian.md",
+      "community.n8n.io",
+      "forum.rclone.org",
+      "community.home-assistant.io",
+    ].map((host) => ({
+      platform: "discourse" as const,
+      identifier: host,
+      accessMethod: "json" as const,
+      baseUrl: `https://${host}`,
+      pollIntervalMinutes: 60,
+      health: "ok" as const,
+      docYield30d: 0,
+      enabled: true,
+    })),
+  ];
+
+  await sources.bulkWrite(
+    seeds.map((s) => ({
+      updateOne: {
+        filter: { platform: s.platform, identifier: s.identifier },
+        update: { $setOnInsert: { ...s, createdAt: now, updatedAt: now } },
+        upsert: true,
       },
-    },
-    { upsert: true },
+    })),
+    { ordered: false },
   );
+  log(`registry seeded with ${seeds.length} source(s)`);
 }
 
 async function main(): Promise<void> {

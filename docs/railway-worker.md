@@ -29,14 +29,24 @@ Railway → New Project → Deploy from GitHub repo → this repo, branch
 npm run worker
 ```
 
-**Settings → Variables** — the worker needs exactly two:
+`railway.json` in the repo root already sets the build and start command, so Railway needs no
+manual configuration beyond variables.
 
-| Variable | Value |
-|---|---|
-| `MONGODB_URI` | the same Atlas connection string Vercel uses |
-| `ANTHROPIC_API_KEY` | the same key Vercel uses |
+**Settings → Variables:**
 
-Nothing else. It never serves HTTP, so it needs no port, no domain, and no `AUTH_URL`.
+| Variable | Required | Value |
+|---|---|---|
+| `MONGODB_URI` | yes | the same Atlas connection string Vercel uses |
+| `ANTHROPIC_API_KEY` | yes | the same key Vercel uses — Stage 3 classification |
+| `VOYAGE_API_KEY` | for semantic search | embeddings. Without it the corpus is lexical-only |
+| `STACKEXCHANGE_KEY` | optional | free, and raises the SE quota substantially |
+
+It never serves HTTP, so it needs no port, no domain and no `AUTH_URL`.
+
+Without `VOYAGE_API_KEY` everything still runs — crawling, gating, classification — and retrieval
+falls back to lexical only. That is a real degradation rather than a failure: name lookups still
+work, paraphrase matching does not. The worker backfills embeddings for anything classified while
+the key was missing, so adding it later costs nothing.
 
 **Atlas Network Access:** Railway egresses from its own IPs, not Vercel's. Either add Railway's
 egress range or allow `0.0.0.0/0` for now — a connection refused here looks exactly like a bad URI
@@ -47,8 +57,11 @@ in the logs, so rule it out first.
 The worker logs one line per poll and one per classify batch:
 
 ```
+2026-08-01T09:14:01.004Z registry seeded with 16 source(s)
 2026-08-01T09:14:02.113Z hn:all fetched=100 stored=31 gate=54 short=12 lang=3 dupe=0
-2026-08-01T09:14:19.882Z classified considered=20 leads=6 none=14 review=3
+2026-08-01T09:14:08.220Z stackexchange:workplace fetched=50 stored=19 gate=24 short=7 lang=0 dupe=0
+2026-08-01T09:14:15.771Z discourse:forum.obsidian.md fetched=15 stored=4 gate=9 short=2 lang=0 dupe=0
+2026-08-01T09:14:19.882Z classified considered=20 leads=6 none=14 review=3 embedded=6
 ```
 
 What to look for in the first hour:
@@ -60,6 +73,22 @@ What to look for in the first hour:
   everything comes back `leads`, the classifier prompt has gone soft.
 - **`review`** is the count landing in the 0.4–0.7 confidence band. That is the label queue; the
   spec's flywheel depends on someone actually reading 50 of them a week.
+
+### The seeded registry
+
+The worker seeds 16 sources on first start: Hacker News, ten Stack Exchange sites, and five public
+Discourse forums. All three platforms are free, permissive by design, and need no registration.
+
+Deliberately **not** Reddit or X. Both have enforced terms on automated access and the enforcement
+is losing access entirely, which is an asymmetric risk to take before there is anything to lose.
+They can be added to the registry later as ordinary rows.
+
+The Stack Exchange sites deliberately span consumer and professional topics (`cooking`, `money`,
+`workplace`, `freelancing`, `gardening`) as well as technical ones. The network is ~180 sites, and
+treating it as a developer-only source wastes most of it.
+
+Sources adapt their own poll interval from observed yield, so a site producing nothing settles to
+daily on its own and stops competing for crawl budget.
 
 ## Before it is worth running
 
