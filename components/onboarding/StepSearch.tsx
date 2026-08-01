@@ -313,7 +313,7 @@ export default function StepSearch({
     return (
       <OnboardingChrome>
         <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 20, maxWidth: 560, textAlign: "center" }}>
-          <h1 style={{ fontFamily: "var(--font-outfit)", fontWeight: 800, fontSize: "clamp(24px,3.4vw,36px)", lineHeight: 1.1, letterSpacing: "-.03em", margin: 0 }}>
+          <h1 style={{ fontFamily: "var(--font-display)", fontWeight: 800, fontSize: "clamp(24px,3.4vw,36px)", lineHeight: 1.1, letterSpacing: "-.03em", margin: 0 }}>
             Couldn&apos;t search for real leads.
           </h1>
           <p style={{ margin: 0, fontSize: 15.5, color: "var(--muted-strong)", lineHeight: 1.6 }}>{error}</p>
@@ -340,7 +340,7 @@ export default function StepSearch({
               placeholder until then. */}
           <SiteBadge url={url} preview={preview} description={analysis?.siteSummary ?? null} compact />
           <div style={{ display: "flex", alignItems: "baseline", gap: 18, flexWrap: "wrap" }}>
-            <span style={{ fontFamily: "var(--font-outfit)", fontWeight: 800, fontSize: "clamp(48px,7vw,92px)", lineHeight: 0.9, letterSpacing: "-.045em", fontVariantNumeric: "tabular-nums" }}>
+            <span style={{ fontFamily: "var(--font-display)", fontWeight: 800, fontSize: "clamp(48px,7vw,92px)", lineHeight: 0.9, letterSpacing: "-.045em", fontVariantNumeric: "tabular-nums" }}>
               {clock}
             </span>
             <span style={{ fontSize: 17, color: "var(--muted)" }}>{phase === "done" ? "search complete" : "elapsed — this is a real, live search"}</span>
@@ -363,7 +363,7 @@ export default function StepSearch({
 
           {leads.length > 0 && (
             <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-              <span style={{ fontFamily: "var(--font-outfit)", fontWeight: 700, fontSize: 15, letterSpacing: ".08em", textTransform: "uppercase", color: "var(--muted)" }}>
+              <span style={{ fontFamily: "var(--font-display)", fontWeight: 700, fontSize: 15, letterSpacing: ".08em", textTransform: "uppercase", color: "var(--muted)" }}>
                 People found
               </span>
               {rankedLeads.slice(0, 5).map((l) => (
@@ -383,7 +383,7 @@ export default function StepSearch({
 
           {phase === "done" && leads.length === 0 ? (
             <div style={{ border: "1px solid var(--border-strong)", borderRadius: 14, padding: "16px 18px", display: "flex", flexDirection: "column", gap: 8, background: "var(--card-veil)" }}>
-              <span style={{ fontFamily: "var(--font-outfit)", fontWeight: 700, fontSize: 16 }}>
+              <span style={{ fontFamily: "var(--font-display)", fontWeight: 700, fontSize: 16 }}>
                 No leads I could stand behind this time.
               </span>
               <span style={{ fontSize: 14, color: "var(--muted-strong)", lineHeight: 1.55 }}>
@@ -421,7 +421,7 @@ export default function StepSearch({
         </div>
 
         <div style={{ background: "var(--card)", border: "1px solid var(--border)", borderRadius: 16, padding: 24, display: "flex", flexDirection: "column", gap: 16, boxShadow: "var(--lift-3)", height: "fit-content", minWidth: 0 }}>
-          <span style={{ fontFamily: "var(--font-outfit)", fontWeight: 700, fontSize: 15, letterSpacing: ".08em", textTransform: "uppercase", color: "var(--muted)" }}>
+          <span style={{ fontFamily: "var(--font-display)", fontWeight: 700, fontSize: 15, letterSpacing: ".08em", textTransform: "uppercase", color: "var(--muted)" }}>
             Communities found
           </span>
 

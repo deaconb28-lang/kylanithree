@@ -130,7 +130,7 @@ export default function DiagnosticsPage() {
         <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
           <Link href="/" style={{ display: "flex", alignItems: "center", gap: 8, color: "var(--ink)" }}>
             <KylaniLogo size={24} />
-            <span style={{ fontFamily: "var(--font-outfit)", fontWeight: 700, fontSize: 17 }}>Kylani</span>
+            <span style={{ fontFamily: "var(--font-display)", fontWeight: 700, fontSize: 17 }}>Kylani</span>
           </Link>
           <span style={{ fontSize: 12.5, color: "var(--muted)", border: "1px solid var(--border)", padding: "3px 9px", borderRadius: 999 }}>diagnostics</span>
           <button onClick={() => setReloadKey((k) => k + 1)} className="ky-btn-outline" style={{ marginLeft: "auto", padding: "8px 14px", fontSize: 13.5 }}>
@@ -138,7 +138,7 @@ export default function DiagnosticsPage() {
           </button>
         </div>
 
-        <h1 style={{ fontFamily: "var(--font-outfit)", fontWeight: 800, fontSize: 28, letterSpacing: "-.03em", margin: 0 }}>
+        <h1 style={{ fontFamily: "var(--font-display)", fontWeight: 800, fontSize: 28, letterSpacing: "-.03em", margin: 0 }}>
           What&apos;s working, and what isn&apos;t
         </h1>
 
@@ -152,14 +152,14 @@ export default function DiagnosticsPage() {
         {health && (
           <>
             <div style={CARD}>
-              <span style={{ fontFamily: "var(--font-outfit)", fontWeight: 700, fontSize: 16 }}>Summary</span>
+              <span style={{ fontFamily: "var(--font-display)", fontWeight: 700, fontSize: 16 }}>Summary</span>
               {Object.entries((health.summary ?? {}) as Record<string, string>).map(([k, v]) => (
                 <Row key={k} label={k.replace(/([A-Z])/g, " $1").replace(/^./, (c) => c.toUpperCase())} ok={!/BROKEN/.test(v)} detail={v} />
               ))}
             </div>
 
             <div style={CARD}>
-              <span style={{ fontFamily: "var(--font-outfit)", fontWeight: 700, fontSize: 16 }}>Lead sources</span>
+              <span style={{ fontFamily: "var(--font-display)", fontWeight: 700, fontSize: 16 }}>Lead sources</span>
               <span style={{ fontSize: 13, color: "var(--muted)", marginTop: -6 }}>
                 The search only needs one of these. Reddit being blocked is expected and not a fault.
               </span>
@@ -177,14 +177,14 @@ export default function DiagnosticsPage() {
             </div>
 
             <div style={CARD}>
-              <span style={{ fontFamily: "var(--font-outfit)", fontWeight: 700, fontSize: 16 }}>Accounts and database</span>
+              <span style={{ fontFamily: "var(--font-display)", fontWeight: 700, fontSize: 16 }}>Accounts and database</span>
               <Row label="MongoDB" ok={Boolean(mongo.ok)} detail={[mongo.ms ? `${mongo.ms}ms` : null, mongo.userCount !== undefined ? `${mongo.userCount} users` : null, (mongo.likelyCause ?? mongo.error) as string | undefined].filter(Boolean).join(" · ")} />
               <Row label="Google sign-in callback" ok={!google.warning} detail={(google.redirectUriForThisRequest as string) ?? ""} />
               {Boolean(google.warning) && <span style={{ fontSize: 13, color: "var(--ember)", lineHeight: 1.5 }}>{google.warning as string}</span>}
             </div>
 
             <div style={CARD}>
-              <span style={{ fontFamily: "var(--font-outfit)", fontWeight: 700, fontSize: 16 }}>Environment</span>
+              <span style={{ fontFamily: "var(--font-display)", fontWeight: 700, fontSize: 16 }}>Environment</span>
               <span style={{ fontSize: 13, color: "var(--muted)", marginTop: -6 }}>Presence only — no value is ever read back here.</span>
               <div style={{ display: "flex", flexWrap: "wrap", gap: 7 }}>
                 {Object.entries(env).map(([k, v]) => {
@@ -214,7 +214,7 @@ export default function DiagnosticsPage() {
         <FlowComparison reloadKey={reloadKey} />
 
         <div style={CARD}>
-          <span style={{ fontFamily: "var(--font-outfit)", fontWeight: 700, fontSize: 16 }}>How the search actually works</span>
+          <span style={{ fontFamily: "var(--font-display)", fontWeight: 700, fontSize: 16 }}>How the search actually works</span>
           <span style={{ fontSize: 13, color: "var(--muted)", marginTop: -6, lineHeight: 1.55 }}>
             Every stage below reports candidates in, candidates out, and time spent. Run the test underneath and these
             same stages fill in with real numbers — a stage with candidates in and zero out is where leads are lost.
@@ -222,7 +222,7 @@ export default function DiagnosticsPage() {
 
           {(["resolve", "extract"] as Phase[]).map((phase) => (
             <div key={phase} style={{ display: "flex", flexDirection: "column", gap: 10, marginTop: 6 }}>
-              <span style={{ fontFamily: "var(--font-outfit)", fontWeight: 700, fontSize: 14.5 }}>{PHASES[phase].title}</span>
+              <span style={{ fontFamily: "var(--font-display)", fontWeight: 700, fontSize: 14.5 }}>{PHASES[phase].title}</span>
               <span style={{ fontSize: 13, color: "var(--muted)", lineHeight: 1.55, marginTop: -6 }}>{PHASES[phase].blurb}</span>
               {STAGES.filter((s) => s.phase === phase).map((s) => {
                 const live = stages.filter((st) => s.match.test(st.stage));
@@ -273,7 +273,7 @@ export default function DiagnosticsPage() {
 
         <div style={CARD}>
           <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
-            <span style={{ fontFamily: "var(--font-outfit)", fontWeight: 700, fontSize: 16 }}>Live search test</span>
+            <span style={{ fontFamily: "var(--font-display)", fontWeight: 700, fontSize: 16 }}>Live search test</span>
             <button onClick={testSearch} disabled={running} className="ky-btn-ember" style={{ marginLeft: "auto", padding: "10px 18px", fontSize: 14, border: "none", opacity: running ? 0.6 : 1 }}>
               {running ? "Running…" : "Run a real search"}
             </button>
@@ -316,7 +316,7 @@ export default function DiagnosticsPage() {
                     gap: 7,
                   }}
                 >
-                  <span style={{ fontFamily: "var(--font-outfit)", fontWeight: 700, fontSize: 15 }}>{verdict.headline}</span>
+                  <span style={{ fontFamily: "var(--font-display)", fontWeight: 700, fontSize: 15 }}>{verdict.headline}</span>
                   <span style={{ fontSize: 13.5, color: "var(--muted-strong)", lineHeight: 1.55 }}>{verdict.detail}</span>
                   {verdict.stage && (
                     <span style={{ fontSize: 12.5, color: "var(--muted)", fontFamily: "ui-monospace, monospace" }}>
@@ -464,7 +464,7 @@ function FlowComparison({ reloadKey }: { reloadKey: number }) {
 
   return (
     <div style={CARD}>
-      <span style={{ fontFamily: "var(--font-outfit)", fontWeight: 700, fontSize: 16 }}>Onboarding, old vs new</span>
+      <span style={{ fontFamily: "var(--font-display)", fontWeight: 700, fontSize: 16 }}>Onboarding, old vs new</span>
       <span style={{ fontSize: 13, color: "var(--muted)", marginTop: -6, lineHeight: 1.55 }}>
         Last 30 days. <code>discover</code> is the one-screen flow; <code>legacy</code> is the four-step one, still
         reachable at <code>/onboarding?flow=legacy</code>. Both report time-to-first-lead from the same moment — the

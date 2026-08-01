@@ -1,15 +1,9 @@
 import type { Metadata, Viewport } from "next";
-import { Fraunces, Outfit, Public_Sans } from "next/font/google";
+import { Fraunces, Public_Sans } from "next/font/google";
 import { Analytics } from "@vercel/analytics/next";
 import AuthProvider from "../components/AuthProvider";
 import AddToHomeScreen from "../components/AddToHomeScreen";
 import "./globals.css";
-
-const outfit = Outfit({
-  variable: "--font-outfit",
-  subsets: ["latin"],
-  weight: ["400", "500", "600", "700", "800"],
-});
 
 const publicSans = Public_Sans({
   variable: "--font-public-sans",
@@ -17,12 +11,15 @@ const publicSans = Public_Sans({
   weight: ["300", "400", "500", "600"],
 });
 
-// The hero's voice, and only the hero's — the h1 and one italic eyebrow. Loaded as a variable font
-// with its optical-size, SOFT and WONK axes exposed, because WONK is the entire reason to use it:
-// it swaps in the canted, off-model glyphs that stop this reading as the default warm-cream serif
-// every AI product landing page has. A static instance would ship the neutral shapes and none of
-// the point. Self-hosted by next/font like the other two, so no render-blocking stylesheet and no
-// layout shift when it arrives.
+// The product's voice. It began as the hero's alone — one h1 and one eyebrow — and is now the
+// display face wherever a heading appears, which is what retired Outfit: carrying two display
+// faces to set the same kind of text in two places was a font download nobody was reading.
+//
+// Loaded as a variable font with its optical-size, SOFT and WONK axes exposed, because WONK is the
+// entire reason to use it: it swaps in the canted, off-model glyphs that stop this reading as the
+// default warm-cream serif every AI product landing page has. A static instance would ship the
+// neutral shapes and none of the point. Self-hosted by next/font, so no render-blocking stylesheet
+// and no layout shift when it arrives.
 const fraunces = Fraunces({
   variable: "--font-fraunces",
   subsets: ["latin"],
@@ -66,7 +63,7 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en" className={`${outfit.variable} ${publicSans.variable} ${fraunces.variable}`}>
+    <html lang="en" className={`${publicSans.variable} ${fraunces.variable}`}>
       <body style={{ fontFamily: "var(--font-public-sans), system-ui, sans-serif" }}>
         <AuthProvider>{children}</AuthProvider>
         <AddToHomeScreen />

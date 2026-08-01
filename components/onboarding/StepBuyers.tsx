@@ -41,7 +41,7 @@ export default function StepBuyers({
             {/* Identity only here — the summary is the subheading directly below, so passing it
                 into the badge as well would print the same sentence twice. */}
             <SiteBadge url={url} preview={preview} description={null} hideDescription compact />
-            <h1 style={{ fontFamily: "var(--font-outfit)", fontWeight: 800, fontSize: "clamp(28px,4vw,40px)", lineHeight: 1.06, letterSpacing: "-.03em", margin: 0 }}>
+            <h1 style={{ fontFamily: "var(--font-display)", fontWeight: 800, fontSize: "clamp(28px,4vw,40px)", lineHeight: 1.06, letterSpacing: "-.03em", margin: 0 }}>
               Is this your audience?
             </h1>
             <p style={{ margin: 0, fontSize: 16.5, color: "var(--muted-strong)", lineHeight: 1.55, maxWidth: 640 }}>
@@ -96,7 +96,7 @@ export default function StepBuyers({
                     autoFocus
                     value={b.name}
                     onChange={(e) => setBuyers((bs) => bs.map((x) => (x.key === b.key ? { ...x, name: e.target.value } : x)))}
-                    style={{ fontFamily: "var(--font-outfit)", fontWeight: 700, fontSize: 21, letterSpacing: "-.02em", border: "1px solid var(--border-strong)", borderRadius: 8, padding: "6px 10px" }}
+                    style={{ fontFamily: "var(--font-display)", fontWeight: 700, fontSize: 21, letterSpacing: "-.02em", border: "1px solid var(--border-strong)", borderRadius: 8, padding: "6px 10px" }}
                   />
                   <textarea
                     value={b.desc}
@@ -117,7 +117,7 @@ export default function StepBuyers({
                 <>
                   <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 16, flexWrap: "wrap" }}>
                     <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
-                      <span style={{ fontFamily: "var(--font-outfit)", fontWeight: 700, fontSize: 21, letterSpacing: "-.02em" }}>{b.name}</span>
+                      <span style={{ fontFamily: "var(--font-display)", fontWeight: 700, fontSize: 21, letterSpacing: "-.02em" }}>{b.name}</span>
                       {b.tag && <span style={{ fontSize: 12, fontWeight: 600, color: "var(--ember)", background: "var(--ember-tint)", padding: "3px 9px", borderRadius: 999 }}>{b.tag}</span>}
                       {b.dropped && <span style={{ fontSize: 12, fontWeight: 600, color: "var(--muted)" }}>Dropped</span>}
                     </div>

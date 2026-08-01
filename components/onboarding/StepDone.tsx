@@ -39,7 +39,7 @@ export default function StepDone() {
           ✓
         </span>
         <span style={{ fontSize: 15, color: "var(--muted)" }}>First pass done</span>
-        <h1 style={{ fontFamily: "var(--font-outfit)", fontWeight: 800, fontSize: "clamp(30px,4.5vw,50px)", lineHeight: 1.02, letterSpacing: "-.035em", margin: 0 }}>
+        <h1 style={{ fontFamily: "var(--font-display)", fontWeight: 800, fontSize: "clamp(30px,4.5vw,50px)", lineHeight: 1.02, letterSpacing: "-.035em", margin: 0 }}>
           Your first buyers, each with a reason attached.
         </h1>
         <p style={{ margin: 0, fontSize: 17.5, color: "var(--muted-strong)", lineHeight: 1.6 }}>

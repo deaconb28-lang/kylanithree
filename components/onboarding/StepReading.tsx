@@ -133,7 +133,7 @@ export default function StepReading({
     return (
       <OnboardingChrome>
         <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 20, maxWidth: 560, textAlign: "center" }}>
-          <h1 style={{ fontFamily: "var(--font-outfit)", fontWeight: 800, fontSize: "clamp(24px,3.4vw,36px)", lineHeight: 1.1, letterSpacing: "-.03em", margin: 0 }}>
+          <h1 style={{ fontFamily: "var(--font-display)", fontWeight: 800, fontSize: "clamp(24px,3.4vw,36px)", lineHeight: 1.1, letterSpacing: "-.03em", margin: 0 }}>
             Couldn&apos;t read {url}.
           </h1>
           <p style={{ margin: 0, fontSize: 15.5, color: "var(--muted-strong)", lineHeight: 1.6 }}>{error}</p>
@@ -152,7 +152,7 @@ export default function StepReading({
           <span style={{ width: 9, height: 9, borderRadius: 999, background: "var(--ember)", animation: "kyPulse 1.8s ease-in-out infinite" }} />
           Reading {url}
         </div>
-        <h1 style={{ fontFamily: "var(--font-outfit)", fontWeight: 800, fontSize: "clamp(26px,4vw,44px)", lineHeight: 1.06, letterSpacing: "-.03em", margin: 0 }}>
+        <h1 style={{ fontFamily: "var(--font-display)", fontWeight: 800, fontSize: "clamp(26px,4vw,44px)", lineHeight: 1.06, letterSpacing: "-.03em", margin: 0 }}>
           Working out what you sell and who has the problem.
         </h1>
 

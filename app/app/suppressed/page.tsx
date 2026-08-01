@@ -59,7 +59,7 @@ export default function SuppressedPage() {
     return (
       <DashboardShell active="suppressed">
         <div style={{ padding: "36px 5vw", display: "flex", flexDirection: "column", alignItems: "flex-start", gap: 14 }}>
-          <span style={{ fontFamily: "var(--font-outfit)", fontWeight: 700, fontSize: 18 }}>Couldn&apos;t load Suppressed.</span>
+          <span style={{ fontFamily: "var(--font-display)", fontWeight: 700, fontSize: 18 }}>Couldn&apos;t load Suppressed.</span>
           <span style={{ fontSize: 14.5, color: "var(--muted)" }}>{loadError}</span>
           <button className="ky-btn-ember" onClick={() => { setLoadError(null); setAttempt((a) => a + 1); }} style={{ padding: "11px 20px", fontSize: 14.5, border: "none" }}>
             Try again
@@ -82,7 +82,7 @@ export default function SuppressedPage() {
       <div style={{ padding: "36px 5vw", boxSizing: "border-box", display: "flex", flexDirection: "column", gap: 20, maxWidth: 1100, margin: "0 auto" }}>
         <div style={{ display: "flex", alignItems: "flex-end", justifyContent: "space-between", gap: 20, flexWrap: "wrap" }}>
           <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-            <h1 style={{ fontFamily: "var(--font-outfit)", fontWeight: 800, fontSize: "clamp(24px,3.2vw,32px)", letterSpacing: "-.03em", margin: 0 }}>
+            <h1 style={{ fontFamily: "var(--font-display)", fontWeight: 800, fontSize: "clamp(24px,3.2vw,32px)", letterSpacing: "-.03em", margin: 0 }}>
               {suppressions.length === 0 ? "Nobody suppressed yet." : `${suppressions.length} people, never contacted.`}
             </h1>
             <p style={{ margin: 0, fontSize: 14, color: "var(--muted)", lineHeight: 1.5, maxWidth: 640 }}>
@@ -120,7 +120,7 @@ export default function SuppressedPage() {
 
         {suppressions.length === 0 ? (
           <div style={{ border: "1px dashed var(--border-strong)", borderRadius: 16, padding: "28px 24px", background: "var(--card-alt)", display: "flex", flexDirection: "column", gap: 10 }}>
-            <span style={{ fontFamily: "var(--font-outfit)", fontWeight: 700, fontSize: 20 }}>Nothing caught here yet.</span>
+            <span style={{ fontFamily: "var(--font-display)", fontWeight: 700, fontSize: 20 }}>Nothing caught here yet.</span>
             <p style={{ margin: 0, fontSize: 15, color: "var(--muted)", lineHeight: 1.6, maxWidth: 640 }}>
               Every sent email includes a real unsubscribe link, and you can manually suppress a contact from Queue.
               Anyone caught either way shows up here and Kylani won&apos;t write to them again for this campaign.

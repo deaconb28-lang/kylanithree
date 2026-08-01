@@ -77,7 +77,7 @@ export default function TimeStepper() {
   return (
     <div style={{ padding: "96px 5vw", display: "flex", flexDirection: "column", gap: 56, background: "var(--card-alt)", borderTop: "1px solid var(--border)" }}>
       <div style={{ display: "flex", flexDirection: "column", gap: 14, maxWidth: 700 }}>
-        <h2 style={{ fontFamily: "var(--font-outfit)", fontWeight: 800, fontSize: "clamp(28px,4vw,42px)", lineHeight: 1.05, letterSpacing: "-.03em", margin: 0 }}>
+        <h2 style={{ fontFamily: "var(--font-display)", fontWeight: 800, fontSize: "clamp(28px,4vw,42px)", lineHeight: 1.05, letterSpacing: "-.03em", margin: 0 }}>
           Ten minutes, a week, then every morning.
         </h2>
         <p style={{ margin: 0, fontSize: 18, lineHeight: 1.6, color: "var(--muted)" }}>
@@ -106,7 +106,7 @@ export default function TimeStepper() {
             >
               <div style={{ width: 4, height: 30, borderRadius: 3, background: i === step ? "var(--ember)" : "var(--border-strong)" }} />
               <div style={{ display: "flex", flexDirection: "column", gap: 2, flex: 1 }}>
-                <span style={{ fontFamily: "var(--font-outfit)", fontWeight: 700, fontSize: 18 }}>{st.label}</span>
+                <span style={{ fontFamily: "var(--font-display)", fontWeight: 700, fontSize: 18 }}>{st.label}</span>
                 <span style={{ fontSize: 13, color: "var(--muted)" }}>{st.sub}</span>
               </div>
               <span style={{ fontSize: 12, fontWeight: 700, color: "var(--green)", background: "var(--green-tint)", padding: "4px 10px", borderRadius: 999, whiteSpace: "nowrap" }}>{st.tag}</span>
@@ -118,7 +118,7 @@ export default function TimeStepper() {
         <div style={{ background: "var(--card)", border: "1px solid var(--border)", borderRadius: 18, padding: "30px 32px", display: "flex", flexDirection: "column", gap: 20, minHeight: 330, boxShadow: "var(--lift-3)" }}>
           <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
             <span style={{ fontSize: 13, letterSpacing: ".08em", textTransform: "uppercase", color: "var(--ember)", fontWeight: 700 }}>{s.k}</span>
-            <span style={{ fontFamily: "var(--font-outfit)", fontWeight: 700, fontSize: 28, lineHeight: 1.2, letterSpacing: "-.025em" }}>{s.h}</span>
+            <span style={{ fontFamily: "var(--font-display)", fontWeight: 700, fontSize: 28, lineHeight: 1.2, letterSpacing: "-.025em" }}>{s.h}</span>
             <span style={{ fontSize: 16, color: "var(--muted)", lineHeight: 1.6, maxWidth: "56ch" }}>{s.b}</span>
           </div>
           <StepPanel step={step} />

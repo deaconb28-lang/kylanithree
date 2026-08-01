@@ -181,7 +181,7 @@ export default function DashboardShell({
       <div style={{ width: "100%", minHeight: "100vh", display: "grid", placeItems: "center", background: "var(--card)" }}>
         <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 14, maxWidth: 420, textAlign: "center", padding: "0 24px" }}>
           <KylaniLogo size={30} />
-          <span style={{ fontFamily: "var(--font-outfit)", fontWeight: 700, fontSize: 18 }}>
+          <span style={{ fontFamily: "var(--font-display)", fontWeight: 700, fontSize: 18 }}>
             {claimIdFromUrl() ? "Couldn't save your search." : "Couldn't build your campaign."}
           </span>
           <span style={{ fontSize: 14, color: "var(--muted)", lineHeight: 1.6 }}>{finalizeError}</span>
@@ -206,7 +206,7 @@ export default function DashboardShell({
       <div style={{ width: "100%", minHeight: "100vh", display: "grid", placeItems: "center", background: "var(--card)" }}>
         <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 14, maxWidth: 420, textAlign: "center", padding: "0 24px" }}>
           <KylaniLogo size={30} />
-          <span style={{ fontFamily: "var(--font-outfit)", fontWeight: 700, fontSize: 18 }}>Let&apos;s find your buyers.</span>
+          <span style={{ fontFamily: "var(--font-display)", fontWeight: 700, fontSize: 18 }}>Let&apos;s find your buyers.</span>
           <span style={{ fontSize: 14, color: "var(--muted)", lineHeight: 1.6 }}>
             There&apos;s no campaign on this account yet. Paste your URL and Kylani will read your product, work out
             who it&apos;s for, and go looking for them.
@@ -224,7 +224,7 @@ export default function DashboardShell({
       <div style={{ width: "100%", minHeight: "100vh", display: "grid", placeItems: "center", background: "var(--card)" }}>
         <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 14, maxWidth: 360, textAlign: "center", padding: "0 24px" }}>
           <KylaniLogo size={30} />
-          <span style={{ fontFamily: "var(--font-outfit)", fontWeight: 700, fontSize: 18 }}>Putting your campaign together…</span>
+          <span style={{ fontFamily: "var(--font-display)", fontWeight: 700, fontSize: 18 }}>Putting your campaign together…</span>
           <span style={{ fontSize: 14, color: "var(--muted)", lineHeight: 1.6 }}>
             Reading what you sold, then actually searching Reddit, forums, and job boards for real leads. This usually
             takes under a minute.
@@ -298,7 +298,7 @@ export default function DashboardShell({
       >
         <Link href="/app" style={{ display: "flex", alignItems: "center", gap: 8, padding: "0 6px" }}>
           <KylaniLogo size={26} />
-          <span style={{ fontFamily: "var(--font-outfit)", fontWeight: 700, fontSize: 17, color: "var(--ink)" }}>Kylani</span>
+          <span style={{ fontFamily: "var(--font-display)", fontWeight: 700, fontSize: 17, color: "var(--ink)" }}>Kylani</span>
         </Link>
 
         <div

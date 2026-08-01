@@ -14,8 +14,9 @@ import { resolveFlow } from "../../lib/discover/flag";
 // The headline used to be three lines of near-display sans at full container width, which pushed
 // the URL field to the fold in dark mode and cut the social proof off entirely — a page promising
 // specificity, showing none of it, and hiding its own call to action. It is now two lines of a
-// display serif over a field of marks that shows the actual claim: thousands of people talking,
-// nine of them buying.
+// display serif over a field of marks that shows the actual claim: a crowd talking, a few of them
+// buying. Deliberately no counts — "3,400 people" and "nine of them" were numbers nobody measured,
+// and the field says the same thing without asserting one.
 //
 // The badge that used to sit above the headline ("Warm, human outreach — not more AI noise") has
 // moved down beside the drafted-message step, where there is a draft on screen for it to be about.
@@ -89,7 +90,7 @@ export default function Hero() {
       >
         <Link href="/" style={{ display: "flex", alignItems: "center", gap: 9, color: "var(--ink)" }}>
           <KylaniLogo size={26} />
-          <span style={{ fontFamily: "var(--font-outfit)", fontWeight: 600, fontSize: 17, letterSpacing: "-.01em" }}>Kylani</span>
+          <span style={{ fontFamily: "var(--font-display)", fontWeight: 600, fontSize: 17, letterSpacing: "-.01em" }}>Kylani</span>
         </Link>
 
         <div style={{ display: "flex", alignItems: "center", gap: 26, fontSize: 13.5 }}>
@@ -108,8 +109,8 @@ export default function Hero() {
       <div style={{ position: "relative", padding: "clamp(40px, 7vh, 88px) 5vw clamp(44px, 6vh, 64px)", maxWidth: 1080, margin: "0 auto" }}>
         <div style={{ maxWidth: 640, margin: "0 auto", textAlign: "center" }}>
           <h1 className="ky-display ky-h1" style={{ margin: 0, color: "var(--ink)" }}>
-            Somebody out there<span className="ky-h1-break" />
-            already wants this.
+            Find your first<span className="ky-h1-break" />
+            hundred buyers.
           </h1>
 
           <p style={{ margin: "20px auto 0", maxWidth: "30rem", fontSize: 17, lineHeight: 1.6, color: "var(--muted)" }}>
@@ -119,7 +120,7 @@ export default function Hero() {
         </div>
 
         <div style={{ marginTop: 44 }}>
-          <FoundField caption="3,400 people talking about your problem this week. Nine of them are buying." />
+          <FoundField caption="Everyone talking about your problem this week — and the few who are actually buying." />
         </div>
 
         <form

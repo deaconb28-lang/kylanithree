@@ -9,7 +9,7 @@ export default function AdsComparison() {
       <style>{`@media (max-width: 980px) { .ac-grid { grid-template-columns: 1fr !important; } }`}</style>
 
       <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
-        <h2 style={{ fontFamily: "var(--font-outfit)", fontWeight: 800, fontSize: "clamp(28px,4vw,42px)", lineHeight: 1.08, letterSpacing: "-.03em", margin: 0 }}>
+        <h2 style={{ fontFamily: "var(--font-display)", fontWeight: 800, fontSize: "clamp(28px,4vw,42px)", lineHeight: 1.08, letterSpacing: "-.03em", margin: 0 }}>
           Ads only reach who&apos;s scrolling. Most of your buyers aren&apos;t.
         </h2>
         <p style={{ margin: 0, fontSize: 18, lineHeight: 1.62, color: "var(--muted)", maxWidth: "44ch" }}>
@@ -24,7 +24,7 @@ export default function AdsComparison() {
       </div>
 
       <div style={{ background: "var(--card)", border: "1px solid var(--border)", borderRadius: 18, padding: 30, display: "flex", flexDirection: "column", gap: 24, boxShadow: "var(--lift-3)" }}>
-        <span style={{ fontFamily: "var(--font-outfit)", fontWeight: 700, fontSize: 13, letterSpacing: ".09em", textTransform: "uppercase", color: "var(--muted)" }}>
+        <span style={{ fontFamily: "var(--font-display)", fontWeight: 700, fontSize: 13, letterSpacing: ".09em", textTransform: "uppercase", color: "var(--muted)" }}>
           Where your buyers actually are
         </span>
         <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
@@ -41,7 +41,7 @@ export default function AdsComparison() {
           ))}
         </div>
         <div style={{ borderTop: "1px solid var(--border)", paddingTop: 18, display: "flex", flexDirection: "column", gap: 8 }}>
-          <span style={{ fontFamily: "var(--font-outfit)", fontWeight: 700, fontSize: 17, letterSpacing: "-.01em" }}>
+          <span style={{ fontFamily: "var(--font-display)", fontWeight: 700, fontSize: 17, letterSpacing: "-.01em" }}>
             The gap between those two bars — that&apos;s who Kylani writes to.
           </span>
           <span style={{ fontSize: 14, color: "var(--muted)", lineHeight: 1.5 }}>

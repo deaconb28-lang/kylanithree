@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 
-// The crowd, and the nine people in it who are buying.
+// The crowd, and the few in it who are buying.
 //
 // This is the one animated thing on the page and it carries the whole claim: thousands of people
 // are talking, most of it is noise, and Kylani's entire job is picking out the handful that isn't.

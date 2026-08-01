@@ -27,7 +27,7 @@ export default function ContactPage() {
         }}
       >
         <span style={{ fontSize: 13.5, color: "var(--muted)" }}>Email</span>
-        <a href="mailto:deacon@kylani.app" style={{ fontFamily: "var(--font-outfit)", fontWeight: 700, fontSize: 22, color: "var(--ink)" }}>
+        <a href="mailto:deacon@kylani.app" style={{ fontFamily: "var(--font-display)", fontWeight: 700, fontSize: 22, color: "var(--ink)" }}>
           deacon@kylani.app
         </a>
       </div>

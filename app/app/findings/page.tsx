@@ -105,7 +105,7 @@ export default function FindingsPage() {
     return (
       <DashboardShell active="findings" bottom={sidebarBottom}>
         <div style={{ padding: "36px 5vw", display: "flex", flexDirection: "column", alignItems: "flex-start", gap: 14 }}>
-          <span style={{ fontFamily: "var(--font-outfit)", fontWeight: 700, fontSize: 18 }}>Couldn&apos;t load Findings.</span>
+          <span style={{ fontFamily: "var(--font-display)", fontWeight: 700, fontSize: 18 }}>Couldn&apos;t load Findings.</span>
           <span style={{ fontSize: 14.5, color: "var(--muted)" }}>{error}</span>
           <button
             className="ky-btn-ember"
@@ -150,7 +150,7 @@ export default function FindingsPage() {
           <span style={{ fontSize: 14.5, color: "var(--muted)" }}>
             {stats.weeksActive} week{stats.weeksActive === 1 ? "" : "s"} · {stats.contactedTotal} sent · {stats.repliedTotal} replies · {stats.callsBooked} calls
           </span>
-          <h1 style={{ fontFamily: "var(--font-outfit)", fontWeight: 800, fontSize: "clamp(24px,3vw,34px)", letterSpacing: "-.03em", margin: 0 }}>
+          <h1 style={{ fontFamily: "var(--font-display)", fontWeight: 800, fontSize: "clamp(24px,3vw,34px)", letterSpacing: "-.03em", margin: 0 }}>
             What I found out that you couldn&apos;t have looked up.
           </h1>
         </div>
@@ -193,7 +193,7 @@ export default function FindingsPage() {
                   boxShadow: "var(--lift-3)",
                 }}
               >
-                <p style={{ margin: 0, fontFamily: "var(--font-outfit)", fontWeight: 700, fontSize: "clamp(22px, 2.4vw, 32px)", lineHeight: 1.2, letterSpacing: "-.025em", flex: "2 1 400px" }}>
+                <p style={{ margin: 0, fontFamily: "var(--font-display)", fontWeight: 700, fontSize: "clamp(22px, 2.4vw, 32px)", lineHeight: 1.2, letterSpacing: "-.025em", flex: "2 1 400px" }}>
                   You thought you were mostly selling to {currentPrimary.name.toLowerCase()}s. {bestHypothesis.name}s reply{" "}
                   {Math.round(bestHypothesis.rateNum / Math.max(parseFloat(currentPrimary.rate) || 0.1, 0.1))}x more often.
                 </p>
@@ -207,7 +207,7 @@ export default function FindingsPage() {
 
             {findings.length === 0 ? (
               <div style={{ border: "1px dashed var(--border-strong)", borderRadius: 16, padding: 32, textAlign: "center", display: "flex", flexDirection: "column", gap: 8, background: "var(--card-alt)" }}>
-                <span style={{ fontFamily: "var(--font-outfit)", fontWeight: 700, fontSize: 18 }}>Nothing to report yet.</span>
+                <span style={{ fontFamily: "var(--font-display)", fontWeight: 700, fontSize: 18 }}>Nothing to report yet.</span>
                 <span style={{ fontSize: 14.5, color: "var(--muted)", lineHeight: 1.6 }}>
                   Findings show up here once you&apos;ve sent enough messages to see a pattern in who replies — approve a few
                   drafts in Today or Queue to get started.
@@ -218,7 +218,7 @@ export default function FindingsPage() {
                 {findings.map((f, i) => (
                   <div key={f._id} style={{ border: "1px solid var(--border)", borderRadius: 16, padding: 24, display: "flex", flexDirection: "column", gap: 10, background: i < 3 ? "var(--card)" : "var(--card-alt)" }}>
                     <span style={{ fontSize: 12.5, color: i < 3 ? "var(--ember)" : "var(--muted)", fontWeight: 700, letterSpacing: ".08em", textTransform: "uppercase" }}>{f.tag}</span>
-                    <span style={{ fontFamily: "var(--font-outfit)", fontWeight: 700, fontSize: 21, lineHeight: 1.3, letterSpacing: "-.02em" }}>{f.headline}</span>
+                    <span style={{ fontFamily: "var(--font-display)", fontWeight: 700, fontSize: 21, lineHeight: 1.3, letterSpacing: "-.02em" }}>{f.headline}</span>
                     <span style={{ fontSize: 15, color: "var(--muted)", lineHeight: 1.6 }}>{f.body}</span>
                   </div>
                 ))}
@@ -233,7 +233,7 @@ export default function FindingsPage() {
                 { v: String(stats.callsBooked), l: `Calls booked from ${stats.repliedTotal} replies` },
               ].map((s) => (
                 <div key={s.l} style={{ border: "1px solid var(--border)", borderRadius: 14, padding: "18px 20px", display: "flex", flexDirection: "column", gap: 4, background: "var(--card)" }}>
-                  <span style={{ fontFamily: "var(--font-outfit)", fontWeight: 800, fontSize: 28, letterSpacing: "-.02em", fontVariantNumeric: "tabular-nums" }}>{s.v}</span>
+                  <span style={{ fontFamily: "var(--font-display)", fontWeight: 800, fontSize: 28, letterSpacing: "-.02em", fontVariantNumeric: "tabular-nums" }}>{s.v}</span>
                   <span style={{ fontSize: 13, color: "var(--muted)" }}>{s.l}</span>
                 </div>
               ))}

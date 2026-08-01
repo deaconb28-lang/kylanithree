@@ -32,7 +32,7 @@ export default function Pricing() {
   return (
     <div id="pricing" style={{ padding: "96px 5vw", display: "flex", flexDirection: "column", gap: 44, background: "var(--card-alt)", borderTop: "1px solid var(--border)" }}>
       <div style={{ display: "flex", alignItems: "flex-end", justifyContent: "space-between", gap: 40, flexWrap: "wrap" }}>
-        <h2 style={{ fontFamily: "var(--font-outfit)", fontWeight: 800, fontSize: "clamp(28px,4vw,42px)", lineHeight: 1.05, letterSpacing: "-.03em", margin: 0 }}>
+        <h2 style={{ fontFamily: "var(--font-display)", fontWeight: 800, fontSize: "clamp(28px,4vw,42px)", lineHeight: 1.05, letterSpacing: "-.03em", margin: 0 }}>
           Priced per hundred, not per seat.
         </h2>
         <p style={{ margin: 0, fontSize: 15.5, color: "var(--muted)", maxWidth: "34ch" }}>
@@ -56,10 +56,10 @@ export default function Pricing() {
           >
             <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
               <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                <span style={{ fontFamily: "var(--font-outfit)", fontWeight: 700, fontSize: 19 }}>{t.name}</span>
+                <span style={{ fontFamily: "var(--font-display)", fontWeight: 700, fontSize: 19 }}>{t.name}</span>
                 {t.badge && <span style={{ fontSize: 12, fontWeight: 600, color: "var(--ember)", background: "var(--ember-tint)", padding: "3px 8px", borderRadius: 999 }}>{t.badge}</span>}
               </div>
-              <span style={{ fontFamily: "var(--font-outfit)", fontWeight: 800, fontSize: 40, letterSpacing: "-.03em" }}>
+              <span style={{ fontFamily: "var(--font-display)", fontWeight: 800, fontSize: 40, letterSpacing: "-.03em" }}>
                 {t.price}
                 {t.per && <span style={{ fontSize: 17, fontWeight: 500, color: "var(--muted)" }}>{t.per}</span>}
               </span>

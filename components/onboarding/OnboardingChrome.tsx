@@ -26,7 +26,7 @@ export default function OnboardingChrome({
       )}
       <Link href="/" style={{ position: "absolute", top: 26, left: 32, display: "flex", alignItems: "center", gap: 8, zIndex: 20, color: "var(--ink)" }}>
         <KylaniLogo size={26} />
-        <span style={{ fontFamily: "var(--font-outfit)", fontWeight: 700, fontSize: 17 }}>Kylani</span>
+        <span style={{ fontFamily: "var(--font-display)", fontWeight: 700, fontSize: 17 }}>Kylani</span>
       </Link>
       <div
         className="ky-fade-in"

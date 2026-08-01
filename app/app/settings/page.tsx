@@ -81,7 +81,7 @@ export default function SettingsPage() {
     return (
       <DashboardShell active="settings">
         <div style={{ padding: "36px 5vw", display: "flex", flexDirection: "column", alignItems: "flex-start", gap: 14 }}>
-          <span style={{ fontFamily: "var(--font-outfit)", fontWeight: 700, fontSize: 18 }}>Couldn&apos;t load Settings.</span>
+          <span style={{ fontFamily: "var(--font-display)", fontWeight: 700, fontSize: 18 }}>Couldn&apos;t load Settings.</span>
           <span style={{ fontSize: 14.5, color: "var(--muted)" }}>{loadError}</span>
           <button className="ky-btn-ember" onClick={() => { setLoadError(null); setAttempt((a) => a + 1); }} style={{ padding: "11px 20px", fontSize: 14.5, border: "none" }}>
             Try again
@@ -103,7 +103,7 @@ export default function SettingsPage() {
     <DashboardShell active="settings">
       <div style={{ padding: "36px 5vw", boxSizing: "border-box", display: "flex", flexDirection: "column", gap: 28, maxWidth: 860, margin: "0 auto" }}>
         <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-          <h1 style={{ fontFamily: "var(--font-outfit)", fontWeight: 800, fontSize: "clamp(26px,3.2vw,34px)", letterSpacing: "-.03em", margin: 0 }}>
+          <h1 style={{ fontFamily: "var(--font-display)", fontWeight: 800, fontSize: "clamp(26px,3.2vw,34px)", letterSpacing: "-.03em", margin: 0 }}>
             Settings
           </h1>
           <span style={{ fontSize: 15, color: "var(--muted)" }}>{campaign.productName} · {campaign.productUrl} · campaign 1</span>
@@ -115,7 +115,7 @@ export default function SettingsPage() {
 
         <div style={{ border: "1px solid var(--border)", borderRadius: 16, padding: "22px 24px", display: "flex", alignItems: "center", justifyContent: "space-between", gap: 16, background: "var(--card)", flexWrap: "wrap" }}>
           <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
-            <span style={{ fontFamily: "var(--font-outfit)", fontWeight: 700, fontSize: 17 }}>Plan &amp; billing</span>
+            <span style={{ fontFamily: "var(--font-display)", fontWeight: 700, fontSize: 17 }}>Plan &amp; billing</span>
             <span style={{ fontSize: 14, color: "var(--muted)" }}>
               {campaign.subscription?.status === "active"
                 ? `${PLAN_COPY[campaign.subscription.plan].name}, billed ${campaign.subscription.interval}.`
@@ -134,7 +134,7 @@ export default function SettingsPage() {
         </div>
 
         <div style={{ border: "1px solid var(--border)", borderRadius: 16, padding: "22px 24px", display: "flex", flexDirection: "column", gap: 14, background: "var(--card)" }}>
-          <span style={{ fontFamily: "var(--font-outfit)", fontWeight: 700, fontSize: 17 }}>Sending inbox</span>
+          <span style={{ fontFamily: "var(--font-display)", fontWeight: 700, fontSize: 17 }}>Sending inbox</span>
           <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
             <span style={{ width: 30, height: 30, borderRadius: 8, background: "linear-gradient(135deg, #EA4335, #FBBC04)", flexShrink: 0 }} />
             <div style={{ display: "flex", flexDirection: "column" }}>
@@ -164,12 +164,12 @@ export default function SettingsPage() {
         </div>
 
         <div style={{ border: "1px solid var(--border)", borderRadius: 16, padding: "22px 24px", display: "flex", flexDirection: "column", gap: 14, background: "var(--card)" }}>
-          <span style={{ fontFamily: "var(--font-outfit)", fontWeight: 700, fontSize: 17 }}>Payments</span>
+          <span style={{ fontFamily: "var(--font-display)", fontWeight: 700, fontSize: 17 }}>Payments</span>
           <p style={{ margin: 0, fontSize: 14.5, color: "var(--muted)", lineHeight: 1.5 }}>
             Connect Stripe so Map shows your real revenue and reply-to-close numbers instead of an estimate.
           </p>
           <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
-            <span style={{ width: 30, height: 30, borderRadius: 8, background: "#635BFF", display: "grid", placeItems: "center", color: "#fff", fontWeight: 800, fontFamily: "var(--font-outfit)", fontSize: 14, flexShrink: 0 }}>
+            <span style={{ width: 30, height: 30, borderRadius: 8, background: "#635BFF", display: "grid", placeItems: "center", color: "#fff", fontWeight: 800, fontFamily: "var(--font-display)", fontSize: 14, flexShrink: 0 }}>
               S
             </span>
             <div style={{ display: "flex", flexDirection: "column" }}>
@@ -202,7 +202,7 @@ export default function SettingsPage() {
         </div>
 
         <div style={{ border: "1px solid var(--border)", borderRadius: 16, padding: "22px 24px", display: "flex", flexDirection: "column", gap: 14, background: "var(--card)" }}>
-          <span style={{ fontFamily: "var(--font-outfit)", fontWeight: 700, fontSize: 17 }}>Daily send cap</span>
+          <span style={{ fontFamily: "var(--font-display)", fontWeight: 700, fontSize: 17 }}>Daily send cap</span>
           <p style={{ margin: 0, fontSize: 14.5, color: "var(--muted)", lineHeight: 1.5 }}>
             Kylani will never send more than this many messages a day, no matter how many drafts are approved.
           </p>
@@ -218,7 +218,7 @@ export default function SettingsPage() {
               onTouchEnd={(e) => patchCampaign({ dailyCap: Number((e.target as HTMLInputElement).value) })}
               style={{ flex: 1, accentColor: "var(--ember)" }}
             />
-            <span style={{ fontFamily: "var(--font-outfit)", fontWeight: 700, fontSize: 18, width: 70, textAlign: "right" }}>{campaign.dailyCap}/day</span>
+            <span style={{ fontFamily: "var(--font-display)", fontWeight: 700, fontSize: 18, width: 70, textAlign: "right" }}>{campaign.dailyCap}/day</span>
           </div>
           {campaign.subscription?.status !== "active" && (
             <span style={{ fontSize: 12.5, color: "var(--muted)" }}>Founder plans can go up to {DAILY_CAP_MAX.founder}/day.</span>
@@ -230,7 +230,7 @@ export default function SettingsPage() {
           style={{ border: "1px solid var(--border)", borderRadius: 16, padding: "22px 24px", display: "flex", alignItems: "center", justifyContent: "space-between", gap: 16, background: "var(--card)", textDecoration: "none", flexWrap: "wrap" }}
         >
           <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
-            <span style={{ fontFamily: "var(--font-outfit)", fontWeight: 700, fontSize: 17, color: "var(--ink)" }}>Channels</span>
+            <span style={{ fontFamily: "var(--font-display)", fontWeight: 700, fontSize: 17, color: "var(--ink)" }}>Channels</span>
             <span style={{ fontSize: 14, color: "var(--muted)" }}>Where Kylani looks, and how it behaves once it&apos;s there.</span>
           </div>
           <span style={{ fontSize: 14, fontWeight: 600, color: "var(--ink)", whiteSpace: "nowrap" }}>Manage channels →</span>
@@ -238,7 +238,7 @@ export default function SettingsPage() {
 
         <div style={{ border: `1px solid ${campaign.paused ? "var(--border)" : "var(--attention-border)"}`, borderRadius: 16, padding: "22px 24px", display: "flex", alignItems: "center", justifyContent: "space-between", gap: 20, flexWrap: "wrap", background: campaign.paused ? "var(--card-alt)" : "var(--card)" }}>
           <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
-            <span style={{ fontFamily: "var(--font-outfit)", fontWeight: 700, fontSize: 17 }}>{campaign.paused ? "Campaign paused" : "Pause this campaign"}</span>
+            <span style={{ fontFamily: "var(--font-display)", fontWeight: 700, fontSize: 17 }}>{campaign.paused ? "Campaign paused" : "Pause this campaign"}</span>
             <span style={{ fontSize: 14, color: "var(--muted)" }}>
               {campaign.paused ? "No new messages will send. Your findings and history are kept." : "Stops all sending immediately. You can resume any time."}
             </span>

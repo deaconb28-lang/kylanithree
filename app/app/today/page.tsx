@@ -119,7 +119,7 @@ export default function TodayPage() {
     return (
       <DashboardShell active="today" bottom={sidebarBottom}>
         <div style={{ padding: "36px 5vw", display: "flex", flexDirection: "column", alignItems: "flex-start", gap: 14 }}>
-          <span style={{ fontFamily: "var(--font-outfit)", fontWeight: 700, fontSize: 18 }}>Couldn&apos;t load Today.</span>
+          <span style={{ fontFamily: "var(--font-display)", fontWeight: 700, fontSize: 18 }}>Couldn&apos;t load Today.</span>
           <span style={{ fontSize: 14.5, color: "var(--muted)" }}>{loadError}</span>
           <button className="ky-btn-ember" onClick={() => { setLoadError(null); setAttempt((a) => a + 1); }} style={{ padding: "11px 20px", fontSize: 14.5, border: "none" }}>
             Try again
@@ -170,7 +170,7 @@ export default function TodayPage() {
         <div style={{ position: "relative", display: "flex", flexWrap: "wrap", alignItems: "flex-end", justifyContent: "space-between", gap: 12 }}>
           <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
             <span style={{ fontSize: 14.5, color: "var(--muted)" }}>{today} · time-sensitive — posted in the last few hours</span>
-            <h1 style={{ fontFamily: "var(--font-outfit)", fontWeight: 800, fontSize: "clamp(26px, 3.2vw, 38px)", lineHeight: 1.05, letterSpacing: "-.03em", margin: 0 }}>
+            <h1 style={{ fontFamily: "var(--font-display)", fontWeight: 800, fontSize: "clamp(26px, 3.2vw, 38px)", lineHeight: 1.05, letterSpacing: "-.03em", margin: 0 }}>
               {done ? "You're caught up." : `${leads.length} people described your problem yesterday.`}
             </h1>
           </div>
@@ -179,7 +179,7 @@ export default function TodayPage() {
 
         {done ? (
           <div className="ky-fade-in" style={{ position: "relative", background: "var(--card)", border: "1px solid var(--border)", borderRadius: 18, padding: "40px 5vw", display: "flex", flexDirection: "column", gap: 12, textAlign: "center", alignItems: "center" }}>
-            <span style={{ fontFamily: "var(--font-outfit)", fontWeight: 700, fontSize: 22 }}>Nothing time-sensitive left today.</span>
+            <span style={{ fontFamily: "var(--font-display)", fontWeight: 700, fontSize: 22 }}>Nothing time-sensitive left today.</span>
             <p style={{ margin: 0, fontSize: 15, color: "var(--muted)", maxWidth: 480, lineHeight: 1.6 }}>
               {sentCount} of {leads.length} sent. The rest of the backlog is in Queue whenever you have a minute — no rush.
             </p>
@@ -205,7 +205,7 @@ export default function TodayPage() {
                 {initialsFor(lead.name)}
               </div>
               <div style={{ display: "flex", flexDirection: "column", gap: 3, flex: 1, minWidth: 200 }}>
-                <span style={{ fontFamily: "var(--font-outfit)", fontWeight: 700, fontSize: 21, letterSpacing: "-.02em" }}>{lead.name}</span>
+                <span style={{ fontFamily: "var(--font-display)", fontWeight: 700, fontSize: 21, letterSpacing: "-.02em" }}>{lead.name}</span>
                 <span style={{ fontSize: 14, color: "var(--muted)" }}>
                   {lead.role}, {lead.company} ·{" "}
                   {lead.sourceUrl ? (
@@ -231,7 +231,7 @@ export default function TodayPage() {
             )}
 
             <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-              <span style={{ fontFamily: "var(--font-outfit)", fontWeight: 700, fontSize: 15 }}>Your reply, drafted</span>
+              <span style={{ fontFamily: "var(--font-display)", fontWeight: 700, fontSize: 15 }}>Your reply, drafted</span>
               {editing ? (
                 <textarea
                   autoFocus

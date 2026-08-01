@@ -133,7 +133,7 @@ export default function DiscoverPage({ params }: { params: Promise<{ id: string 
         <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
           <Link href="/" style={{ display: "flex", alignItems: "center", gap: 8, color: "var(--ink)" }}>
             <KylaniLogo size={26} />
-            <span style={{ fontFamily: "var(--font-outfit)", fontWeight: 700, fontSize: 18 }}>Kylani</span>
+            <span style={{ fontFamily: "var(--font-display)", fontWeight: 700, fontSize: 18 }}>Kylani</span>
           </Link>
           {leads.length > 0 && (
             <Link
@@ -152,7 +152,7 @@ export default function DiscoverPage({ params }: { params: Promise<{ id: string 
 
         {searching ? (
           <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 28, textAlign: "center", padding: "clamp(8px,4vh,44px) 0 40px" }}>
-            <h1 style={{ fontFamily: "var(--font-outfit)", fontWeight: 800, fontSize: "clamp(26px,4vw,40px)", letterSpacing: "-.035em", margin: 0, maxWidth: "18ch" }}>
+            <h1 style={{ fontFamily: "var(--font-display)", fontWeight: 800, fontSize: "clamp(26px,4vw,40px)", letterSpacing: "-.035em", margin: 0, maxWidth: "18ch" }}>
               {done ? "Nobody's describing this problem right now." : "Looking for people describing this problem"}
             </h1>
 
@@ -219,7 +219,7 @@ export default function DiscoverPage({ params }: { params: Promise<{ id: string 
 
             <div style={{ display: "flex", flexDirection: "column", gap: 12, minWidth: 0 }}>
               <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", gap: 12, flexWrap: "wrap" }} aria-live="polite">
-                <h1 style={{ fontFamily: "var(--font-outfit)", fontWeight: 800, fontSize: "clamp(22px,3vw,30px)", letterSpacing: "-.03em", margin: 0 }}>
+                <h1 style={{ fontFamily: "var(--font-display)", fontWeight: 800, fontSize: "clamp(22px,3vw,30px)", letterSpacing: "-.03em", margin: 0 }}>
                   {leads.length} {leads.length === 1 ? "person" : "people"} describing this problem
                 </h1>
                 {working && <span style={{ fontSize: 13.5, color: "var(--muted)" }}>still finding more</span>}

@@ -67,7 +67,7 @@ function PlanCard({
       }}
     >
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10 }}>
-        <span style={{ fontFamily: "var(--font-outfit)", fontWeight: 800, fontSize: 20, letterSpacing: "-.02em" }}>{copy.name}</span>
+        <span style={{ fontFamily: "var(--font-display)", fontWeight: 800, fontSize: 20, letterSpacing: "-.02em" }}>{copy.name}</span>
         {isCurrent && (
           <span style={{ fontSize: 10.5, fontWeight: 700, color: "var(--green)", background: "var(--green-tint)", padding: "3px 8px", borderRadius: 999, letterSpacing: ".03em" }}>
             YOUR PLAN
@@ -157,7 +157,7 @@ function TrialInner() {
     return (
       <DashboardShell active="home">
         <div style={{ padding: "36px 5vw", display: "flex", flexDirection: "column", alignItems: "flex-start", gap: 14 }}>
-          <span style={{ fontFamily: "var(--font-outfit)", fontWeight: 700, fontSize: 18 }}>Couldn&apos;t load Trial.</span>
+          <span style={{ fontFamily: "var(--font-display)", fontWeight: 700, fontSize: 18 }}>Couldn&apos;t load Trial.</span>
           <span style={{ fontSize: 14.5, color: "var(--muted)" }}>{loadError}</span>
           <button className="ky-btn-ember" onClick={() => { setLoadError(null); setAttempt((a) => a + 1); }} style={{ padding: "11px 20px", fontSize: 14.5, border: "none" }}>
             Try again
@@ -195,7 +195,7 @@ function TrialInner() {
         />
 
         <div style={{ position: "relative", display: "flex", flexDirection: "column", gap: 12, maxWidth: 720 }}>
-          <h1 style={{ fontFamily: "var(--font-outfit)", fontWeight: 800, fontSize: "clamp(28px,4vw,40px)", lineHeight: 1.12, letterSpacing: "-.03em", margin: 0 }}>
+          <h1 style={{ fontFamily: "var(--font-display)", fontWeight: 800, fontSize: "clamp(28px,4vw,40px)", lineHeight: 1.12, letterSpacing: "-.03em", margin: 0 }}>
             {isActive ? `You're on ${PLAN_COPY[subscription!.plan].name}.` : `You're reaching real buyers with ${campaign.productName}.`}
           </h1>
           <p style={{ margin: 0, fontSize: 16, color: "var(--muted)", lineHeight: 1.6 }}>
@@ -221,7 +221,7 @@ function TrialInner() {
               <div style={{ width: 46, height: 46, borderRadius: 999, background: "var(--green)", display: "grid", placeItems: "center" }}>
                 <svg width="18" height="18" viewBox="0 0 18 18" fill="none" stroke="#fff" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M4.5 9.3l3 3 6-6.6" /></svg>
               </div>
-              <span style={{ fontFamily: "var(--font-outfit)", fontWeight: 700, fontSize: 15.5 }}>Setup ready</span>
+              <span style={{ fontFamily: "var(--font-display)", fontWeight: 700, fontSize: 15.5 }}>Setup ready</span>
               <span style={{ fontSize: 13.5, color: "var(--muted)", lineHeight: 1.5, maxWidth: 190 }}>Channels connected and your buyer profile confirmed.</span>
             </div>
             <div style={{ width: 60, height: 46, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
@@ -231,7 +231,7 @@ function TrialInner() {
               <div style={{ width: 46, height: 46, borderRadius: 999, background: "var(--ember)", display: "grid", placeItems: "center", boxShadow: "0 0 0 6px #FFF1E7" }}>
                 <svg width="18" height="18" viewBox="0 0 18 18" fill="none" stroke="#fff" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M9.7 2.3L4.6 9.7h3.9l-.8 6 5.7-8h-4.2z" /></svg>
               </div>
-              <span style={{ fontFamily: "var(--font-outfit)", fontWeight: 700, fontSize: 15.5 }}>Kylani goes to work</span>
+              <span style={{ fontFamily: "var(--font-display)", fontWeight: 700, fontSize: 15.5 }}>Kylani goes to work</span>
               <span style={{ fontSize: 13.5, color: "var(--muted)", lineHeight: 1.5, maxWidth: 210 }}>I find conversations and draft replies — you approve every one.</span>
             </div>
             <div style={{ width: 60, height: 46, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
@@ -241,7 +241,7 @@ function TrialInner() {
               <div style={{ width: 46, height: 46, borderRadius: 999, border: "1.5px solid var(--border-strong)", display: "grid", placeItems: "center" }}>
                 <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="var(--muted)" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"><path d="M8 1.6l1.6 3.5 3.8.4-2.8 2.6.8 3.8-3.4-1.9-3.4 1.9.8-3.8-2.8-2.6 3.8-.4z" /></svg>
               </div>
-              <span style={{ fontFamily: "var(--font-outfit)", fontWeight: 700, fontSize: 15.5, color: "var(--muted)" }}>
+              <span style={{ fontFamily: "var(--font-display)", fontWeight: 700, fontSize: 15.5, color: "var(--muted)" }}>
                 {daysLeft !== null && daysLeft > 0 ? `Trial ends in ${daysLeft} day${daysLeft === 1 ? "" : "s"}` : "Subscribe when ready"}
               </span>
               <span style={{ fontSize: 13.5, color: "var(--muted)", lineHeight: 1.5, maxWidth: 190 }}>

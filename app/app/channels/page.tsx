@@ -63,7 +63,7 @@ export default function ChannelsPage() {
     return (
       <DashboardShell active="channels">
         <div style={{ padding: "36px 5vw", display: "flex", flexDirection: "column", alignItems: "flex-start", gap: 14 }}>
-          <span style={{ fontFamily: "var(--font-outfit)", fontWeight: 700, fontSize: 18 }}>Couldn&apos;t load Channels.</span>
+          <span style={{ fontFamily: "var(--font-display)", fontWeight: 700, fontSize: 18 }}>Couldn&apos;t load Channels.</span>
           <span style={{ fontSize: 14.5, color: "var(--muted)" }}>{loadError}</span>
           <button className="ky-btn-ember" onClick={() => { setLoadError(null); setAttempt((a) => a + 1); }} style={{ padding: "11px 20px", fontSize: 14.5, border: "none" }}>
             Try again
@@ -86,7 +86,7 @@ export default function ChannelsPage() {
       <div style={{ padding: "36px 5vw", boxSizing: "border-box", display: "flex", flexDirection: "column", gap: 22, maxWidth: 900, margin: "0 auto" }}>
         <div style={{ display: "flex", alignItems: "flex-end", justifyContent: "space-between", gap: 24, flexWrap: "wrap" }}>
           <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-            <h1 style={{ fontFamily: "var(--font-outfit)", fontWeight: 800, fontSize: "clamp(26px,3.2vw,32px)", letterSpacing: "-.03em", margin: 0 }}>
+            <h1 style={{ fontFamily: "var(--font-display)", fontWeight: 800, fontSize: "clamp(26px,3.2vw,32px)", letterSpacing: "-.03em", margin: 0 }}>
               Where should I reach people?
             </h1>
             <p style={{ margin: 0, fontSize: 14.5, color: "var(--muted)", lineHeight: 1.5, maxWidth: 640 }}>
@@ -123,10 +123,10 @@ export default function ChannelsPage() {
                   color: disabled ? "var(--muted)" : "inherit",
                 }}
               >
-                <span style={{ width: 32, height: 32, borderRadius: 9, background: c.color, display: "grid", placeItems: "center", color: "#fff", fontWeight: 700, fontSize: 14, fontFamily: "var(--font-outfit)", flexShrink: 0 }}>
+                <span style={{ width: 32, height: 32, borderRadius: 9, background: c.color, display: "grid", placeItems: "center", color: "#fff", fontWeight: 700, fontSize: 14, fontFamily: "var(--font-display)", flexShrink: 0 }}>
                   {c.glyph}
                 </span>
-                <span style={{ fontFamily: "var(--font-outfit)", fontWeight: 700, fontSize: 15.5, width: 190, flexShrink: 0 }}>{c.name}</span>
+                <span style={{ fontFamily: "var(--font-display)", fontWeight: 700, fontSize: 15.5, width: 190, flexShrink: 0 }}>{c.name}</span>
                 <span style={{ fontSize: 13.5, color: "var(--muted)", flex: 1, minWidth: 160 }}>{disabled ? "Not matched yet" : c.desc}</span>
                 {disabled ? (
                   <span style={{ fontSize: 12, fontWeight: 600, color: "var(--muted)", whiteSpace: "nowrap" }}>Add once matched</span>

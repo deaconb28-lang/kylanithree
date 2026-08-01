@@ -65,7 +65,7 @@ function SignInInner() {
       <div style={{ position: "relative", width: "100%", maxWidth: 420, display: "flex", flexDirection: "column", gap: 24 }}>
         <Link href="/" style={{ display: "flex", alignItems: "center", gap: 9, alignSelf: "center", color: "var(--ink)" }}>
           <KylaniLogo size={30} />
-          <span style={{ fontFamily: "var(--font-outfit)", fontWeight: 700, fontSize: 20, letterSpacing: "-.01em" }}>Kylani</span>
+          <span style={{ fontFamily: "var(--font-display)", fontWeight: 700, fontSize: 20, letterSpacing: "-.01em" }}>Kylani</span>
         </Link>
 
         <div
@@ -81,7 +81,7 @@ function SignInInner() {
           }}
         >
           <div style={{ display: "flex", flexDirection: "column", gap: 7, textAlign: "center" }}>
-            <h1 style={{ fontFamily: "var(--font-outfit)", fontWeight: 800, fontSize: 25, letterSpacing: "-.03em", margin: 0 }}>
+            <h1 style={{ fontFamily: "var(--font-display)", fontWeight: 800, fontSize: 25, letterSpacing: "-.03em", margin: 0 }}>
               Sign in to Kylani
             </h1>
             <p style={{ margin: 0, fontSize: 14.5, color: "var(--muted)", lineHeight: 1.55 }}>

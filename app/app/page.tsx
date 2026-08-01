@@ -106,7 +106,7 @@ export default function HomePage() {
     return (
       <DashboardShell active="home">
         <div style={{ padding: "36px 5vw", display: "flex", flexDirection: "column", alignItems: "flex-start", gap: 14 }}>
-          <span style={{ fontFamily: "var(--font-outfit)", fontWeight: 700, fontSize: 18 }}>Couldn&apos;t load Home.</span>
+          <span style={{ fontFamily: "var(--font-display)", fontWeight: 700, fontSize: 18 }}>Couldn&apos;t load Home.</span>
           <span style={{ fontSize: 14.5, color: "var(--muted)" }}>{loadError}</span>
           <button className="ky-btn-ember" onClick={() => { setLoadError(null); setAttempt((a) => a + 1); }} style={{ padding: "11px 20px", fontSize: 14.5, border: "none" }}>
             Try again
@@ -173,7 +173,7 @@ export default function HomePage() {
         <div style={{ display: "flex", alignItems: "flex-end", justifyContent: "space-between", gap: 16, flexWrap: "wrap" }}>
           <div style={{ display: "flex", flexDirection: "column", gap: 5, minWidth: 0 }}>
             <span style={{ fontSize: 13, color: "var(--muted)" }}>{campaign.productUrl}</span>
-            <h1 style={{ fontFamily: "var(--font-outfit)", fontWeight: 800, fontSize: "clamp(24px,3vw,32px)", lineHeight: 1.08, letterSpacing: "-.03em", margin: 0 }}>
+            <h1 style={{ fontFamily: "var(--font-display)", fontWeight: 800, fontSize: "clamp(24px,3vw,32px)", lineHeight: 1.08, letterSpacing: "-.03em", margin: 0 }}>
               {campaign.productName}
             </h1>
             {campaign.whatYouSell && (
@@ -218,7 +218,7 @@ export default function HomePage() {
             >
               <span
                 style={{
-                  fontFamily: "var(--font-outfit)",
+                  fontFamily: "var(--font-display)",
                   fontWeight: 800,
                   fontSize: 26,
                   letterSpacing: "-.03em",
@@ -235,7 +235,7 @@ export default function HomePage() {
 
         <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
           <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", gap: 16, flexWrap: "wrap" }}>
-            <h2 style={{ fontFamily: "var(--font-outfit)", fontWeight: 700, fontSize: 19, letterSpacing: "-.02em", margin: 0 }}>
+            <h2 style={{ fontFamily: "var(--font-display)", fontWeight: 700, fontSize: 19, letterSpacing: "-.02em", margin: 0 }}>
               Who Kylani thinks buys this
             </h2>
             <span style={{ fontSize: 13, color: "var(--muted)" }}>
@@ -252,7 +252,7 @@ export default function HomePage() {
             </div>
           ) : (
             <div style={{ background: "var(--card)", border: "1px solid var(--border)", borderRadius: 16, padding: "26px 24px", display: "flex", flexDirection: "column", gap: 8 }}>
-              <span style={{ fontFamily: "var(--font-outfit)", fontWeight: 700, fontSize: 16 }}>No buyers named yet.</span>
+              <span style={{ fontFamily: "var(--font-display)", fontWeight: 700, fontSize: 16 }}>No buyers named yet.</span>
               <span style={{ fontSize: 14, color: "var(--muted)", lineHeight: 1.55 }}>
                 Run a search and Kylani will propose two to four buyer hypotheses, then go looking for real people
                 matching each one.
@@ -269,7 +269,7 @@ export default function HomePage() {
 
           <div style={{ background: "var(--card)", border: "1px solid var(--border)", borderRadius: 16, padding: "20px 22px", display: "flex", flexDirection: "column", gap: 14, minWidth: 0 }}>
             <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", gap: 12 }}>
-              <span style={{ fontFamily: "var(--font-outfit)", fontWeight: 700, fontSize: 16, letterSpacing: "-.02em" }}>Waiting on you</span>
+              <span style={{ fontFamily: "var(--font-display)", fontWeight: 700, fontSize: 16, letterSpacing: "-.02em" }}>Waiting on you</span>
               <span style={{ fontSize: 13, color: "var(--muted)" }}>{waiting.length} to review</span>
             </div>
             {topWaiting.length > 0 ? (
@@ -315,7 +315,7 @@ export default function HomePage() {
 
           <div style={{ background: "var(--card)", border: "1px solid var(--border)", borderRadius: 16, padding: "20px 22px", display: "flex", flexDirection: "column", gap: 12, minWidth: 0 }}>
             <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", gap: 12 }}>
-              <span style={{ fontFamily: "var(--font-outfit)", fontWeight: 700, fontSize: 16, letterSpacing: "-.02em" }}>Where they are</span>
+              <span style={{ fontFamily: "var(--font-display)", fontWeight: 700, fontSize: 16, letterSpacing: "-.02em" }}>Where they are</span>
               <Link href="/app/map" style={{ fontSize: 13, color: "var(--ember)", fontWeight: 700, textDecoration: "none" }}>
                 Map →
               </Link>
@@ -336,11 +336,11 @@ export default function HomePage() {
           </div>
 
           <div style={{ background: "var(--card)", border: "1px solid var(--border)", borderRadius: 16, padding: "20px 22px", display: "flex", flexDirection: "column", gap: 12, minWidth: 0 }}>
-            <span style={{ fontFamily: "var(--font-outfit)", fontWeight: 700, fontSize: 16, letterSpacing: "-.02em" }}>What Kylani has learnt</span>
+            <span style={{ fontFamily: "var(--font-display)", fontWeight: 700, fontSize: 16, letterSpacing: "-.02em" }}>What Kylani has learnt</span>
             {latestFinding ? (
               <>
                 <span style={{ fontSize: 11.5, fontWeight: 700, letterSpacing: ".08em", color: "var(--ember)" }}>{latestFinding.tag.toUpperCase()}</span>
-                <span style={{ fontFamily: "var(--font-outfit)", fontWeight: 700, fontSize: 16.5, lineHeight: 1.3, letterSpacing: "-.02em" }}>{latestFinding.headline}</span>
+                <span style={{ fontFamily: "var(--font-display)", fontWeight: 700, fontSize: 16.5, lineHeight: 1.3, letterSpacing: "-.02em" }}>{latestFinding.headline}</span>
                 <span style={{ fontSize: 13.5, color: "var(--muted)", lineHeight: 1.55 }}>{latestFinding.body}</span>
                 <Link href="/app/findings" style={{ fontSize: 13, fontWeight: 700, color: "var(--ember)", textDecoration: "none", marginTop: "auto" }}>
                   All findings →

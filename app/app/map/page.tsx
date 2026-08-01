@@ -113,7 +113,7 @@ export default function MapPage() {
     return (
       <DashboardShell active="map">
         <div style={{ padding: "36px 5vw", display: "flex", flexDirection: "column", alignItems: "flex-start", gap: 14 }}>
-          <span style={{ fontFamily: "var(--font-outfit)", fontWeight: 700, fontSize: 18 }}>Couldn&apos;t load Map.</span>
+          <span style={{ fontFamily: "var(--font-display)", fontWeight: 700, fontSize: 18 }}>Couldn&apos;t load Map.</span>
           <span style={{ fontSize: 14.5, color: "var(--muted)" }}>{loadError}</span>
           <button className="ky-btn-ember" onClick={() => { setLoadError(null); setAttempt((a) => a + 1); }} style={{ padding: "11px 20px", fontSize: 14.5, border: "none" }}>
             Try again
@@ -149,7 +149,7 @@ export default function MapPage() {
       <div style={{ padding: "36px 5vw", boxSizing: "border-box", display: "flex", flexDirection: "column", gap: 24, overflow: "hidden", maxWidth: 1220, margin: "0 auto" }}>
         <div style={{ display: "flex", alignItems: "flex-end", justifyContent: "space-between", gap: 20, flexWrap: "wrap" }}>
           <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-            <h1 style={{ fontFamily: "var(--font-outfit)", fontWeight: 800, fontSize: "clamp(24px,3vw,34px)", letterSpacing: "-.03em", margin: 0 }}>
+            <h1 style={{ fontFamily: "var(--font-display)", fontWeight: 800, fontSize: "clamp(24px,3vw,34px)", letterSpacing: "-.03em", margin: 0 }}>
               Every community, ranked by who actually replies.
             </h1>
             <span style={{ fontSize: 15, color: "var(--muted)" }}>
@@ -209,7 +209,7 @@ export default function MapPage() {
                   }}
                 >
                   <div style={{ display: "flex", flexDirection: "column", gap: 2, width: 200, flexShrink: 0 }}>
-                    <span style={{ fontFamily: "var(--font-outfit)", fontWeight: 700, fontSize: 15 }}>{c.name}</span>
+                    <span style={{ fontFamily: "var(--font-display)", fontWeight: 700, fontSize: 15 }}>{c.name}</span>
                     <span style={{ fontSize: 12.5, color: "var(--muted)" }}>{c.role}</span>
                   </div>
                   <span style={{ flex: 1, minWidth: 120, fontSize: 13.5, color: "var(--muted)" }}>{c.company}</span>
@@ -259,12 +259,12 @@ export default function MapPage() {
                     }}
                   >
                     <div style={{ display: "flex", flexDirection: "column", color: paused ? "var(--muted)" : "var(--ink)" }}>
-                      <span style={{ fontFamily: "var(--font-outfit)", fontWeight: 800, fontSize: 24, letterSpacing: "-.03em" }}>{h.rate}</span>
+                      <span style={{ fontFamily: "var(--font-display)", fontWeight: 800, fontSize: 24, letterSpacing: "-.03em" }}>{h.rate}</span>
                       <span style={{ fontSize: 12, color: "var(--muted)" }}>reply rate</span>
                     </div>
                     <div style={{ display: "flex", flexDirection: "column", gap: 3, flex: 1, minWidth: 0 }}>
                       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8 }}>
-                        <span style={{ fontFamily: "var(--font-outfit)", fontWeight: 700, fontSize: 15.5, letterSpacing: "-.01em", color: paused ? "var(--muted)" : "var(--ink)" }}>{h.name}</span>
+                        <span style={{ fontFamily: "var(--font-display)", fontWeight: 700, fontSize: 15.5, letterSpacing: "-.01em", color: paused ? "var(--muted)" : "var(--ink)" }}>{h.name}</span>
                         <span
                           style={{
                             fontSize: 11,
@@ -336,7 +336,7 @@ export default function MapPage() {
                     >
                       <span style={{ width: 9, height: 9, borderRadius: 999, flexShrink: 0, background: n.dotFill, border: n.dotBorder }} />
                       <div style={{ display: "flex", flexDirection: "column", gap: 2, width: 180, flexShrink: 0 }}>
-                        <span style={{ fontFamily: "var(--font-outfit)", fontWeight: 700, fontSize: 15, letterSpacing: "-.01em", color: n.textColor }}>
+                        <span style={{ fontFamily: "var(--font-display)", fontWeight: 700, fontSize: 15, letterSpacing: "-.01em", color: n.textColor }}>
                           {n.mapLabel1} {n.mapLabel2}
                         </span>
                         <span style={{ fontSize: 12.5, color: "var(--muted)" }}>{n.members}</span>
@@ -367,7 +367,7 @@ export default function MapPage() {
                 {active ? (
                   <div style={{ border: "1px solid var(--border)", borderRadius: 16, padding: 20, display: "flex", flexDirection: "column", gap: 12, background: "var(--card)" }}>
                     <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10 }}>
-                      <span style={{ fontFamily: "var(--font-outfit)", fontWeight: 700, fontSize: 18, letterSpacing: "-.02em" }}>{active.name}</span>
+                      <span style={{ fontFamily: "var(--font-display)", fontWeight: 700, fontSize: 18, letterSpacing: "-.02em" }}>{active.name}</span>
                       <span style={{ fontSize: 11.5, fontWeight: 700, color: "var(--muted)", background: "var(--active-bg)", padding: "4px 9px", borderRadius: 999 }}>{active.fit}</span>
                     </div>
                     <div style={{ display: "flex", gap: 16, fontSize: 13.5, color: "var(--muted)", flexWrap: "wrap" }}>
@@ -407,7 +407,7 @@ export default function MapPage() {
                       <span style={{ width: 7, height: 7, borderRadius: 999, background: "var(--green)", animation: "kyPulse 2s ease-in-out infinite" }} />
                       <span style={{ fontSize: 12, letterSpacing: ".08em", textTransform: "uppercase", color: "var(--muted)", fontWeight: 700 }}>Real revenue · via Stripe</span>
                     </div>
-                    <span style={{ fontFamily: "var(--font-outfit)", fontWeight: 800, fontSize: 34, letterSpacing: "-.035em", fontVariantNumeric: "tabular-nums", lineHeight: 1 }}>
+                    <span style={{ fontFamily: "var(--font-display)", fontWeight: 800, fontSize: 34, letterSpacing: "-.035em", fontVariantNumeric: "tabular-nums", lineHeight: 1 }}>
                       {formatCents(stripeSummary.availableCents, stripeSummary.currency)}
                     </span>
                     <div style={{ display: "flex", flexDirection: "column", gap: 7, fontSize: 13.5, color: "var(--muted)" }}>

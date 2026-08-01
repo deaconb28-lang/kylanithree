@@ -71,7 +71,7 @@ export default function ProcessSteps() {
   return (
     <div style={{ padding: "96px 5vw", display: "flex", flexDirection: "column", gap: 48, borderTop: "1px solid var(--border)" }}>
       <div style={{ display: "flex", flexDirection: "column", gap: 14, maxWidth: 700 }}>
-        <h2 style={{ fontFamily: "var(--font-outfit)", fontWeight: 800, fontSize: "clamp(28px,4vw,42px)", lineHeight: 1.05, letterSpacing: "-.03em", margin: 0 }}>
+        <h2 style={{ fontFamily: "var(--font-display)", fontWeight: 800, fontSize: "clamp(28px,4vw,42px)", lineHeight: 1.05, letterSpacing: "-.03em", margin: 0 }}>
           Paste a URL. Four things happen.
         </h2>
         <p style={{ margin: 0, fontSize: 18, lineHeight: 1.6, color: "var(--muted)" }}>
@@ -104,7 +104,7 @@ export default function ProcessSteps() {
                 color: c.dark ? "#fff" : "var(--card)",
                 display: "grid",
                 placeItems: "center",
-                fontFamily: "var(--font-outfit)",
+                fontFamily: "var(--font-display)",
                 fontWeight: 800,
                 fontSize: 16,
               }}
@@ -112,7 +112,7 @@ export default function ProcessSteps() {
               {c.n}
             </span>
             <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-              <span style={{ fontFamily: "var(--font-outfit)", fontWeight: 700, fontSize: 20, letterSpacing: "-.02em", color: c.dark ? "var(--card)" : "inherit" }}>{c.title}</span>
+              <span style={{ fontFamily: "var(--font-display)", fontWeight: 700, fontSize: 20, letterSpacing: "-.02em", color: c.dark ? "var(--card)" : "inherit" }}>{c.title}</span>
               <p style={{ margin: 0, fontSize: 14.5, lineHeight: 1.6, color: c.dark ? "var(--on-ink-muted)" : "var(--muted)" }}>{c.body}</p>
             </div>
             {c.artifact}
@@ -127,20 +127,20 @@ export default function ProcessSteps() {
       </div>
 
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 24, border: "1px solid var(--border)", borderRadius: 16, padding: "24px 5vw", background: "var(--card)", flexWrap: "wrap" }}>
-        <span style={{ fontFamily: "var(--font-outfit)", fontWeight: 700, fontSize: 19, letterSpacing: "-.02em", maxWidth: "40ch" }}>
+        <span style={{ fontFamily: "var(--font-display)", fontWeight: 700, fontSize: 19, letterSpacing: "-.02em", maxWidth: "40ch" }}>
           One URL in. This is what typically comes out the other end.
         </span>
         <div style={{ display: "flex", gap: 32, flexWrap: "wrap" }}>
           <div style={{ display: "flex", flexDirection: "column" }}>
-            <span style={{ fontFamily: "var(--font-outfit)", fontWeight: 800, fontSize: 30, letterSpacing: "-.03em" }}>104</span>
+            <span style={{ fontFamily: "var(--font-display)", fontWeight: 800, fontSize: 30, letterSpacing: "-.03em" }}>104</span>
             <span style={{ fontSize: 13, color: "var(--muted)" }}>buyers found</span>
           </div>
           <div style={{ display: "flex", flexDirection: "column" }}>
-            <span style={{ fontFamily: "var(--font-outfit)", fontWeight: 800, fontSize: 30, letterSpacing: "-.03em" }}>41</span>
+            <span style={{ fontFamily: "var(--font-display)", fontWeight: 800, fontSize: 30, letterSpacing: "-.03em" }}>41</span>
             <span style={{ fontSize: 13, color: "var(--muted)" }}>contacted, week one</span>
           </div>
           <div style={{ display: "flex", flexDirection: "column" }}>
-            <span style={{ fontFamily: "var(--font-outfit)", fontWeight: 800, fontSize: 30, letterSpacing: "-.03em", color: "var(--green)" }}>$18.4k</span>
+            <span style={{ fontFamily: "var(--font-display)", fontWeight: 800, fontSize: 30, letterSpacing: "-.03em", color: "var(--green)" }}>$18.4k</span>
             <span style={{ fontSize: 13, color: "var(--muted)" }}>pipeline attributed</span>
           </div>
         </div>

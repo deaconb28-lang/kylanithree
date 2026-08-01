@@ -97,7 +97,7 @@ function QueueInner() {
     return (
       <DashboardShell active="queue" bottom={sidebarBottom}>
         <div style={{ padding: "36px 5vw", display: "flex", flexDirection: "column", alignItems: "flex-start", gap: 14 }}>
-          <span style={{ fontFamily: "var(--font-outfit)", fontWeight: 700, fontSize: 18 }}>Couldn&apos;t load Queue.</span>
+          <span style={{ fontFamily: "var(--font-display)", fontWeight: 700, fontSize: 18 }}>Couldn&apos;t load Queue.</span>
           <span style={{ fontSize: 14.5, color: "var(--muted)" }}>{loadError}</span>
           <button className="ky-btn-ember" onClick={() => { setLoadError(null); setAttempt((a) => a + 1); }} style={{ padding: "11px 20px", fontSize: 14.5, border: "none" }}>
             Try again
@@ -120,7 +120,7 @@ function QueueInner() {
       <DashboardShell active="queue" bottom={sidebarBottom}>
         <div style={{ padding: "36px 5vw", display: "flex", flexDirection: "column", alignItems: "flex-start", gap: 16, maxWidth: 560 }}>
           <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-            <span style={{ fontFamily: "var(--font-outfit)", fontWeight: 700, fontSize: 20 }}>Nothing in Queue yet.</span>
+            <span style={{ fontFamily: "var(--font-display)", fontWeight: 700, fontSize: 20 }}>Nothing in Queue yet.</span>
             <p style={{ margin: 0, fontSize: 15, color: "var(--muted)", lineHeight: 1.6 }}>
               Every lead here came from a real search — if it hasn&apos;t found anyone yet, there&apos;s nothing to pad the
               list with. Check Today for anything time-sensitive, or run the search again.
@@ -229,7 +229,7 @@ function QueueInner() {
 
         <div className="queue-list" style={{ borderRight: "1px solid var(--border)", display: "flex", flexDirection: "column", overflow: "hidden" }}>
           <div style={{ padding: "26px 26px 18px", display: "flex", flexDirection: "column", gap: 14, borderBottom: "1px solid var(--border)" }}>
-            <h1 style={{ fontFamily: "var(--font-outfit)", fontWeight: 800, fontSize: 26, letterSpacing: "-.03em", margin: 0 }}>
+            <h1 style={{ fontFamily: "var(--font-display)", fontWeight: 800, fontSize: 26, letterSpacing: "-.03em", margin: 0 }}>
               {leads.length} {leads.length === 1 ? "person" : "people"} worth talking to
             </h1>
             <span style={{ fontSize: 14.5, color: "var(--muted)", lineHeight: 1.5 }}>
@@ -321,7 +321,7 @@ function QueueInner() {
           <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 20, flexWrap: "wrap" }}>
             <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
               <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
-                <span style={{ fontFamily: "var(--font-outfit)", fontWeight: 700, fontSize: 24, letterSpacing: "-.02em" }}>{lead.name}</span>
+                <span style={{ fontFamily: "var(--font-display)", fontWeight: 700, fontSize: 24, letterSpacing: "-.02em" }}>{lead.name}</span>
                 {typeof lead.scoreTotal === "number" && (
                   <LeadStars
                     size={16}

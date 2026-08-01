@@ -90,7 +90,7 @@ export default function SegmentCard({ segment }: { segment: Segment }) {
       <div style={{ display: "flex", alignItems: "flex-start", gap: 14 }}>
         <div style={{ display: "flex", flexDirection: "column", gap: 6, flex: 1, minWidth: 0 }}>
           <div style={{ display: "flex", alignItems: "center", gap: 9, flexWrap: "wrap" }}>
-            <span style={{ fontFamily: "var(--font-outfit)", fontWeight: 700, fontSize: 18, letterSpacing: "-.02em" }}>{segment.name}</span>
+            <span style={{ fontFamily: "var(--font-display)", fontWeight: 700, fontSize: 18, letterSpacing: "-.02em" }}>{segment.name}</span>
             <span style={{ fontSize: 11.5, fontWeight: 700, color: status.color, background: status.bg, padding: "3px 9px", borderRadius: 999, whiteSpace: "nowrap" }}>
               {status.label}
             </span>

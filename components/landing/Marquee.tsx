@@ -37,7 +37,7 @@ export default function Marquee() {
   return (
     <div style={{ padding: "96px 0", display: "flex", flexDirection: "column", gap: 48, borderTop: "1px solid var(--border)", overflow: "hidden" }}>
       <div style={{ padding: "0 5vw", display: "flex", flexDirection: "column", gap: 10, maxWidth: 620 }}>
-        <h2 style={{ fontFamily: "var(--font-outfit)", fontWeight: 800, fontSize: "clamp(28px,4vw,42px)", lineHeight: 1.05, letterSpacing: "-.03em", margin: 0 }}>
+        <h2 style={{ fontFamily: "var(--font-display)", fontWeight: 800, fontSize: "clamp(28px,4vw,42px)", lineHeight: 1.05, letterSpacing: "-.03em", margin: 0 }}>
           Real founders use Kylani.
         </h2>
         <p style={{ margin: 0, fontSize: 17, color: "var(--muted)" }}>A hundred small bets, sent this week, by people building things.</p>

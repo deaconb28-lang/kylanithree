@@ -13,7 +13,7 @@ export default function StepUrl({ onSubmit }: { onSubmit: (url: string) => void 
   return (
     <OnboardingChrome>
       <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 30, maxWidth: 680, textAlign: "center" }}>
-        <h1 style={{ fontFamily: "var(--font-outfit)", fontWeight: 800, fontSize: "clamp(32px,5vw,52px)", lineHeight: 1.02, letterSpacing: "-.035em", margin: 0 }}>
+        <h1 style={{ fontFamily: "var(--font-display)", fontWeight: 800, fontSize: "clamp(32px,5vw,52px)", lineHeight: 1.02, letterSpacing: "-.035em", margin: 0 }}>
           Where does your product <span style={{ color: "var(--ember)" }}>live</span>?
         </h1>
         <p style={{ margin: 0, fontSize: 18, color: "var(--muted-strong)", lineHeight: 1.55 }}>
