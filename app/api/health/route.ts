@@ -27,6 +27,11 @@ export async function GET(req: NextRequest) {
     AUTH_SECRET: present("AUTH_SECRET"),
     GOOGLE_CLIENT_ID: present("GOOGLE_CLIENT_ID"),
     GOOGLE_CLIENT_SECRET: present("GOOGLE_CLIENT_SECRET"),
+    // The names Auth.js also accepts. Listed so a config using them reads as configured rather
+    // than as three missing variables.
+    NEXTAUTH_SECRET: present("NEXTAUTH_SECRET"),
+    AUTH_GOOGLE_ID: present("AUTH_GOOGLE_ID"),
+    AUTH_GOOGLE_SECRET: present("AUTH_GOOGLE_SECRET"),
     ANTHROPIC_API_KEY: present("ANTHROPIC_API_KEY"),
     REDDIT_CLIENT_ID: present("REDDIT_CLIENT_ID"),
     REDDIT_CLIENT_SECRET: present("REDDIT_CLIENT_SECRET"),
@@ -71,6 +76,8 @@ export async function GET(req: NextRequest) {
     };
   }
 
+  const mongoOk = (checks.mongo as { ok: boolean }).ok;
+
   // --- google oauth wiring ------------------------------------------------
   // Auth.js only ever calls back to <origin>/api/auth/callback/google. If that exact string is
   // not in the Google Console's Authorized redirect URIs, sign-in fails at the redirect.
@@ -80,10 +87,28 @@ export async function GET(req: NextRequest) {
   const configuredOrigin = process.env.AUTH_URL || process.env.NEXTAUTH_URL || null;
   const liveOrigin = configuredOrigin || (forwardedHost ? `https://${forwardedHost}` : null);
   const deploymentOrigin = process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : null;
+  // Auth.js reads a secret from AUTH_SECRET or NEXTAUTH_SECRET and nothing else, and fills an
+  // absent client id/secret from AUTH_GOOGLE_ID / AUTH_GOOGLE_SECRET — so both namings are checked
+  // here. Reporting only the first name would have called a working config broken.
+  const authSecretSet = Boolean(process.env.AUTH_SECRET || process.env.NEXTAUTH_SECRET);
+  const clientIdSet = Boolean(process.env.GOOGLE_CLIENT_ID || process.env.AUTH_GOOGLE_ID);
+  const clientSecretSet = Boolean(process.env.GOOGLE_CLIENT_SECRET || process.env.AUTH_GOOGLE_SECRET);
+
   checks.googleOAuth = {
-    clientIdSet: Boolean(process.env.GOOGLE_CLIENT_ID),
-    clientSecretSet: Boolean(process.env.GOOGLE_CLIENT_SECRET),
-    authSecretSet: Boolean(process.env.AUTH_SECRET),
+    clientIdSet,
+    clientSecretSet,
+    authSecretSet,
+    // `?error=Configuration` is used by Auth.js for two unrelated failures: a config it rejected
+    // before consulting any provider, and any non-client-safe error thrown on the way back from
+    // Google — an unreachable database being the usual one. The code cannot tell them apart. This
+    // does, because it can see both halves at once.
+    configurationErrorCause: !authSecretSet
+      ? "AUTH_SECRET is not set, so Auth.js rejects every request before Google is involved. Set it in the Vercel project's Environment Variables for the Production environment specifically."
+      : !clientIdSet || !clientSecretSet
+        ? "The Google provider has no client id and/or secret. Set GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET (AUTH_GOOGLE_ID / AUTH_GOOGLE_SECRET also work)."
+        : !mongoOk
+          ? "Config is complete, so sign-in reaches Google — and then fails on the way back, because the adapter cannot record the account. See checks.mongo."
+          : null,
     requestHost: forwardedHost,
     authUrlConfigured: configuredOrigin,
     redirectUriForThisRequest: liveOrigin ? `${liveOrigin}/api/auth/callback/google` : "unknown",
@@ -215,7 +240,6 @@ export async function GET(req: NextRequest) {
     context: "Google Custom Search is closed to new customers and Bing Search was retired in Aug 2025, so Anthropic or Brave are the realistic choices.",
   };
 
-  const mongoOk = (checks.mongo as { ok: boolean }).ok;
   const anySource = Boolean(
     (checks.reddit as { reachable?: boolean }).reachable ||
       (checks.hackerNews as { reachable?: boolean }).reachable ||

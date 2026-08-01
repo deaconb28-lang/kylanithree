@@ -3,6 +3,45 @@ import Google from "next-auth/providers/google";
 import { MongoDBAdapter } from "@auth/mongodb-adapter";
 import clientPromise from "./lib/mongodb";
 
+/**
+ * Names, at cold start, whatever would make Auth.js refuse to run.
+ *
+ * `?error=Configuration` is the least informative error this app can produce: Auth.js uses it both
+ * for a config it rejected up front and, separately, for any non-client-safe error thrown during
+ * the callback — a database that cannot be reached being the usual one. The code alone cannot tell
+ * those apart, and neither could we, so the two are distinguished here instead of guessed at later.
+ *
+ * Only presence is ever logged, never a value. Vercel's function logs are not a secret store.
+ */
+function logAuthConfigProblems(): void {
+  // The only two names Auth.js will read a secret from. Missing means it rejects every auth
+  // request before a provider is even consulted, so sign-in fails without Google being involved.
+  if (!process.env.AUTH_SECRET && !process.env.NEXTAUTH_SECRET) {
+    console.error(
+      "[auth] AUTH_SECRET is not set. Auth.js rejects every request without it and the browser is " +
+        "sent to ?error=Configuration before Google is ever reached. Set AUTH_SECRET in the Vercel " +
+        "project's Environment Variables for the Production environment specifically — a variable " +
+        "scoped only to Preview does not exist on the production deployment.",
+    );
+  }
+  // These have a fallback: Auth.js fills an absent clientId/clientSecret from AUTH_GOOGLE_ID and
+  // AUTH_GOOGLE_SECRET, so either naming works and only having neither is a fault.
+  if (!process.env.GOOGLE_CLIENT_ID && !process.env.AUTH_GOOGLE_ID) {
+    console.error("[auth] Neither GOOGLE_CLIENT_ID nor AUTH_GOOGLE_ID is set — the Google provider has no client id.");
+  }
+  if (!process.env.GOOGLE_CLIENT_SECRET && !process.env.AUTH_GOOGLE_SECRET) {
+    console.error("[auth] Neither GOOGLE_CLIENT_SECRET nor AUTH_GOOGLE_SECRET is set — the Google provider has no client secret.");
+  }
+  if (!process.env.MONGODB_URI) {
+    console.error(
+      "[auth] MONGODB_URI is not set. Sign-in reaches Google and then fails on the way back, because " +
+        "the adapter has nowhere to record the account — which also surfaces as ?error=Configuration.",
+    );
+  }
+}
+
+logAuthConfigProblems();
+
 export const { handlers, auth, signIn, signOut } = NextAuth({
   adapter: MongoDBAdapter(clientPromise, { databaseName: "kylani" }),
   // Vercel terminates TLS at its proxy, so the origin Auth.js should use lives in the forwarded
@@ -54,5 +93,11 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
   },
   pages: {
     signIn: "/signin",
+    // Without this, a failure lands on Auth.js's own /api/auth/error page — an unstyled page whose
+    // entire content is a code like "Configuration", which tells a founder nothing and looks like
+    // the product broke in a way nobody noticed. /signin already turns every code Auth.js can send
+    // into a plain sentence, so failures go back to the page they came from. It requires no
+    // session itself, so this cannot produce the redirect loop Auth.js guards against.
+    error: "/signin",
   },
 });
