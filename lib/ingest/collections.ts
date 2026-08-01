@@ -108,18 +108,48 @@ export async function People() {
  */
 export async function ensureIngestIndexes(): Promise<void> {
   const [sources, corpus, people] = await Promise.all([Sources(), Corpus(), People()]);
-  await Promise.all([
-    sources.createIndex({ platform: 1, identifier: 1 }, { unique: true, name: "source_identity" }),
-    sources.createIndex({ enabled: 1, health: 1, lastPolled: 1 }, { name: "source_due" }),
+
+  // Every index is attempted independently and NO failure is fatal.
+  //
+  // This is the fix for a real outage: `doc_unclassified` was redefined with an extra key while
+  // keeping its name, MongoDB rejected the conflicting definition, ensureIngestIndexes() threw, and
+  // the worker crash-looped on startup — unable to crawl at all because of a query optimisation.
+  //
+  // Index creation is best-effort infrastructure, not a correctness invariant. Every query here
+  // returns correct results without its index; it just scans more. Losing the crawler over that
+  // trade is never right.
+  type Spec = [ReturnType<typeof Object>, Record<string, 1 | -1>, { name: string; unique?: boolean }];
+  const specs: Spec[] = [
+    [sources, { platform: 1, identifier: 1 }, { name: "source_identity", unique: true }],
+    [sources, { enabled: 1, health: 1, lastPolled: 1 }, { name: "source_due" }],
     // Re-polling a source re-sees the same posts constantly; this is what makes ingest idempotent.
-    corpus.createIndex({ platform: 1, externalId: 1 }, { unique: true, name: "doc_identity" }),
-    corpus.createIndex({ contentHash: 1 }, { name: "doc_content_hash" }),
-    corpus.createIndex({ postedAt: -1 }, { name: "doc_recency" }),
-    corpus.createIndex({ personFingerprint: 1 }, { name: "doc_person" }),
+    [corpus, { platform: 1, externalId: 1 }, { name: "doc_identity", unique: true }],
+    [corpus, { contentHash: 1 }, { name: "doc_content_hash" }],
+    [corpus, { postedAt: -1 }, { name: "doc_recency" }],
+    [corpus, { personFingerprint: 1 }, { name: "doc_person" }],
     // The retrieval filter: only classified, intent-positive documents are ever searched.
-    corpus.createIndex({ intentType: 1, intentConfidence: -1 }, { name: "doc_intent" }),
-    // Finds the backlog for the classifier worker.
-    corpus.createIndex({ classifierStage: 1, classifyAttempts: 1, fetchedAt: 1 }, { name: "doc_unclassified" }),
-    people.createIndex({ fingerprint: 1 }, { unique: true, name: "person_identity" }),
-  ]);
+    [corpus, { intentType: 1, intentConfidence: -1 }, { name: "doc_intent" }],
+    // Finds the backlog for the classifier worker. Named _v2 because the v1 index has the same name
+    // but a different key, and MongoDB will not redefine one in place — a rename is the migration.
+    [corpus, { classifierStage: 1, classifyAttempts: 1, fetchedAt: 1 }, { name: "doc_unclassified_v2" }],
+    [people, { fingerprint: 1 }, { name: "person_identity", unique: true }],
+  ];
+
+  for (const [collection, keys, options] of specs) {
+    try {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      await (collection as any).createIndex(keys, options);
+    } catch (err) {
+      console.error(`[ingest] index ${options.name} not created:`, err instanceof Error ? err.message : err);
+    }
+  }
+
+  // The superseded index still costs writes for a query nothing runs any more. Dropping it is a
+  // tidy-up, so a failure here is even less interesting than one above.
+  try {
+    await corpus.dropIndex("doc_unclassified");
+    console.error("[ingest] dropped superseded index doc_unclassified");
+  } catch {
+    // Already gone, or never existed on this cluster. Either is fine.
+  }
 }

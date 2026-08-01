@@ -269,8 +269,11 @@ async function main(): Promise<void> {
   if (!process.env.VOYAGE_API_KEY) log("WARNING: VOYAGE_API_KEY is not set — documents will be stored without embeddings, so retrieval stays lexical-only. They are backfilled automatically once the key is added.");
 
   log("worker starting");
+  // Indexes are a query optimisation, never a precondition for crawling — so a failure here is
+  // logged and stepped over rather than thrown. It threw once, and the worker crash-looped
+  // indefinitely because one index definition had changed shape.
+  await ensureIngestIndexes();
   try {
-    await ensureIngestIndexes();
     await seedSources();
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
