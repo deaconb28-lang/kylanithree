@@ -1,208 +1,263 @@
 # Kylani — project handoff
 
-This doc exists so a new Claude Code session can pick this project up cold. Read this in full
-before making changes.
+This doc exists so a new Claude Code session can pick this project up cold. Read it in full before
+making changes. It is loaded automatically via `CLAUDE.md`.
+
+---
 
 ## The pitch
 
-**Kylani finds a founder's first hundred buyers and writes to each one, in the founder's own
-voice, from their own inbox.**
+**Kylani finds a founder's first hundred buyers and writes to each one, in the founder's own voice,
+from their own inbox.**
 
-Most early-stage founders don't have a lead-gen problem, they have a *going-looking* problem —
-their buyers are already out there, complaining on Reddit, asking in Slack communities, posting
-job ads that describe the exact pain the product solves. Nobody has time to go find them one at a
-time, and generic outbound tools (mail-merge blasts, scraped lists) read as spam because they are.
+Early-stage founders don't have a lead-gen problem, they have a *going-looking* problem — their
+buyers are already out there complaining on Reddit, asking in Slack communities, posting job ads
+that describe the exact pain the product solves. Nobody has time to find them one at a time, and
+generic outbound (mail-merge blasts, scraped lists) reads as spam because it is.
 
-Kylani's pitch: paste your URL. It reads the site, works out who's likely to buy (as 2-4 ranked,
-correctable hypotheses — not a single guess), then goes looking for those people across Reddit,
-Slack communities, Discord, forums, and job postings. For each lead it finds, it drafts a specific,
-warm, non-salesy outreach message anchored to something that person actually said or did — never a
-generic template. The founder approves, edits, or drops each draft; nothing sends automatically.
-Approved messages go out from the founder's own Gmail (OAuth-connected), so replies land in their
-real inbox, not a shared tool inbox. Over time it tells the founder which buyer hypothesis is
-actually converting (reply rate by persona) and which communities are worth the effort — the
-"Findings" it couldn't have looked up on day one.
-
-Landing page framing: **"Find your first hundred buyers in ten minutes."** / "Warm, human outreach
-— not more AI noise." The four-step story on the homepage (`ProcessSteps.tsx`) is the whole product
-in miniature: read the site → guess the buyer → go looking for them → write the first draft.
+Paste your URL. Kylani reads the site, works out who's likely to buy, then goes looking for those
+people across Reddit, Bluesky, Hacker News, Stack Exchange, Quora, Discourse forums and job boards.
+For each lead it drafts a specific, warm, non-salesy message anchored to something that person
+actually said. The founder approves, edits or drops each draft; nothing sends automatically.
+Approved messages go out from the founder's own Gmail (OAuth), so replies land in their real inbox.
 
 This is a demo/portfolio build of that product, not a live company — treat "Kylani" as the real
-product it's pretending to be when writing copy or code; don't undercut the pitch with fake
-numbers (see "Design principles" below).
+product it's pretending to be, but never fabricate data (see Design principles).
 
-## Design principles established this build (don't regress these)
+---
 
-1. **No fabricated data shown as if real.** Early sessions seeded every new account with the same
-   hardcoded "Dockside" demo dataset (104 buyers, specific named leads, fake revenue). That's gone
-   for real accounts — `lib/generateCampaignSeed.ts` generates leads/communities/hypotheses via
-   Claude from the founder's *actual* onboarding answers, and stats start at zero for a new
-   account (no fabricated history). `ensureSeeded()` (the old Dockside seed) is now purely a
-   fallback for direct sign-ins with no onboarding data at all — it should never fire for someone
-   who completed onboarding. Anywhere else fake/hardcoded numbers were found bleeding into a real
-   account's UI (Step6Complete's "104 buyers", Map's "12 suppressed" banner, Queue's ops/warehouse
-   filters wired to Dockside-specific hypothesis keys) has been generalized or made honest — don't
-   reintroduce hardcoded product-specific numbers into shared UI.
+## STATE OF PLAY — read this first
+
+Branch: **`claude/kylanithree-data-organization-v7j15s`** (NOT `main` — `main` has only a
+placeholder README; all real code is here, and Vercel's Production Branch is set to this branch).
+
+Everything below is committed and pushed. `tsc`, `eslint`, `next build` and 111 tests are green as
+of `d7c42be`.
+
+Recent history, newest first:
+
+```
+d7c42be Fraunces everywhere, no invented counts, no logo plates
+882c32c Editorial hero: a display headline over a field of found buyers
+7a3fa1e Never cache a failed Mongo connection
+ff6d03a Make ?error=Configuration say what is actually wrong
+387159f Cut the homepage demo, draw the search, and a design-system pass
+a18ad44 Discover: the one-screen onboarding, end to end
+b8bee50 Discover: niche map, pass 1, and the merge policy
+```
+
+### The one thing that is NOT done
+
+**The Explee scraper was requested but never built.** The user said "the api is ready in railway and
+vercel", meaning the key is set as an environment variable in both — but three things were never
+established and are needed before a line of code makes sense:
+
+1. **The env var name** they used (guessing `EXPLEE_API_KEY` would be a coin flip).
+2. **The base URL and endpoint shape.**
+3. **A sample response**, or a docs link.
+
+`explee.com` is not reachable from the sandbox (the agent proxy 403s it), so the shape cannot be
+discovered by calling it. **Ask for these three things before starting.** Tell the user to keep the
+key itself in Railway/Vercel and out of chat — anything pasted into a conversation should be
+treated as exposed.
+
+Where it slots in once the details arrive: if Explee is a query-time search source it belongs in
+`lib/search/` (see `bluesky.ts`, `quora.ts` for the shape a source module takes) and gets
+registered in `lib/search/venues.ts`. If it is a *corpus* source it belongs in
+`lib/ingest/sources/` next to `hackernews.ts`, and gets seeded in `worker/index.ts`.
+
+### Also outstanding
+
+- **Atlas Search + Vector Search indexes are still not created.** The Railway worker fills the
+  `corpus` collection, but nothing can query it until those indexes exist in Atlas. Vector Search
+  requires **M10+**, not M0 — confirm the cluster tier.
+- **Rotate the Bluesky app password.** It was pasted into chat in an earlier session.
+- Founder/Studio plan naming is undecided, which blocks the billing half of the credits system
+  (`lib/credits/`, `docs/credits.md`). Metering works and records; nothing is debited.
+- Google sign-in was failing in production with `?error=Configuration`. `/api/auth/providers`
+  returns normal JSON, which proves the config is fine — so it is the Mongo adapter failing on the
+  callback. `7a3fa1e` fixed a real bug there (a rejected connection promise was cached for the life
+  of a warm lambda, with no retry). **If it still fails after that deploy, read `/api/health` →
+  `checks.mongo.likelyCause` and `checks.googleOAuth.configurationErrorCause`, which now name the
+  cause directly.** Most likely: Atlas Network Access not allowing `0.0.0.0/0`, or a paused cluster.
+
+---
+
+## Design principles (do not regress these)
+
+1. **No fabricated data shown as if real.** Early sessions seeded every account with a hardcoded
+   "Dockside" demo dataset. That is gone. Stats start at zero for a new account. This is enforced
+   aggressively and recently: the hero's field caption lost "3,400 people" and "nine of them"
+   because nobody measured those; claimed leads omit `quoteMeta` rather than print "0 comments ·
+   0 points"; communities say "size unknown" rather than invent a member count.
 2. **No silent fallback when Claude/Mongo calls fail — but never show the customer the raw
-   exception either.** Every route that calls Claude or Mongo wraps the call in try/catch. Real
-   failures still surface (a Retry button in Step2Reading and DashboardShell's finalize step,
-   never a silent switch to fake data) — but the JSON error a route returns is always a short,
-   non-technical, contextual message written for a founder using the product, never `err.message`
-   directly. Internal detail (a missing env var, an invalid API key, a Mongo timeout) is ours to
-   fix, not something a customer can act on or should have to read. Use `toUserError(context, err,
-   fallback)` from `lib/apiError.ts` in every catch block: it `console.error`s the full technical
-   detail (visible in hosting logs) and returns the fallback string. If you add a new Claude- or
-   Mongo-backed feature, follow this pattern — never return `err.message` to the client, and never
-   add a hardcoded fallback dataset as an error handler either.
-3. **Be honest about what isn't wired up yet.** E.g. Map's "Suppressed" tab shows "Nobody
-   suppressed yet" rather than a fake count, because there's no real suppression-tracking system
-   built. If a feature is UI-only with no backend behind it, either build the backend or make the
-   UI say so — don't fake the number.
+   exception either.** Every route wraps its call in try/catch and uses `toUserError(context, err,
+   fallback)` from `lib/apiError.ts`: it `console.error`s the full technical detail (visible in
+   hosting logs) and returns a short, non-technical message written for a founder. Never return
+   `err.message` to the client. Never add a hardcoded fallback dataset as an error handler.
+3. **Be honest about what isn't wired up yet.** If a feature is UI-only, either build the backend or
+   make the UI say so.
+
+---
 
 ## Architecture
 
 - **Next.js 16** (App Router). **Read `AGENTS.md` before writing Next.js code** — this version has
-  breaking changes vs. training-data Next.js (e.g. `proxy.ts` not `middleware.ts`, dynamic route
-  `params` are `Promise<{...}>`). It links `node_modules/next/dist/docs/` for specifics.
-- **Auth.js v5** (`next-auth@beta`), JWT session strategy (required because the Credentials
-  provider can't hydrate a database session), `@auth/mongodb-adapter` for Google OAuth. Both Google
-  and email/password (bcryptjs, hand-rolled against a `users` collection) sign-in are supported.
-  Sign-in happens *after* onboarding, not before — onboarding itself runs fully unauthenticated.
-- **MongoDB** via `lib/mongodb.ts` → `lib/collections.ts` (typed collection getters: `Campaigns`,
-  `Leads`, `Communities`, `Hypotheses`, `Findings`). No ORM.
-- **Anthropic (Claude)** via `lib/anthropic.ts`'s `getAnthropic()` — lazy singleton, throws a clear
-  error if `ANTHROPIC_API_KEY` is missing (and a clear one if the key contains a header-unsafe
-  character, e.g. a stray bullet from a bad copy-paste), but only when actually called (not at
-  module load), so it's always inside a route's own try/catch. Model is always `claude-opus-5` per
-  the skill defaults; don't downgrade. Three call sites: `/api/analyze-site` (onboarding
-  buyer-persona analysis — now with the `web_search_20260209` server tool enabled, so Claude
-  verifies what the company actually does and checks 2-3 competitors before proposing buyers,
-  instead of guessing from scraped page text alone; also instructed to favor broader, more
-  inclusive buyer definitions over an overly narrow single-niche guess), `lib/generateCampaignSeed.ts`
-  (also `web_search`-enabled — this is now a **real search**, not invented data: it actually looks
-  for real Reddit/Slack/Discord/forum/job-board posts matching the buyer personas and only returns
-  leads/communities it can back with a real quote and, where possible, a real URL stored on
-  `LeadDoc.sourceUrl` and rendered as a link on Today. It can legitimately return fewer leads than
-  before, or zero, if nothing real is found — `finalizeOnboarding` in `lib/seed.ts` skips the
-  `insertMany` call entirely when an array is empty rather than blindly padding a quota, since an
-  empty array throws on `insertMany`), `/api/leads/[id]/draft` (on-demand "Rewrite with AI").
-  Real search takes meaningfully longer than the old invent-a-response call — `onboarding/finalize`'s
-  `maxDuration` is 180s accordingly (still gated by Fluid Compute on Vercel, see below).
-- **Gmail sending** via `lib/gmail.ts`, using the signed-in user's own Google OAuth refresh token
-  (stored by the Mongo adapter in the `accounts` collection) — real send, not a stub. Only fires
-  when a lead has a real email on file; most AI-generated leads (sourced from anonymous social
-  posts) legitimately don't, and approving those just marks them approved with an honest note
-  instead of pretending to send. Gmail is intentionally **not disconnectable** anywhere in the UI —
-  `lib/data.ts`'s `CHANNELS` array marks `gmail` `required: true` (both Step4Channels in onboarding
-  and the Settings channel list render it as a static, non-clickable "on" toggle), and Settings'
-  "Sending inbox" card explicitly says so. Don't add a disconnect control for it — without Gmail
-  connected, Kylani has nowhere to send from, so this is deliberate, not an oversight.
-- **Stripe Connect** (OAuth, not API keys pasted by the user) for real revenue numbers on the Map
-  page — `lib/stripe.ts`, `/api/stripe/{connect,callback,summary,disconnect}`. Shows an honest
-  "connect Stripe for real numbers" empty state otherwise, never a fabricated revenue figure.
-- **Onboarding flow**: `app/onboarding/page.tsx` is a 6-step client-side state machine (no router
-  per step) — Step1Url → Step2Reading (real Claude call) → Step3Buyers (correct the guesses) →
-  Step4Channels (toggle Reddit/Slack/Discord/etc) → Step5Search (a *simulated* ~45s "searching"
-  animation — real search-and-scrape infra doesn't exist, this is a deliberate UX device) →
-  Step6Complete. Answers are stashed in `sessionStorage` (`lib/onboardingStorage.ts`) across the
-  sign-in redirect, then POSTed to `/api/onboarding/finalize` once authenticated.
-- **DashboardShell** (`components/dashboard/DashboardShell.tsx`) wraps all four app surfaces
-  (Today/Queue/Map/Findings) plus Settings. It owns the onboarding-finalize call and **must**
-  finish (success or a shown error) before rendering `children` — this gates against a real race
-  where every page's own `/api/leads`/`/api/campaign` fetch would otherwise auto-seed the generic
-  Dockside demo faster than the ~25-40s Claude call could finish, silently stranding real accounts
-  on fake data. Don't restructure this without preserving that gate.
-- **Vercel Hobby plan caps serverless functions at 10s by default.** `analyze-site`,
-  `onboarding/finalize`, and `leads/[id]/draft` all set `export const maxDuration = 30-60`, but
-  that only takes effect if **Fluid Compute** is enabled on the Vercel project (free, in Settings →
-  Functions). Without it, these routes will keep timing out in production regardless of the code.
-  This has been communicated to the user but not confirmed enabled — worth checking early if
-  Claude-backed routes seem to time out on Vercel specifically (vs. working when tested directly
-  against the API, as they do from a sandbox that can reach `api.anthropic.com`).
+  breaking changes vs. training data (`proxy.ts` not `middleware.ts`, dynamic route `params` are
+  `Promise<{...}>`). It links `node_modules/next/dist/docs/`.
+- **Auth.js v5** (`next-auth@beta`), JWT sessions, `@auth/mongodb-adapter`. **Google only** —
+  email/password was removed.
+- **MongoDB** via `lib/mongodb.ts` → `lib/collections.ts` (typed getters). No ORM.
+- **Anthropic** via `lib/anthropic.ts`'s `getAnthropic()` — lazy singleton, throws clearly if the
+  key is missing, but only when called, so it is always inside a route's try/catch. Model is
+  `claude-opus-5` (or `claude-sonnet-5` for the fast tier); don't downgrade.
+- **Gmail sending** via `lib/gmail.ts` using the signed-in user's own OAuth refresh token. Gmail is
+  intentionally **not disconnectable** — without it Kylani has nowhere to send from.
+- **Stripe Connect** (OAuth) for real revenue numbers on the Map page.
+- **Vercel Hobby caps functions at 10s** unless **Fluid Compute** is on (free, Settings →
+  Functions). Confirmed on. Even so the ceiling is 60s, which every long route budgets under.
 
-## Known working / verified this session
+### The onboarding rebuild (the current flow)
 
-- `generateCampaignSeed` end-to-end against the live Anthropic API (real personas, real leads,
-  ~25-40s).
-- `/api/analyze-site` end-to-end in a real browser (pasted `pocketledger.com`, got back real
-  "Small Business Owner / Freelancer / Bookkeeper" personas — not Dockside's ops/warehouse/
-  logistics).
-- The error-surfacing fix: forced a real MongoDB connection failure and confirmed the actual error
-  message ("Server selection timed out...") reaches the sign-up form, instead of a generic
-  "Something went wrong."
-- `tsc --noEmit`, `eslint`, and `next build` all clean as of the last commit.
+The old four-step flow still exists behind a feature flag; the new one is default.
 
-## Sandbox limitations (if continuing from a similar sandboxed environment)
+- **`/onboarding`** is the single entry URL for both. `lib/discover/flag.ts` decides:
+  `?flow=legacy` forces the old one, `NEXT_PUBLIC_ONBOARDING_FLOW=legacy` flips the default back
+  (that's the rollback). Both flows emit the same analytics events so they can be compared.
+- **New flow**: `components/onboarding/StepStart.tsx` writes a row via `POST /api/discover` and
+  hands off to **`/discover/[id]`**, where `app/api/discover/[id]/stream/route.ts` (SSE) does the
+  work in front of the person watching. Fast tier-1 inference (~2s, sonnet) → pass 1 (8s hard
+  budget: corpus lookup, or a live-shallow fallback when the corpus hasn't reached that niche) →
+  pass 2 (sharded, streams). Every stage ships partial results rather than an error.
+- **Correction**: `POST /api/discover/[id]/correct` re-derives keywords and re-ranks in place; it
+  never restarts. If the run is still in flight the stream adopts the correction at its next shard
+  boundary and takes the re-ranked list, so the two writers can't fight over ordering.
+- **Claim**: `POST /api/discover/[id]/claim` attaches an anonymous run to the account after
+  sign-in. `DashboardShell` gates rendering on it exactly as it gates on finalize — same race:
+  whichever request wins decides what the founder sees.
+- **Instrumentation**: `lib/discover/analytics.ts` + `clientTrack.ts`. Time-to-first-lead is
+  measured in the browser for *both* flows on purpose — a server clock starts when the run does and
+  omits the request and navigation the person also waited through, which would bias the comparison
+  toward the new flow by construction. `/api/diagnostics/flows` and `/diagnostics` show both.
 
-- `api.anthropic.com` is reachable — Claude-backed logic can be tested directly with a real key.
-- **MongoDB Atlas is NOT reachable** (`MongoServerSelectionError` / timeout on every attempt) —
-  can't test full Mongo-backed flows (sign-in persistence, campaign CRUD, etc.) end-to-end from a
-  sandbox with this same network policy. Verify DB-dependent code by careful review + isolated
-  Anthropic-only testing, not by running the full stack.
-- `vercel.com` / `api.vercel.com` are NOT reachable — can't deploy, check Vercel logs, or use a
-  Vercel access token from here even if the user provides one.
-- **GitHub push is blocked** — `git-upload-pack` (read) works, `git-receive-pack` (write)
-  consistently 403s across every repo/owner tried. This was diagnosed at length in an earlier
-  session and is **not a repo or GitHub-permissions problem** (the user confirmed the GitHub App
-  has read/write granted) — it's a Claude-side account/admin-settings gate specific to this user's
-  account that no amount of retrying or repo-switching fixes. If this is still broken in a new
-  session, don't re-diagnose from scratch — point the user to Anthropic support
-  (support.claude.com), or just work via zip export as this handoff does.
-- Given both Mongo and Vercel are unreachable, **the delivery mechanism has been zip exports** the
-  user manually deploys (via Vercel CLI from their own machine, or drag-and-drop, though the latter
-  creates a new project each time — CLI with `vercel link` is the better path for repeat updates).
+### The corpus / worker
 
-## Deployment
+`worker/index.ts` runs on **Railway** (Railpack, not NIXPACKS; devDependencies are pruned so it runs
+a compiled `.worker-build/`, not `tsx`). It crawls sources into a flat `corpus` collection — flat
+because Atlas `$search`/`$vectorSearch` must be the first stage on a *single* collection.
+`lib/ingest/` holds normalize → Stage 1 lexical gate → Stage 3 LLM classify → embeddings.
 
-The Vercel project was originally created via drag-and-drop zip upload, which is **not** connected
-to Git — pushes to this repo did nothing until the user connected the project to
-`deaconb28-lang/kylanithree` under Settings → Git (or Settings → Environments → Production →
-Branch Tracking, depending on dashboard version), with **Production Branch** set to
-`claude/kylanithree-data-organization-v7j15s` (not `main` — `main` only has a placeholder README;
-all real app code lives on this branch, which was never merged). Once connected correctly, every
-push to this branch should trigger a Vercel deploy automatically. If a push lands here and nothing
-deploys, re-check that Production Branch setting first before assuming a code problem.
+---
+
+## Design system
+
+Tokens live in `app/globals.css` `:root`, with a `@media (prefers-color-scheme: dark)` block that
+**rebuilds** the palette rather than inverting it. Every component reads the token names, so
+changing values there moves the whole product — there is deliberately no second palette.
+
+- Colour: `--ink --paper --card --card-alt --border --border-strong --muted --muted-strong --faint
+  --ember --ember-dark --ember-tint --on-ember --field-idle --green --active-bg --wash-active
+  --card-veil --attention --attention-border --on-ink-muted --on-ink-accent`
+- Elevation: `--lift-1/2/3`. Motion: `--ease`. Focus: a real 2px `--ember` outline at 2px offset
+  (it was a box-shadow, which was silently invisible inside any `overflow: hidden` ancestor).
+- Type: **Fraunces** is the display face everywhere via `--font-display`; **Public Sans** is body.
+  Outfit is retired. The wonk axes are set once on `body` and inherited (static fonts have no such
+  axes and ignore it); `opsz` is deliberately *not* in that rule so small headings get the text cut
+  — only `.ky-display` pins `opsz 48`.
+- **Every token clears 4.5:1 in both modes.** Two values deliberately differ from the design brief
+  that specified them, because the brief's own contrast floor beat its own swatch: `--faint`
+  (#8A8177 measured 3.49:1 on paper) and `--ember` (#DE4E22 gave white only 4.02:1).
+
+The landing hero is `components/landing/Hero.tsx` + `components/landing/FoundField.tsx` — a field of
+bars where a few are coral. Its constraints are load-bearing and commented in the file: heights come
+from a **seeded index function, never `Math.random()`** (random differs between server and client =
+hydration mismatch, and reshuffles on every resize); the entrance is transform+colour only so it
+cannot cause layout shift; and the pre-entrance state lives inside `@media (prefers-reduced-motion:
+no-preference)` so the *finished* field is the default render — a JS-driven version reads the
+preference after hydration and snaps.
+
+`components/discover/SearchField.tsx` is the sibling graphic on the search screen: the product at
+the centre, real communities around it, lines lighting up as each is searched.
+
+---
+
+## Known working / verified
+
+- `generateCampaignSeed` and `/api/analyze-site` end-to-end against the live Anthropic API.
+- The first live crawl: 16 sources, ~500 docs, classifier + embeddings working.
+- The hero at 1440×800, 768×1024 and 390×844 in both modes, scripted in a real browser: the field
+  entrance runs once, holds 9 found bars at every width from 390 to 1440, returns byte-identical
+  after a resize round-trip, never moves under reduced motion; empty submit shows the inline message
+  without navigating; bare / `www.` / full URLs all normalize.
+
+## Sandbox limitations (they will bite you again)
+
+- `api.anthropic.com` **is** reachable — Claude-backed logic can be tested with a real key.
+- **MongoDB Atlas is NOT reachable.** Can't test Mongo-backed flows end to end.
+- **`kylani.app` and `vercel.com` are NOT reachable** — the agent proxy 403s them. You cannot check
+  production, read Vercel logs, or deploy from here.
+- **`explee.com` is not reachable either.**
+- Playwright works: `playwright-core` is in `node_modules`, Chromium at `/opt/pw-browsers/chromium`.
+  Import it as CJS (`import pw from ".../playwright-core/index.js"; const { chromium } = pw;`).
+  Screenshotting and scripting the real built app caught several bugs that review did not — use it.
+  Beware sampling computed styles at `domcontentloaded`: you can catch a frame before the stylesheet
+  applies and measure nonsense.
+- `pkill -f "next start"` **kills its own shell** (the pattern matches its own command line). Use
+  `pgrep -f next-server | xargs -r kill -9`, and start servers with `nohup ... &` on a fresh port.
+- The Railway MCP server loses auth on container restart and cannot be re-authorized from a
+  non-interactive session.
+- Git push works.
 
 ## Environment variables
 
-Not included in any zip export (`.env.local` is gitignored and deliberately excluded). The user has
-been given these directly in chat multiple times this session — ask them to paste current values
-if picking this up fresh, or check earlier messages in the original conversation:
+Not in any zip/export (`.env.local` is gitignored). Must be set in **Vercel's project Environment
+Variables for the Production environment specifically** — a variable scoped only to Preview does not
+exist on the production deployment, and env changes need a redeploy to take effect.
 
 ```
 ANTHROPIC_API_KEY=
 MONGODB_URI=
-AUTH_SECRET=
-GOOGLE_CLIENT_ID=
-GOOGLE_CLIENT_SECRET=
-STRIPE_CLIENT_ID=      # optional — Stripe Connect won't work without it, nothing else needs it
-STRIPE_SECRET_KEY=     # optional
+AUTH_SECRET=            # or NEXTAUTH_SECRET — Auth.js reads no other name
+GOOGLE_CLIENT_ID=       # AUTH_GOOGLE_ID also works
+GOOGLE_CLIENT_SECRET=   # AUTH_GOOGLE_SECRET also works
+AUTH_URL=               # canonical origin, e.g. https://www.kylani.app
+VOYAGE_API_KEY=         # embeddings, worker
+STACKEXCHANGE_KEY=
+BLUESKY_IDENTIFIER= / BLUESKY_APP_PASSWORD=
+STRIPE_CLIENT_ID= / STRIPE_SECRET_KEY=   # optional
+NEXT_PUBLIC_ONBOARDING_FLOW=             # set to "legacy" to roll onboarding back
+EXPLEE_?=               # name unknown — ask the user
 ```
 
-These must be set in **Vercel's project Environment Variables**, not just locally — a zip-drop
-deploy carries no env config at all. Treat any credential that's been pasted into a chat as
-potentially exposed; suggest rotation if that's a concern.
+Treat any credential pasted into a chat as exposed and suggest rotation.
 
-## Standing user preferences (established across this whole build)
+## Standing user preferences
 
-- Only commit to git when there's a clear reason — this repo has a stop-hook enforcing a commit
-  when there are uncommitted changes at turn end, so this has been happening naturally most turns.
-- Never fabricate URLs.
-- Be honest about sandbox limitations rather than claiming something works when it's untested —
-  say plainly what could and couldn't be verified from this environment.
-- The user directs product/UX decisions (e.g. explicitly chose to revert the `home.kylani.app`
-  subdomain experiment back to `kylani.app`, chose to add themselves as a Google test user rather
-  than remove the `gmail.send` scope) — don't relitigate settled decisions without being asked.
+- Only commit when there's a clear reason; a stop-hook enforces a commit if the tree is dirty at
+  turn end.
+- **Never fabricate URLs.**
+- Be honest about sandbox limitations rather than claiming something works when it's untested — say
+  plainly what could and couldn't be verified.
+- The user directs product/UX decisions. Don't relitigate settled ones.
+- The user reverts copy they dislike bluntly and quickly. Propose; don't assume.
 
-## Where to look first for common tasks
+## Where to look first
 
-- Add a new AI-backed feature → follow the pattern in `app/api/leads/[id]/draft/route.ts`: lazy
-  `getAnthropic()`, whole handler in try/catch, `toUserError()` from `lib/apiError.ts` for a
-  customer-safe JSON error response, zod + `zodOutputFormat` for structured output, tight "HARD
-  LIMIT" wording in field descriptions (Claude ignores soft guidance like "keep it brief" but
-  respects explicit numeric caps).
-- Add a new dashboard page → wrap in `<DashboardShell active="...">`, fetch via `requireCampaign()`
-  in the API route (auto-seeds Dockside demo only if truly no campaign exists yet — see the race
-  note above).
-- Touch onboarding → `app/onboarding/page.tsx` is the state machine; each `Step*.tsx` is
-  presentation + local state only, lifted state flows back up via `onDone` callbacks.
+- New AI-backed feature → follow `app/api/leads/[id]/draft/route.ts`: lazy `getAnthropic()`, whole
+  handler in try/catch, `toUserError()`, zod + `zodOutputFormat`, explicit numeric caps in field
+  descriptions (Claude ignores "keep it brief" but respects "HARD LIMIT 20 words"). Prefer
+  `z.string()` + a normalizer over `z.enum` for model output — one out-of-vocabulary word rejects
+  an entire batch and retries forever.
+- New dashboard page → wrap in `<DashboardShell active="...">`, fetch via `requireCampaign()`.
+- New lead source → `lib/search/bluesky.ts` is the cleanest example; register in
+  `lib/search/venues.ts`.
+- New corpus source → `lib/ingest/sources/hackernews.ts`, seeded in `worker/index.ts`.
+- Tests are `lib/search/__tests__/pipeline.test.mjs`, run via `npm test` (tsc → `.test-build` →
+  `node --test`). **Add the file to `tsconfig.test.json`'s `include` or it won't compile.**
+
+## Mongo gotchas that have already cost time
+
+- `{f: {$lt: n}}` does **not** match documents where the field is absent. Use `{$not: {$gte: n}}`.
+- Mongo rejects redefining an index with the same name but a different key. A rename is the
+  migration, and index creation must be non-fatal or a bad index crash-loops the worker.
+- `$vectorSearch`/`$search` must be the **first** stage, on a **single** collection.
