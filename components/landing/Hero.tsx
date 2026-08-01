@@ -1,157 +1,216 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { useUrlCycle } from "./useUrlCycle";
 import KylaniLogo from "../icons/KylaniLogo";
+import FoundField from "./FoundField";
+import { DiscordIcon, ForumsIcon, RedditIcon, SlackIcon, XIcon } from "../icons/SourceIcons";
 import { markFlowStart, trackClient } from "../../lib/discover/clientTrack";
 import { resolveFlow } from "../../lib/discover/flag";
 
-// One column, centered, one thing to do.
+// One centred column, and one thing to do.
 //
-// This used to be a two-up: copy on the left, a fake browser on the right replaying a recorded
-// "Kylani at work" demo of a fictional logistics company. It came out because it was selling the
-// old four-step flow — a flow that no longer exists — and because a scripted cursor clicking
-// through someone else's product is a promise the real thing now keeps in eight seconds. The page
-// no longer needs to show what happens next; you can just go and watch it happen.
+// The headline used to be three lines of near-display sans at full container width, which pushed
+// the URL field to the fold in dark mode and cut the social proof off entirely — a page promising
+// specificity, showing none of it, and hiding its own call to action. It is now two lines of a
+// display serif over a field of marks that shows the actual claim: thousands of people talking,
+// nine of them buying.
+//
+// The badge that used to sit above the headline ("Warm, human outreach — not more AI noise") has
+// moved down beside the drafted-message step, where there is a draft on screen for it to be about.
+
+// Above this width the headline holds its intended two-line break; below it, the break is removed
+// and the line wraps wherever it needs to.
+const HARD_BREAK_MIN = 900;
+
+const SOURCES = [
+  { name: "Reddit", Icon: RedditIcon },
+  { name: "X", Icon: XIcon },
+  { name: "Discord", Icon: DiscordIcon },
+  { name: "Slack", Icon: SlackIcon },
+  { name: "Forums", Icon: ForumsIcon },
+];
+
+/**
+ * Accepts what a founder actually types.
+ *
+ * "dockside.app", "www.dockside.app" and "https://dockside.app/pricing" are the same answer, and
+ * rejecting two of the three for a missing protocol would be the page failing at the one question
+ * it asks.
+ */
+function normalizeUrl(raw: string): string {
+  const trimmed = raw.trim().replace(/\s+/g, "");
+  return /^https?:\/\//i.test(trimmed) ? trimmed : `https://${trimmed}`;
+}
 
 export default function Hero() {
-  const { url } = useUrlCycle();
   const [typedUrl, setTypedUrl] = useState("");
+  const [error, setError] = useState<string | null>(null);
   const router = useRouter();
-
-  const [shake, setShake] = useState(false);
+  const inputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     trackClient("landing_view", { flow: resolveFlow() });
+
+    // Desktop only. Autofocus on a touch device throws the keyboard open before the page has been
+    // read, covering half of what someone came to look at.
+    const isTouch = window.matchMedia("(hover: none), (pointer: coarse)").matches;
+    if (!isTouch && window.innerWidth >= HARD_BREAK_MIN) inputRef.current?.focus();
   }, []);
 
-  const goToOnboarding = () => {
-    // The rotating placeholder is only ever a hint, never a real submission — the demo cycling
-    // through dockside.app/fathom.dev/etc. used to get silently submitted as the URL if someone
-    // clicked without typing (the placeholder looks enough like real content to skim past).
+  const submit = () => {
     const value = typedUrl.trim();
     if (!value) {
-      setShake(true);
-      setTimeout(() => setShake(false), 500);
+      setError("Enter your product's URL to start.");
+      inputRef.current?.focus();
       return;
     }
-    // The clock the whole comparison rests on starts here, at the submission, not when a route
-    // eventually begins working.
+    setError(null);
+    // The clock the flow comparison rests on starts at the submission, not when a route eventually
+    // begins working.
     markFlowStart();
-    router.push(`/onboarding?url=${encodeURIComponent(value)}`);
+    router.push(`/onboarding?url=${encodeURIComponent(normalizeUrl(value))}`);
   };
 
   return (
-    <div style={{ position: "relative", overflow: "hidden" }}>
-      <div
-        aria-hidden
+    <header style={{ position: "relative", overflow: "hidden", background: "var(--paper)" }}>
+      <nav
         style={{
-          position: "absolute",
-          inset: "-160px -80px auto -80px",
-          height: 820,
-          opacity: "var(--wash)",
-          pointerEvents: "none",
-          background:
-            "radial-gradient(46% 52% at 22% 10%, #FFE8D6 0%, rgba(255,232,214,0) 64%), radial-gradient(44% 50% at 78% 6%, #F6E4F0 0%, rgba(246,228,240,0) 66%), radial-gradient(62% 60% at 50% 58%, #E8EEFF 0%, rgba(232,238,255,0) 68%)",
+          position: "relative",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "space-between",
+          gap: 16,
+          padding: "22px 5vw",
+          maxWidth: 1240,
+          margin: "0 auto",
         }}
-      />
-
-      <nav style={{ position: "relative", display: "flex", alignItems: "center", justifyContent: "space-between", padding: "26px 5vw", flexWrap: "wrap", gap: 16 }}>
-        <Link href="/" style={{ display: "flex", alignItems: "center", gap: 9 }}>
-          <KylaniLogo size={28} />
-          <span style={{ fontFamily: "var(--font-outfit)", fontWeight: 700, fontSize: 19, letterSpacing: "-.01em", color: "var(--ink)" }}>Kylani</span>
+      >
+        <Link href="/" style={{ display: "flex", alignItems: "center", gap: 9, color: "var(--ink)" }}>
+          <KylaniLogo size={26} />
+          <span style={{ fontFamily: "var(--font-outfit)", fontWeight: 600, fontSize: 17, letterSpacing: "-.01em" }}>Kylani</span>
         </Link>
-        <div className="ky-hide-mobile" style={{ display: "flex", alignItems: "center", gap: 34, fontSize: 15, color: "var(--muted)" }}>
-          <a href="#how" className="ky-link">How it works</a>
-          <a href="#findings" className="ky-link">Findings</a>
-          <a href="#pricing" className="ky-link">Pricing</a>
+
+        <div style={{ display: "flex", alignItems: "center", gap: 26, fontSize: 13.5 }}>
+          <a href="#how" className="ky-link ky-nav-wide">How it works</a>
+          <a href="#findings" className="ky-link ky-nav-wide">Findings</a>
+          <a href="#pricing" className="ky-link ky-nav-wide">Pricing</a>
           <a href="/signin" className="ky-link">Sign in</a>
-          <a href="/onboarding" className="ky-btn-ember" style={{ padding: "10px 18px", fontSize: 15 }}>
+          {/* Outline, not filled. There is exactly one filled coral button on screen and it is the
+              one the whole page is built to get pressed. */}
+          <a href="/onboarding" className="ky-btn-outline" style={{ padding: "9px 15px", fontSize: 13.5, fontWeight: 500, color: "var(--ink)", borderColor: "var(--ink)", minHeight: 0 }}>
             Paste your URL
           </a>
         </div>
-        <a href="/onboarding" className="ky-btn-ember ky-hide-desktop" style={{ padding: "10px 18px", fontSize: 15 }}>
-          Paste your URL
-        </a>
       </nav>
 
-      <div style={{ position: "relative", padding: "clamp(30px, 5vh, 72px) 5vw clamp(48px, 7vh, 84px)", display: "flex", justifyContent: "center" }}>
-        <div style={{ display: "flex", flexDirection: "column", alignItems: "center", textAlign: "center", gap: 26, maxWidth: 760, width: "100%" }}>
-          <div style={{ display: "inline-flex", alignItems: "center", gap: 8, background: "var(--card)", border: "1px solid var(--border)", borderRadius: 999, padding: "6px 14px 6px 7px" }}>
-            <span style={{ width: 18, height: 18, borderRadius: 999, background: "var(--green)", display: "grid", placeItems: "center", color: "#fff", fontSize: 10, fontWeight: 700 }}>✓</span>
-            <span style={{ fontSize: 13, fontWeight: 600 }}>Warm, human outreach — not more AI noise</span>
-          </div>
-
-          <h1 style={{ fontFamily: "var(--font-outfit)", fontWeight: 800, fontSize: "clamp(42px, 7vw, 82px)", lineHeight: 0.95, letterSpacing: "-.04em", margin: 0, maxWidth: "13ch" }}>
-            Find your first hundred buyers in ten minutes.
+      <div style={{ position: "relative", padding: "clamp(40px, 7vh, 88px) 5vw clamp(44px, 6vh, 64px)", maxWidth: 1080, margin: "0 auto" }}>
+        <div style={{ maxWidth: 640, margin: "0 auto", textAlign: "center" }}>
+          <h1 className="ky-display ky-h1" style={{ margin: 0, color: "var(--ink)" }}>
+            Somebody out there<span className="ky-h1-break" />
+            already wants this.
           </h1>
 
-          <p style={{ margin: 0, fontSize: "clamp(17px, 2.1vw, 20px)", lineHeight: 1.55, color: "var(--muted-strong)", maxWidth: "46ch" }}>
-            Paste your URL. Kylani finds the people who want what you built, writes to each one, and tells you who&apos;s actually
-            buying.
+          <p style={{ margin: "20px auto 0", maxWidth: "30rem", fontSize: 17, lineHeight: 1.6, color: "var(--muted)" }}>
+            Kylani reads your product, then goes and finds them — by name, with a message already written. First hundred in
+            about ten minutes.
           </p>
+        </div>
 
-          <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 16, width: "100%", maxWidth: 640, marginTop: 4 }}>
-            <div
-              className="ky-field ky-field-stack"
-              style={{
-                display: "flex",
-                gap: 10,
-                width: "100%",
-                maxWidth: 580,
-                background: "var(--card)",
-                border: shake ? "1px solid var(--ember)" : "1px solid var(--border-strong)",
-                borderRadius: 15,
-                padding: "8px 8px 8px 20px",
-                alignItems: "center",
-                textAlign: "left",
-                boxShadow: "var(--lift-2)",
-                animation: shake ? "kyShake .5s" : undefined,
+        <div style={{ marginTop: 44 }}>
+          <FoundField caption="3,400 people talking about your problem this week. Nine of them are buying." />
+        </div>
+
+        <form
+          onSubmit={(e) => {
+            e.preventDefault();
+            submit();
+          }}
+          style={{ marginTop: 32, maxWidth: 520, marginLeft: "auto", marginRight: "auto" }}
+        >
+          <div
+            className="ky-field ky-field-stack"
+            style={{
+              display: "flex",
+              gap: 8,
+              background: "var(--card)",
+              border: "1px solid var(--border-strong)",
+              borderRadius: 12,
+              padding: 6,
+              alignItems: "center",
+            }}
+          >
+            <input
+              ref={inputRef}
+              aria-label="Your product's URL"
+              aria-invalid={error ? true : undefined}
+              aria-describedby={error ? "ky-url-error" : undefined}
+              value={typedUrl}
+              onChange={(e) => {
+                setTypedUrl(e.target.value);
+                if (error) setError(null);
               }}
-            >
-              <input
-                aria-label="Your product URL"
-                value={typedUrl}
-                onChange={(e) => setTypedUrl(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter") goToOnboarding();
-                }}
-                placeholder={`e.g. ${url}`}
-                style={{ fontSize: 17, color: "var(--ink)", flex: 1, minWidth: 0, overflow: "hidden", border: "none", outline: "none", background: "transparent", fontFamily: "inherit" }}
-              />
-              <button onClick={goToOnboarding} className="ky-btn-ember" style={{ padding: "13px 24px", fontSize: 16, whiteSpace: "nowrap" }}>
-                Find my buyers free
-              </button>
-            </div>
-
-            {shake && (
-              <span role="alert" style={{ fontSize: 13.5, color: "var(--ember)", marginTop: -10 }}>
-                Paste your own URL first — that&apos;s just an example.
-              </span>
-            )}
-
-            <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 18, flexWrap: "wrap", marginTop: 2 }}>
-              <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                <div style={{ display: "flex" }} aria-hidden>
-                  {["#E8DDD0", "#DBD3E4", "#CFE0D8", "#E2D6CE"].map((c, i) => (
-                    <span key={c} style={{ width: 28, height: 28, borderRadius: 999, background: c, border: "2px solid var(--card)", marginLeft: i === 0 ? 0 : -10 }} />
-                  ))}
-                </div>
-                <span style={{ fontSize: 14.5, color: "var(--muted-strong)" }}>
-                  <strong style={{ fontWeight: 600 }}>312 founders</strong> sent their first hundred with Kylani today
-                </span>
-              </div>
-            </div>
-
-            <span style={{ fontSize: 14, color: "var(--muted)", lineHeight: 1.6 }}>
-              First campaign free · no card · no list uploads · then <strong style={{ color: "var(--ink)", fontWeight: 600 }}>$89/month</strong>, cancel in one click.{" "}
-              <a href="#pricing" style={{ fontWeight: 500, whiteSpace: "nowrap" }}>See plans</a>
-            </span>
+              placeholder="dockside.app"
+              inputMode="url"
+              autoComplete="url"
+              style={{
+                // Never below 16px: iOS zooms the whole page on focus for anything smaller, which
+                // reads as the site breaking the instant you tap the one field that matters.
+                fontSize: 16,
+                color: "var(--ink)",
+                flex: 1,
+                minWidth: 0,
+                border: "none",
+                outline: "none",
+                background: "transparent",
+                fontFamily: "inherit",
+                padding: "10px 12px",
+              }}
+            />
+            <button type="submit" className="ky-btn-ember" style={{ padding: "11px 20px", fontSize: 15, fontWeight: 500, whiteSpace: "nowrap", minHeight: 0 }}>
+              Find them free
+            </button>
           </div>
+
+          {error && (
+            <p id="ky-url-error" role="alert" style={{ margin: "10px 0 0", textAlign: "center", fontSize: 13, color: "var(--ember)" }}>
+              {error}
+            </p>
+          )}
+
+          <p style={{ margin: "12px 0 0", textAlign: "center", fontSize: 13, color: "var(--faint)" }}>
+            312 founders sent their first hundred today
+          </p>
+        </form>
+
+        <div style={{ maxWidth: 640, margin: "40px auto 0", borderTop: "1px solid var(--border)", paddingTop: 20, textAlign: "center" }}>
+          <p className="ky-display" style={{ margin: 0, fontStyle: "italic", fontSize: 13, color: "var(--faint)" }}>
+            Kylani looks in
+          </p>
+          <ul
+            style={{
+              margin: "14px 0 0",
+              padding: 0,
+              listStyle: "none",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              flexWrap: "wrap",
+              gap: "10px 26px",
+              fontSize: 13,
+              color: "var(--muted)",
+            }}
+          >
+            {SOURCES.map(({ name, Icon }) => (
+              <li key={name} style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
+                <Icon />
+                {name}
+              </li>
+            ))}
+          </ul>
         </div>
       </div>
-    </div>
+    </header>
   );
 }

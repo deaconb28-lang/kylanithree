@@ -1,30 +1,42 @@
 :root {
-  --ink: #14120f;
-  --paper: #efebe5;
-  --card: #fdfcfa;
-  --card-alt: #faf8f5;
-  --border: #ede9e3;
-  --border-strong: #ded8d0;
-  --muted: #6b655d;
-  --muted-strong: #4a443d;
-  --ember: #e4572e;
-  --ember-dark: #c7431f;
-  --ember-tint: #ffede6;
+  /* The hero's palette, adopted as the app's. Retuned in place rather than added alongside: every
+     component already reads these names, so changing the values moves the whole product at once
+     and there is never a second, competing set of colours to keep in sync. */
+  --ink: #14110e;
+  --paper: #f8f4ed;
+  --card: #ffffff;
+  --card-alt: #f4efe7;
+  --border: #e4ded4;
+  --border-strong: #dcd5ca;
+  --muted: #5f574e;
+  --muted-strong: #3b352f;
+  /* Quieter than --muted, for captions and the source row. NOT the specified #8A8177, which comes
+     out at 3.5:1 on paper — the brief's own contrast floor is 4.5, and the floor wins over the
+     swatch. This is the nearest tone that clears it. */
+  --faint: #756d64;
+  --ember: #d2431a;
+  --ember-dark: #b33814;
+  --ember-tint: #fdece5;
+  /* What goes ON coral. White clears 4.5:1 against the coral above; it did not against the lighter
+     #DE4E22 the brief named, which is why that coral moved rather than this. */
+  --on-ember: #ffffff;
+  /* The resting bars in the hero field — present, uncountable, not the point. */
+  --field-idle: #dcd5ca;
   --green: #2f7a56;
   --green-tint: #e9f2ec;
-  --active-bg: #f1ebe4;
+  --active-bg: #efe9df;
   /* A row the eye is currently on. Distinct from --active-bg, which marks a persistent selection
      in the sidebar; this one is transient — hover, the step in progress, the lead being read. */
-  --wash-active: #f7f3ee;
+  --wash-active: #f2ece3;
   /* Translucent card, for surfaces that sit over the gradient wash and should let it through. */
-  --card-veil: rgba(253, 252, 250, 0.86);
+  --card-veil: rgba(255, 255, 255, 0.86);
   /* "Look at this" without "something is wrong" — warmer than a card, cooler than an error. */
   --attention: #fff8f1;
   --attention-border: #f3d9be;
   /* For the inverted surfaces (a card painted --ink). Those flip with the theme automatically, so
      anything sitting on top of one has to flip with it too, or it inverts into unreadability. */
   --on-ink-muted: #c9c3b9;
-  --on-ink-accent: #ffb89c;
+  --on-ink-accent: #ff9d78;
   --wash: 1;
 
   /* Elevation as three named steps rather than a bespoke shadow per component. Every surface in
@@ -39,7 +51,7 @@
   /* One easing for everything that moves. Motion that all decelerates the same way reads as one
      surface responding, rather than several components each doing their own thing. */
   --ease: cubic-bezier(0.32, 0.72, 0, 1);
-  --focus: 0 0 0 3px rgba(228, 87, 46, 0.28);
+  --focus: 0 0 0 3px rgba(210, 67, 26, 0.3);
 }
 
 /* Dark mode follows the system rather than adding a control nobody asked for. The palette is
@@ -47,33 +59,40 @@
    depth relationships hold and every component keeps working without a single change. */
 @media (prefers-color-scheme: dark) {
   :root {
-    --ink: #f4f1ec;
-    --paper: #16150f;
-    --card: #201e19;
-    --card-alt: #262420;
-    --border: #322f29;
-    --border-strong: #423e36;
-    --muted: #9a938a;
-    --muted-strong: #c2bbb1;
-    --ember: #ff7a52;
-    --ember-dark: #ff9a79;
+    --ink: #f7f3ee;
+    --paper: #15120f;
+    --card: #221e1a;
+    --card-alt: #292420;
+    --border: #2c2723;
+    --border-strong: #3d3730;
+    --muted: #a79e94;
+    --muted-strong: #c8c0b6;
+    /* Same story as light: the specified #7E766D lands at 4.2:1 on this ground, so it lifts until
+       it clears. */
+    --faint: #877e74;
+    --ember: #ff7043;
+    --ember-dark: #ff8f6b;
     --ember-tint: #3a2118;
+    /* Dark ink on coral here, not white — coral is bright enough in dark mode that white on it is
+       the weaker pairing, and this reads at 5.8:1. */
+    --on-ember: #3d1509;
+    --field-idle: #322c26;
     --green: #5cbb8b;
     --green-tint: #1b2d24;
     --active-bg: #2b2822;
     --wash-active: #2a2721;
-    --card-veil: rgba(32, 30, 25, 0.88);
+    --card-veil: rgba(34, 30, 26, 0.88);
     --attention: #2e2117;
     --attention-border: #4b3624;
     --on-ink-muted: #4a443d;
-    --on-ink-accent: #c7431f;
+    --on-ink-accent: #b33814;
     /* The pastel gradient washes are built for paper. At full strength on a dark ground they read
        as haze, so they are dimmed rather than removed — the warmth is still there, just quieter. */
     --wash: 0.14;
     --lift-1: 0 1px 2px rgba(0, 0, 0, 0.4);
     --lift-2: 0 1px 2px rgba(0, 0, 0, 0.4), 0 12px 28px -16px rgba(0, 0, 0, 0.7);
     --lift-3: 0 1px 2px rgba(0, 0, 0, 0.5), 0 28px 60px -28px rgba(0, 0, 0, 0.8);
-    --focus: 0 0 0 3px rgba(255, 122, 82, 0.36);
+    --focus: 0 0 0 3px rgba(255, 112, 67, 0.36);
   }
 }
 
@@ -118,10 +137,11 @@ button {
    so a keyboard user could not tell where they were. `:focus-visible` puts a real ring back on
    without bringing the mouse-click outline with it. */
 :focus-visible {
-  outline: none;
-  /* No radius of its own — the ring follows whatever shape the element already is, so a pill
-     button gets a pill ring and a circular one gets a circle. */
-  box-shadow: var(--focus);
+  /* A real outline rather than a box-shadow ring: outline follows the element's own shape, is
+     never clipped by an ancestor's overflow, and survives a transform. The shadow version was
+     silently invisible on anything inside an overflow:hidden container. */
+  outline: 2px solid var(--ember);
+  outline-offset: 2px;
 }
 /* Below this width an inline submit leaves the field too narrow to read what you typed, so the
    button takes its own line rather than squeezing the thing it is submitting. */
@@ -138,12 +158,108 @@ button {
 
 .ky-field:focus-within {
   border-color: var(--ink) !important;
-  box-shadow: var(--lift-2), var(--focus) !important;
+  box-shadow: var(--focus) !important;
 }
 
 ::selection {
   background: var(--ember-tint);
   color: var(--ink);
+}
+
+/* The hero voice. WONK is the whole reason Fraunces is here — it swaps in the canted, off-model
+   glyphs; without it this is a neutral serif and the page looks like every other one. opsz 48
+   picks the display cut rather than the text cut, SOFT 20 takes the edge off the terminals. */
+.ky-display {
+  font-family: var(--font-fraunces), Georgia, "Times New Roman", serif;
+  font-variation-settings:
+    "SOFT" 20,
+    "WONK" 1,
+    "opsz" 48;
+  font-weight: 400;
+}
+
+/* --- hero type and responsive behaviour ------------------------------------------------------ */
+.ky-h1 {
+  font-size: 64px;
+  line-height: 1.06;
+  letter-spacing: -0.02em;
+  font-weight: 400;
+}
+/* The break is an element rather than a <br> so it can be switched off by a media query — a <br>
+   would need a second copy of the headline to remove it. */
+.ky-h1-break::before {
+  content: "\A";
+  white-space: pre;
+}
+@media (max-width: 899px) {
+  .ky-h1 {
+    font-size: 46px;
+    line-height: 1.1;
+  }
+  /* Below the two-line width the hard break would strand a word; the line wraps naturally. */
+  .ky-h1-break::before {
+    content: " ";
+    white-space: normal;
+  }
+  /* Leaves Sign in and the CTA, which is all a narrow bar has room for. */
+  .ky-nav-wide {
+    display: none;
+  }
+}
+@media (max-width: 599px) {
+  .ky-h1 {
+    font-size: 36px;
+    line-height: 1.12;
+  }
+}
+
+/* One unit drives every bar height, so the field scales at a breakpoint by changing a single
+   number rather than by re-deriving every bar. 80px tall desktop, 64 at tablet, 56 on a phone. */
+.ky-field-bars {
+  --ky-field-unit: 1px;
+}
+@media (max-width: 900px) {
+  .ky-field-bars {
+    --ky-field-unit: 0.8px;
+  }
+}
+@media (max-width: 600px) {
+  .ky-field-bars {
+    --ky-field-unit: 0.7px;
+  }
+}
+
+/* --- hero field -------------------------------------------------------------------------------
+   A crowd of people talking, most of them not about you. Bars only grow and recolour: transform
+   and colour, never height or margin, so mounting the field cannot shift a single pixel of the
+   page around it. */
+.ky-bar {
+  width: 3px;
+  flex: 0 0 auto;
+  border-radius: 2px;
+  background: var(--field-idle);
+  transform-origin: bottom center;
+}
+.ky-bar-found {
+  background: var(--ember);
+}
+
+/* The entrance lives entirely in CSS, gated on the motion preference, so the FINAL state is what
+   renders by default. Someone who prefers reduced motion therefore gets the finished field on the
+   first paint — not a squashed one that snaps the moment JavaScript hydrates and reads the
+   preference, which is what a JS-driven version does no matter how early it runs. */
+@media (prefers-reduced-motion: no-preference) {
+  .ky-bar-found {
+    transition:
+      transform 720ms cubic-bezier(0.16, 1, 0.3, 1),
+      background-color 520ms cubic-bezier(0.16, 1, 0.3, 1);
+  }
+  /* Pre-entrance: a found bar occupies its full height in layout from the start and is squashed
+     down to idle by a transform, so growing it cannot move anything around it. */
+  .ky-bar-waiting {
+    background: var(--field-idle);
+    transform: scaleY(var(--ky-idle-fraction, 0.4));
+  }
 }
 
 /* Numbers that change in place — timers, counts, scores — must not reflow as they tick. */
@@ -304,14 +420,14 @@ button {
 
 .ky-btn-ember {
   background: var(--ember);
-  color: #fff;
+  color: var(--on-ember);
   font-weight: 600;
   border: none;
   box-shadow: var(--lift-1);
 }
 .ky-btn-ember:hover {
   filter: brightness(0.93);
-  color: #fff;
+  color: var(--on-ember);
 }
 /* A press that moves is a press you felt. One pixel is enough. */
 .ky-btn-ember:active,

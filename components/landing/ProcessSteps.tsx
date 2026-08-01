@@ -53,8 +53,15 @@ const CARDS = [
     href: "/app/queue",
     dark: true,
     artifact: (
-      <div style={{ border: "1px solid color-mix(in srgb, var(--card) 18%, transparent)", borderRadius: 10, background: "color-mix(in srgb, var(--card) 8%, transparent)", padding: 12, fontSize: 13, lineHeight: 1.55, color: "var(--card)" }}>
-        &ldquo;Eli — saw Northline is hiring a receiving clerk…&rdquo;
+      <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+        <div style={{ border: "1px solid color-mix(in srgb, var(--card) 18%, transparent)", borderRadius: 10, background: "color-mix(in srgb, var(--card) 8%, transparent)", padding: 12, fontSize: 13, lineHeight: 1.55, color: "var(--card)" }}>
+          &ldquo;Eli — saw Northline is hiring a receiving clerk…&rdquo;
+        </div>
+        {/* Moved down from the hero, where it was a claim with nothing to back it. Here there is a
+            draft on screen and the line is a caption for it. */}
+        <span style={{ fontSize: 12, color: "var(--on-ink-muted)", lineHeight: 1.5 }}>
+          Warm, human outreach — not more AI noise.
+        </span>
       </div>
     ),
   },

@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { usePrefersReducedMotion } from "../../lib/useReducedMotion";
 
 // Where Kylani is looking, drawn.
 //
@@ -39,24 +40,6 @@ const CENTER: Point = { x: 50, y: 50 };
 function nodeRadius(hits: number, scanning: boolean): number {
   const solid = hits > 0 ? 2 + Math.min(hits, 6) * 0.28 : 1.5;
   return Math.max(solid, scanning ? 3.4 : 0);
-}
-
-// A media query is an external store, so it is read as one — no effect, no state, and no first
-// paint that animates before being told not to.
-const REDUCED_MOTION = "(prefers-reduced-motion: reduce)";
-
-function subscribeToMotionPreference(onChange: () => void) {
-  const mq = window.matchMedia(REDUCED_MOTION);
-  mq.addEventListener("change", onChange);
-  return () => mq.removeEventListener("change", onChange);
-}
-
-function usePrefersReducedMotion(): boolean {
-  return useSyncExternalStore(
-    subscribeToMotionPreference,
-    () => window.matchMedia(REDUCED_MOTION).matches,
-    () => false,
-  );
 }
 
 /**

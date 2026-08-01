@@ -1,5 +1,5 @@
 import type { Metadata, Viewport } from "next";
-import { Outfit, Public_Sans } from "next/font/google";
+import { Fraunces, Outfit, Public_Sans } from "next/font/google";
 import { Analytics } from "@vercel/analytics/next";
 import AuthProvider from "../components/AuthProvider";
 import AddToHomeScreen from "../components/AddToHomeScreen";
@@ -15,6 +15,20 @@ const publicSans = Public_Sans({
   variable: "--font-public-sans",
   subsets: ["latin"],
   weight: ["300", "400", "500", "600"],
+});
+
+// The hero's voice, and only the hero's — the h1 and one italic eyebrow. Loaded as a variable font
+// with its optical-size, SOFT and WONK axes exposed, because WONK is the entire reason to use it:
+// it swaps in the canted, off-model glyphs that stop this reading as the default warm-cream serif
+// every AI product landing page has. A static instance would ship the neutral shapes and none of
+// the point. Self-hosted by next/font like the other two, so no render-blocking stylesheet and no
+// layout shift when it arrives.
+const fraunces = Fraunces({
+  variable: "--font-fraunces",
+  subsets: ["latin"],
+  style: ["normal", "italic"],
+  axes: ["SOFT", "WONK", "opsz"],
+  display: "swap",
 });
 
 export const metadata: Metadata = {
@@ -52,7 +66,7 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en" className={`${outfit.variable} ${publicSans.variable}`}>
+    <html lang="en" className={`${outfit.variable} ${publicSans.variable} ${fraunces.variable}`}>
       <body style={{ fontFamily: "var(--font-public-sans), system-ui, sans-serif" }}>
         <AuthProvider>{children}</AuthProvider>
         <AddToHomeScreen />
