@@ -3,8 +3,8 @@ import Link from "next/link";
 const CARDS = [
   {
     n: "01",
-    title: "I read what you built",
-    body: "Pages, pricing, the changelog — plus how comparable products position themselves. Working out what problem this actually removes, not scraping keywords.",
+    title: "I read the site",
+    body: "Five pages, pricing, the changelog. Not keyword scraping — working out what problem this actually removes.",
     time: "~40 seconds →",
     href: "/onboarding",
     dark: false,
@@ -18,8 +18,8 @@ const CARDS = [
   },
   {
     n: "02",
-    title: "I work out who it's for",
-    body: "2–4 buyer hypotheses, ranked by confidence. You correct me, and I search for whichever ones you keep. That correction is the real input — not a form.",
+    title: "I guess who buys it",
+    body: "2–4 buyer hypotheses, ranked by confidence. Your correction is the real input — not a form.",
     time: "One click to fix →",
     href: "/onboarding",
     dark: false,
@@ -32,9 +32,9 @@ const CARDS = [
   },
   {
     n: "03",
-    title: "I go and find them",
-    body: "Reddit, X, forums, communities, the open web. Real people already describing the problem you solve — with a link to the post and the date they said it.",
-    time: "However many are really there →",
+    title: "I go looking for them",
+    body: "Subreddits, Slacks, Discords, forums, inboxes — matched by what's actually discussed there.",
+    time: "104 names, typically →",
     href: "/app/map",
     dark: false,
     artifact: (
@@ -48,7 +48,7 @@ const CARDS = [
   {
     n: "04",
     title: "I write the first draft",
-    body: "Anchored to something that person actually said, in their words. You approve, edit, or skip — and it sends from your own inbox, so replies come back to you.",
+    body: "Anchored to something that person actually said. You approve, edit, or skip — sent from your own inbox.",
     time: "Waiting on you, not the other way round →",
     href: "/app/queue",
     dark: true,

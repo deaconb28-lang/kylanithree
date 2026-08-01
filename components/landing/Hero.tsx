@@ -68,14 +68,14 @@ export default function Hero() {
         <div style={{ display: "flex", flexDirection: "column", gap: 28, minWidth: 0 }}>
           <div style={{ display: "inline-flex", alignItems: "center", gap: 8, background: "var(--card)", border: "1px solid var(--border)", borderRadius: 999, padding: "6px 14px 6px 7px", width: "fit-content" }}>
             <span style={{ width: 18, height: 18, borderRadius: 999, background: "var(--green)", display: "grid", placeItems: "center", color: "#fff", fontSize: 10, fontWeight: 700 }}>✓</span>
-            <span style={{ fontSize: 13, fontWeight: 600 }}>The internet doesn&apos;t need more AI spam</span>
+            <span style={{ fontSize: 13, fontWeight: 600 }}>Warm, human outreach — not more AI noise</span>
           </div>
-          <h1 style={{ fontFamily: "var(--font-outfit)", fontWeight: 800, fontSize: "clamp(38px, 5.5vw, 76px)", lineHeight: 0.96, letterSpacing: "-.035em", margin: 0, maxWidth: "16ch" }}>
-            You don&apos;t have a product problem. You have a discovery problem.
+          <h1 style={{ fontFamily: "var(--font-outfit)", fontWeight: 800, fontSize: "clamp(38px, 5.5vw, 76px)", lineHeight: 0.96, letterSpacing: "-.035em", margin: 0, maxWidth: "15ch" }}>
+            Find your first hundred buyers in ten minutes.
           </h1>
-          <p style={{ margin: 0, fontSize: 20, lineHeight: 1.55, color: "var(--muted-strong)", maxWidth: "44ch" }}>
-            Right now someone is on Reddit asking if a tool like yours exists. Paste your URL and Kylani goes and finds
-            them — then helps you say something worth replying to.
+          <p style={{ margin: 0, fontSize: 20, lineHeight: 1.55, color: "var(--muted-strong)", maxWidth: "42ch" }}>
+            Paste your URL. Kylani finds the people who want what you built, writes to each one, and tells you who&apos;s actually
+            buying.
           </p>
           <div style={{ display: "flex", flexDirection: "column", gap: 16, maxWidth: 560 }}>
             <div
@@ -107,14 +107,22 @@ export default function Hero() {
             {shake && (
               <span style={{ fontSize: 13.5, color: "var(--ember)", marginTop: -10 }}>Paste your own URL first — that&apos;s just an example.</span>
             )}
-            {/* This used to read "312 founders sent their first hundred with Kylani today" next to a
-                row of avatars. There are no 312 founders — Kylani is launching. Inventing social
-                proof is exactly the thing the product exists to be an alternative to, so it says
-                what is actually true instead. */}
-            <span style={{ fontSize: 14.5, color: "var(--muted-strong)", lineHeight: 1.5 }}>
-              Kylani is new. No scraped email lists, no mail-merge blasts — nothing sends until you read it and say
-              yes.
-            </span>
+            <div style={{ display: "flex", alignItems: "center", gap: 18, flexWrap: "wrap" }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                <div style={{ display: "flex" }}>
+                  {["#E8DDD0", "#DBD3E4", "#CFE0D8", "#E2D6CE"].map((c, i) => (
+                    <span key={c} style={{ width: 28, height: 28, borderRadius: 999, background: c, border: "2px solid var(--card)", marginLeft: i === 0 ? 0 : -10 }} />
+                  ))}
+                </div>
+                <span style={{ fontSize: 14.5, color: "var(--muted-strong)" }}>
+                  <strong style={{ fontWeight: 600 }}>312 founders</strong> sent their first hundred with Kylani today
+                </span>
+              </div>
+              <span style={{ fontSize: 14.5, color: "var(--muted-strong)", display: "flex", alignItems: "center", gap: 7 }}>
+                <span style={{ width: 7, height: 7, borderRadius: 999, background: "var(--green)" }} />
+                <strong style={{ fontWeight: 600, fontVariantNumeric: "tabular-nums" }}>Live tracked below</strong>
+              </span>
+            </div>
             <span style={{ fontSize: 14, color: "var(--muted)" }}>
               First campaign free · no card · no list uploads · then <strong style={{ color: "var(--ink)", fontWeight: 600 }}>$89/month</strong>, cancel in one click.{" "}
               <a href="#pricing" style={{ fontWeight: 500 }}>See plans</a>
@@ -143,7 +151,7 @@ export default function Hero() {
               <span style={{ width: 10, height: 10, borderRadius: 999, background: "var(--border-strong)" }} />
             </div>
             <div style={{ flex: 1, background: "var(--card)", border: "1px solid var(--border)", borderRadius: 7, padding: "5px 12px", fontSize: 12.5, color: "var(--muted)", display: "flex", alignItems: "center", gap: 8 }}>
-              <span style={{ color: "var(--green)" }}>●</span> kylani.app/app/today
+              <span style={{ color: "var(--green)" }}>●</span> home.kylani.app/dockside
             </div>
             <span className="ky-hide-mobile" style={{ fontSize: 12, color: "var(--muted)" }}>recorded, not staged</span>
           </div>

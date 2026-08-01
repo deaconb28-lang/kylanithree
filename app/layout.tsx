@@ -18,9 +18,9 @@ const publicSans = Public_Sans({
 });
 
 export const metadata: Metadata = {
-  title: "Kylani — your buyers are already out there",
+  title: "Kylani — find your first hundred buyers in ten minutes",
   description:
-    "You don't have a product problem, you have a discovery problem. Paste your URL and Kylani finds the people already describing what you solve — on Reddit, X, forums and the open web — then helps you say something worth replying to.",
+    "Paste your URL. Kylani finds the people who want what you built, writes to each one, and tells you who's actually buying.",
   // iOS reads these rather than the manifest: it has never supported the web app manifest for
   // home-screen behaviour, so the standalone flag and the title under the icon have to be declared
   // here or an installed Kylani opens inside Safari chrome with the page title beneath it.

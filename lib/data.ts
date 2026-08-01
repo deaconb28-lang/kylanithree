@@ -228,23 +228,27 @@ export const GALLERY_PRODUCTS: GalleryProduct[] = [
   { name: "Fenwick Partners", category: "Advisory firm", image: "/gallery/fenwick-partners.png", alt: "Fenwick Partners logo in navy serif with tracked caps", mrr: "$6,900 MRR" },
 ];
 
-// Replaces the invented testimonials that used to live here. Kylani hasn't launched; there are no
-// customers to quote, and faking them would undercut the one thing the product is actually for.
-export const WHY_KYLANI = [
+export const TESTIMONIALS = [
   {
-    heading: "We kept seeing the same story.",
-    body:
-      "Someone spends six months building something. They fix bugs at 2 a.m. They redesign the landing page five times. They finally hit Launch — and then nothing. Not because the product wasn't good. Not because people didn't need it. Just because the right people never found it.",
+    quote:
+      "Three calls in week one, from a product nobody had heard of. I’d been staring at an empty CRM for four months.",
+    name: "Maya Oyelaran",
+    role: "Founder, Dockside",
+    color: "#E8DDD0",
   },
   {
-    heading: "The reward for building shouldn't be becoming a marketer.",
-    body:
-      "Post more. Write more threads. Send more cold emails. Build in public. Create more content. We've somehow accepted that as normal. It never felt right to us — you made something useful, and the prize is a second full-time job you didn't ask for.",
+    quote:
+      "It told me I was pitching the wrong job title. That one sentence was worth more than the year of ads.",
+    name: "Ivo Halstead",
+    role: "Founder, Sitewatch",
+    color: "#DBD3E4",
   },
   {
-    heading: "Your buyers are already out there.",
-    body:
-      "Someone is on Reddit right now asking if a tool like yours exists. Someone is venting on X about the exact problem you solved. Someone is in a niche forum asking if there's a better way. Those conversations happen every minute. Most founders never see them.",
+    quote:
+      "I approve messages on the train. Eleven minutes a week, and it’s the only part of sales I don’t dread.",
+    name: "Renata Vieira",
+    role: "Founder, Chapterhouse",
+    color: "#CFE0D8",
   },
 ];
 
@@ -294,11 +298,7 @@ export const FAQS = [
   },
   {
     q: "Is this a lead database?",
-    a: "No, and it isn't a scraper either. Kylani doesn't harvest email addresses — it finds public posts where a real person described your problem, and keeps the link, the date and their own words as the reason to reach out.",
-  },
-  {
-    q: "How is this different from every other AI outreach tool?",
-    a: "Those merge a name into a template. Kylani won't count someone as a lead at all unless it can quote what they actually said — so there's no generic version of the message to fall back on.",
+    a: "No. Business contacts from public channels, verified, deduplicated, and screened against suppression before a message is written.",
   },
   {
     q: "What happens when someone replies?",

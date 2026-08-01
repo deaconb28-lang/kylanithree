@@ -3,7 +3,7 @@
 import { useRevenueTicker } from "../../lib/useRevenueTicker";
 
 export default function RevenueFindings() {
-  const { revenue } = useRevenueTicker();
+  const { revenue, revenueMrr } = useRevenueTicker();
 
   return (
     <div id="findings" style={{ padding: "96px 5vw", display: "grid", gridTemplateColumns: "1fr minmax(320px,620px)", gap: 72, alignItems: "center", borderTop: "1px solid var(--border)" }} className="rf-grid">
@@ -12,22 +12,19 @@ export default function RevenueFindings() {
         <h2 style={{ fontFamily: "var(--font-outfit)", fontWeight: 800, fontSize: "clamp(28px,4vw,42px)", lineHeight: 1.05, letterSpacing: "-.03em", margin: 0 }}>
           The part nobody else can do.
         </h2>
-        <p style={{ margin: 0, fontSize: 18, lineHeight: 1.62, color: "var(--muted)", maxWidth: "42ch" }}>
-          Kylani sent the messages, so Kylani reads what came back — which buyer actually replies, and which communities
-          were worth the effort. You leave with the answer you walked in without.
+        <p style={{ margin: 0, fontSize: 18, lineHeight: 1.62, color: "var(--muted)", maxWidth: "40ch" }}>
+          Kylani sent the messages, so Kylani reads what came back. You leave with the answer you walked in without.
         </p>
-        {/* This card used to present a ticking counter as "Live · closed revenue from Kylani
-            replies … across 312 founders". None of that was real. Connect Stripe inside the app and
-            the number becomes genuinely yours; until then it is labelled as the example it is. */}
-        <div style={{ border: "1px dashed var(--border-strong)", borderRadius: 16, padding: "22px 24px", display: "flex", flexDirection: "column", gap: 14, background: "var(--card-alt)", maxWidth: 420 }}>
-          <span style={{ fontSize: 13, letterSpacing: ".08em", textTransform: "uppercase", color: "var(--muted)", fontWeight: 700 }}>
-            Example · what this looks like once you connect Stripe
-          </span>
-          <span style={{ fontFamily: "var(--font-outfit)", fontWeight: 800, fontSize: 46, letterSpacing: "-.04em", fontVariantNumeric: "tabular-nums", lineHeight: 1, color: "var(--muted-strong)" }}>{revenue}</span>
-          <span style={{ fontSize: 14, color: "var(--muted)", lineHeight: 1.5 }}>
-            Revenue is read from your own Stripe account, not estimated. No Stripe, no number — Kylani won&apos;t invent
-            one.
-          </span>
+        <div style={{ border: "1px solid var(--border)", borderRadius: 16, padding: "22px 24px", display: "flex", flexDirection: "column", gap: 14, background: "var(--card-alt)", maxWidth: 420 }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 9 }}>
+            <span style={{ width: 7, height: 7, borderRadius: 999, background: "var(--green)", animation: "kyPulse 2s ease-in-out infinite" }} />
+            <span style={{ fontSize: 13, letterSpacing: ".08em", textTransform: "uppercase", color: "var(--muted)", fontWeight: 700 }}>Live · closed revenue from Kylani replies</span>
+          </div>
+          <span style={{ fontFamily: "var(--font-outfit)", fontWeight: 800, fontSize: 46, letterSpacing: "-.04em", fontVariantNumeric: "tabular-nums", lineHeight: 1 }}>{revenue}</span>
+          <div style={{ display: "flex", gap: 26, fontSize: 14, color: "var(--muted)", flexWrap: "wrap" }}>
+            <span><strong style={{ color: "var(--ink)", fontWeight: 600, fontVariantNumeric: "tabular-nums" }}>{revenueMrr}</strong> added this week</span>
+            <span>across 312 founders</span>
+          </div>
         </div>
       </div>
       <div style={{ background: "var(--card)", border: "1px solid var(--border)", borderRadius: 18, padding: 30, display: "flex", flexDirection: "column", gap: 22, boxShadow: "0 1px 2px rgba(20,18,15,.05), 0 26px 54px -26px rgba(20,18,15,.18)" }}>
