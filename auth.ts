@@ -1,7 +1,7 @@
 import NextAuth from "next-auth";
 import Google from "next-auth/providers/google";
 import { MongoDBAdapter } from "@auth/mongodb-adapter";
-import clientPromise from "./lib/mongodb";
+import mongoConnection from "./lib/mongodb";
 
 /**
  * Names, at cold start, whatever would make Auth.js refuse to run.
@@ -43,7 +43,11 @@ function logAuthConfigProblems(): void {
 logAuthConfigProblems();
 
 export const { handlers, auth, signIn, signOut } = NextAuth({
-  adapter: MongoDBAdapter(clientPromise, { databaseName: "kylani" }),
+  // A function, not a promise. The adapter calls it per operation, so a sign-in that lands after
+  // a failed connection gets a fresh attempt — passing a promise captured at module load meant one
+  // transient Atlas failure was replayed to every later request on that warm instance, and Auth.js
+  // reports every adapter error as ?error=Configuration, so it read as a permanently broken app.
+  adapter: MongoDBAdapter(mongoConnection, { databaseName: "kylani" }),
   // Vercel terminates TLS at its proxy, so the origin Auth.js should use lives in the forwarded
   // host header, not in VERCEL_URL — which is a per-DEPLOYMENT hostname
   // (kylani-8us1c5o0c-kylani.vercel.app) that changes on every push and can never be registered
