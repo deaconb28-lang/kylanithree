@@ -5,7 +5,7 @@ import type { MetadataRoute } from "next";
 // platform will use an SVG for a home-screen shortcut, hence the PNG set.
 export default function manifest(): MetadataRoute.Manifest {
   return {
-    name: "Kylani — find your first hundred buyers",
+    name: "Kylani — find the people already asking for what you built",
     short_name: "Kylani",
     description: "Find the people already describing the problem you solve, and write to each one in your own voice.",
     start_url: "/app",

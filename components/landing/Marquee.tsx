@@ -18,12 +18,7 @@ function Row({ direction, speed }: { direction: "left" | "right"; speed: number 
         {doubled.map((p, i) => (
           <div key={p.name + i} style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 10, flexShrink: 0 }}>
             <Image src={p.image} alt={p.alt} width={325} height={130} loading={i < 6 ? "eager" : "lazy"} style={{ height: 130, width: "auto", display: "block" }} />
-            <span style={{ display: "inline-flex", alignItems: "center", gap: 5, fontSize: 13, fontWeight: 700, color: "var(--green)", fontVariantNumeric: "tabular-nums", letterSpacing: ".02em" }}>
-              <svg width="10" height="10" viewBox="0 0 11 11" style={{ flexShrink: 0 }}>
-                <path d="M5.5 0L11 11H0Z" fill="#2F7A56" />
-              </svg>
-              {p.mrr}
-            </span>
+            <span style={{ fontSize: 12.5, color: "var(--muted)" }}>{p.category}</span>
           </div>
         ))}
       </div>
@@ -36,9 +31,13 @@ export default function Marquee() {
     <div style={{ padding: "96px 0", display: "flex", flexDirection: "column", gap: 48, borderTop: "1px solid var(--border)", overflow: "hidden" }}>
       <div style={{ padding: "0 5vw", display: "flex", flexDirection: "column", gap: 10, maxWidth: 620 }}>
         <h2 style={{ fontFamily: "var(--font-outfit)", fontWeight: 800, fontSize: "clamp(28px,4vw,42px)", lineHeight: 1.05, letterSpacing: "-.03em", margin: 0 }}>
-          Real founders use Kylani.
+          Built for anything with a URL.
         </h2>
-        <p style={{ margin: 0, fontSize: 17, color: "var(--muted)" }}>A hundred small bets, sent this week, by people building things.</p>
+        <p style={{ margin: 0, fontSize: 17, color: "var(--muted)", lineHeight: 1.55 }}>
+          A newsletter, a SaaS product, a design studio, a bag of coffee. If someone out there is describing the problem
+          you solve, Kylani can go and find them. These are illustrations of the kinds of products it reads — not
+          customers.
+        </p>
       </div>
 
       <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>

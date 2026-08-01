@@ -15,11 +15,11 @@ export default function ClosingFooter() {
       />
       <div style={{ position: "relative", padding: "104px 5vw 40px", display: "flex", flexDirection: "column", gap: 28, alignItems: "center", textAlign: "center" }}>
         <h2 style={{ fontFamily: "var(--font-outfit)", fontWeight: 800, fontSize: "clamp(30px,5vw,54px)", lineHeight: 1.02, letterSpacing: "-.035em", margin: 0, maxWidth: "22ch" }}>
-          Your product is ready. This is the part that&apos;s left.
+          Spending months building something shouldn&apos;t end with shouting into the void.
         </h2>
         <p style={{ margin: 0, fontSize: 18, color: "var(--muted-strong)", maxWidth: "50ch", lineHeight: 1.6 }}>
-          Ten minutes from now you&apos;ll have a hundred names and a reason for each. Nobody is going to ask why it took you this
-          long.
+          The people who need what you made are already online, scattered across a million conversations. Paste your URL
+          and let&apos;s go find them.
         </p>
         <a
           href="/onboarding"

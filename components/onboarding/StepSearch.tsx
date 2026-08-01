@@ -2,7 +2,6 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import OnboardingChrome from "./OnboardingChrome";
-import ScanningWindow from "./ScanningWindow";
 import SiteBadge, { useSitePreview } from "./SiteBadge";
 import type { GeneratedSeed } from "../../lib/generateCampaignSeed";
 import type { ScoredLead, Venue } from "../../lib/search/types";
@@ -305,14 +304,11 @@ export default function StepSearch({
           {/* Kylani's own read of the site once it exists — the site's meta description is only a
               placeholder until then. */}
           <SiteBadge url={url} preview={preview} description={analysis?.siteSummary ?? null} compact />
-          <div style={{ display: "flex", alignItems: "center", gap: 22, flexWrap: "wrap" }}>
-            <div style={{ display: "flex", alignItems: "baseline", gap: 18, flexWrap: "wrap" }}>
-              <span style={{ fontFamily: "var(--font-outfit)", fontWeight: 800, fontSize: "clamp(48px,7vw,92px)", lineHeight: 0.9, letterSpacing: "-.045em", fontVariantNumeric: "tabular-nums" }}>
-                {clock}
-              </span>
-              <span style={{ fontSize: 17, color: "var(--muted)" }}>{phase === "done" ? "search complete" : "elapsed — this is a real, live search"}</span>
-            </div>
-            {phase !== "done" && <ScanningWindow label={`${buyers[0]?.name || "buyers"} · live`} accent="var(--ember)" />}
+          <div style={{ display: "flex", alignItems: "baseline", gap: 18, flexWrap: "wrap" }}>
+            <span style={{ fontFamily: "var(--font-outfit)", fontWeight: 800, fontSize: "clamp(48px,7vw,92px)", lineHeight: 0.9, letterSpacing: "-.045em", fontVariantNumeric: "tabular-nums" }}>
+              {clock}
+            </span>
+            <span style={{ fontSize: 17, color: "var(--muted)" }}>{phase === "done" ? "search complete" : "elapsed — this is a real, live search"}</span>
           </div>
 
           <div style={{ background: "rgba(253,252,250,.86)", border: "1px solid var(--border)", borderRadius: 14, padding: 8, display: "flex", flexDirection: "column", gap: 2 }}>

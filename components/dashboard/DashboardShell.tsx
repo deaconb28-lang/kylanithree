@@ -50,6 +50,7 @@ export default function DashboardShell({
   const [ready, setReady] = useState(() => !readOnboardingResult());
   const [finalizeError, setFinalizeError] = useState<string | null>(null);
   const [retrying, setRetrying] = useState(false);
+  const [needsOnboarding, setNeedsOnboarding] = useState(false);
 
   // These only feed sidebar badges/labels, not page content — a failure here degrades quietly
   // (badges just stay blank) rather than blocking the shell, since each page underneath already
@@ -65,15 +66,23 @@ export default function DashboardShell({
       .catch(() => {});
   const loadCampaign = () =>
     fetch("/api/campaign")
-      .then((r) => r.json())
-      .then((c: { productName: string; productUrl: string; trialEndsAt: string | null; subscription?: { plan: "pro" | "founder"; status: string } }) =>
+      .then((r) => r.json().then((data) => ({ ok: r.ok, data })))
+      .then(({ ok, data }) => {
+        // 404 + needsOnboarding is the honest answer for an account that has never run onboarding.
+        // It used to be impossible to get here: the API invented a demo campaign rather than admit
+        // there wasn't one, which is how accounts ended up showing a fictional company's leads.
+        if (!ok) {
+          if (data?.needsOnboarding) setNeedsOnboarding(true);
+          return;
+        }
+        const c = data as { productName: string; productUrl: string; trialEndsAt: string | null; subscription?: { plan: "pro" | "founder"; status: string } };
         setProduct({
           name: c.productName,
           url: c.productUrl,
           trialEndsAt: c.trialEndsAt ?? null,
           subscriptionPlan: c.subscription?.status === "active" ? c.subscription.plan : null,
-        }),
-      )
+        });
+      })
       .catch(() => {});
   const loadSuppressedCount = () =>
     fetch("/api/suppressions")
@@ -140,6 +149,27 @@ export default function DashboardShell({
           >
             {retrying ? "Retrying…" : "Try again"}
           </button>
+        </div>
+      </div>
+    );
+  }
+
+  // Signed in, but this account has never completed onboarding — so there is genuinely nothing to
+  // show. Sending them to do it is the only honest option; the alternative used to be inventing a
+  // campaign for them.
+  if (needsOnboarding) {
+    return (
+      <div style={{ width: "100%", minHeight: "100vh", display: "grid", placeItems: "center", background: "var(--card)" }}>
+        <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 14, maxWidth: 420, textAlign: "center", padding: "0 24px" }}>
+          <KylaniLogo size={30} />
+          <span style={{ fontFamily: "var(--font-outfit)", fontWeight: 700, fontSize: 18 }}>Let&apos;s find your buyers.</span>
+          <span style={{ fontSize: 14, color: "var(--muted)", lineHeight: 1.6 }}>
+            There&apos;s no campaign on this account yet. Paste your URL and Kylani will read your product, work out
+            who it&apos;s for, and go looking for them.
+          </span>
+          <Link href="/onboarding" className="ky-btn-ember" style={{ padding: "12px 22px", fontSize: 15, border: "none", marginTop: 8 }}>
+            Paste your URL
+          </Link>
         </div>
       </div>
     );

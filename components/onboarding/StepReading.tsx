@@ -2,7 +2,6 @@
 
 import { useEffect, useRef, useState } from "react";
 import OnboardingChrome from "./OnboardingChrome";
-import ScanningWindow from "./ScanningWindow";
 import SiteBadge, { useSitePreview } from "./SiteBadge";
 import type { SiteAnalysis } from "../../lib/types";
 import { useNotificationPermission } from "../../lib/useNotificationPermission";
@@ -158,8 +157,6 @@ export default function StepReading({
         </h1>
 
         <SiteBadge url={url} preview={preview} />
-
-        <ScanningWindow label={`${url} · ${seconds}s`} />
 
         <div style={{ width: "100%", maxWidth: 620, display: "flex", flexDirection: "column", gap: 2, background: "rgba(253,252,250,.86)", border: "1px solid var(--border)", borderRadius: 14, padding: 8, boxShadow: "0 1px 2px rgba(20,18,15,.05), 0 18px 40px -22px rgba(20,18,15,.18)" }}>
           {ITEMS.map((item, i) => {
