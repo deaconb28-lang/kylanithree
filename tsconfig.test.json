@@ -31,6 +31,9 @@
     "lib/search/intent.ts",
     "lib/search/rrf.ts",
     "lib/search/finalScore.ts",
-    "lib/search/queryPlan.ts"
+    "lib/search/queryPlan.ts",
+    "lib/ingest/normalize.ts",
+    "lib/ingest/pipeline.ts",
+    "lib/ingest/sources/hackernews.ts"
   ]
 }

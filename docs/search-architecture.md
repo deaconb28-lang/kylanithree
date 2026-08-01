@@ -21,36 +21,41 @@ ever blocked on crawl work.
 
 ---
 
-## Two decisions block the rest of this
+## The two decisions, settled
 
-Neither can be worked around in code, and both change everything downstream.
+**MongoDB Atlas** for storage and retrieval, **Railway** for the ingestion worker.
 
-### 1. Postgres + pgvector, or MongoDB Atlas?
+What that means in practice is recorded below and in `docs/railway-worker.md`.
+
+### 1. MongoDB Atlas — chosen
 
 The spec is written for Postgres with `pgvector` — HNSW vector index, a generated `tsvector` column
 with a GIN index for lexical, `FOR UPDATE SKIP LOCKED` for the job table. **Kylani runs on MongoDB**
 (`lib/mongodb.ts`, `lib/collections.ts`, `@auth/mongodb-adapter` for sessions).
 
-Two honest options:
+The one translation that matters: in Postgres, `documents`, `intents` and `doc_vectors` are three
+tables joined at query time. On Atlas they are **one collection** (`corpus`), because both
+`$vectorSearch` and `$search` must be the FIRST stage of an aggregation and operate on a single
+collection. Splitting them would force a `$lookup` after retrieval, which defeats the point of
+having an index at all. The logical model is unchanged; the physical layout is flattened.
 
-- **Move to Postgres.** Everything in the spec then works verbatim. Cost: migrating the campaign,
-  lead, community and auth data, and swapping the Auth.js adapter.
-- **Stay on Mongo Atlas.** Atlas has `$vectorSearch` and Atlas Search, so hybrid retrieval is
-  achievable — but the schema, the fusion query and the job table all need rewriting, and Atlas
-  Search is a different beast from a GIN index on a tsvector.
+Search and Vector Search indexes are cluster-level and cannot be created from the driver — they
+live in `docs/atlas-indexes.json` and are applied through the Atlas UI or CLI. Ordinary btree
+indexes are created automatically by `ensureIngestIndexes()`.
 
-I have not chosen one. Picking wrong here is a rewrite, not a refactor.
+**Vector Search requires an M10 cluster or above.** It is not on the M0 free tier. Crawling, gating
+and classification all work on M0; only retrieval needs the upgrade.
 
-### 2. Where do the continuous crawlers run?
+### 2. Railway — chosen
 
 Principle 2 requires something crawling **continuously**, and principle 1 requires a **durable
 workflow engine**. Vercel serverless has neither: functions are capped at 60s (see
 `docs/` history — that ceiling is what caused the timeouts this architecture is meant to fix), and
 there are no long-running workers.
 
-So the ingestion half needs a home: a small always-on box (Railway/Fly/Render), or Inngest /
-Trigger.dev for the workflow plus scheduled functions for the crawl loop. The Next.js app stays on
-Vercel and reads the index.
+The Next.js app stays on Vercel and reads the index. The worker (`worker/index.ts`, `npm run
+worker`) runs on Railway with exactly two environment variables. Deployment and what to watch in
+the logs: `docs/railway-worker.md`.
 
 ---
 
@@ -67,10 +72,21 @@ today.
 | `lib/search/finalScore.ts` | The five-component final score, tier assignment, fallback trigger. |
 | `lib/credits/*` | Metering — see `docs/credits.md`. |
 
+**M1 — Hacker News end to end** (`lib/ingest/`, `worker/`):
+
+| Module | What it is |
+|---|---|
+| `lib/ingest/collections.ts` | `sources`, `corpus`, `people` — the Atlas translation of the spec's schema. |
+| `lib/ingest/normalize.ts` | Quote-stripping, language gate, length floor, content hash. |
+| `lib/ingest/sources/hackernews.ts` | Cursor-based Algolia crawler, walking backwards in time. |
+| `lib/ingest/classify.ts` | Stage 3 batched extraction, including `problemStatement`. |
+| `lib/ingest/pipeline.ts` | Ingest pass and classify pass, deliberately separate. |
+| `worker/index.ts` | The Railway loop: poll by yield, ingest, drain the classify backlog. |
+
 Wired live: the lexical gate now runs inside `extract.ts` before the expensive model pass, and
 planned queries widen each wave's fan-out on top of the lexicon phrases.
 
-Everything is covered by offline tests in `lib/search/__tests__/pipeline.test.mjs` — 89 passing.
+Everything is covered by offline tests in `lib/search/__tests__/pipeline.test.mjs` — 95 passing.
 
 ### Two bugs the tests caught while writing this
 
@@ -82,16 +98,25 @@ Everything is covered by offline tests in `lib/search/__tests__/pipeline.test.mj
 
 ## What is not built
 
-- The `sources` registry, scheduler and adaptive polling (§2).
-- The document store, intent table, and the hybrid index — blocked on decision 1.
-- Stage 2 (embedding classifier) and Stage 3 (LLM extraction with `problem_statement`). Stage 3's
-  normalised statement is the key idea: embedding it alongside the raw body collapses the vocabulary
-  gap between how people complain and how founders describe their product.
-- Person resolution and cross-platform linking (§4.4).
-- Durable workflow, wave-based SSE streaming, budget enforcement — blocked on decision 2.
+- **Embeddings.** `corpus.embedding` is defined and indexed but nothing writes it yet — so
+  retrieval today is lexical only. This is the next thing, and it is what M2 turns on.
+- **The hybrid retrieval query** — `$vectorSearch` + `$search`, fused with the RRF module that
+  already exists.
+- **Stage 2** (embedding classifier). The cascade currently runs 1 → 3, skipping the middle, which
+  is what the spec prescribes for M1 and gets expensive once the corpus grows.
+- Cross-platform person linking (§4.4). Single-platform resolution IS built.
+- Durable workflow and wave-based SSE streaming (§8) — the milestone that kills the timeout.
 - Enrichment and contact verification (§7).
 - Live-crawl fallback with writeback (§6). This is the compounding mechanic: the crawl is a
   commodity, the corpus accumulated from a thousand users exploring their own niches is not.
+
+### Not verified from here
+
+The HN crawler could not be run against the live API: this sandbox's proxy blocks
+`hn.algolia.com` at the CONNECT level (403), same as it blocks every other lead source. The parsing,
+normalisation, gate and scheduling logic are covered by offline tests; the network call itself is
+unproven until the worker runs on Railway. Watch the first few log lines closely — the numbers to
+check are in `docs/railway-worker.md`.
 
 ## Build order
 
@@ -99,9 +124,9 @@ Follows the spec's own sequencing, which puts **async orchestration before bread
 architecture on a small corpus, then scale the corpus. The other order means debugging orchestration
 and crawler health simultaneously.
 
-- **M1** — one source end to end (Hacker News via Algolia), normalize → gate → LLM extract → store.
-- **M2** — hybrid index and retrieval, RRF, hardcoded queries.
-- **M3** — query planner and rerank. *(the pure logic for this is built)*
+- **M1** — one source end to end (Hacker News via Algolia), normalize → gate → LLM extract → store. **Built.**
+- **M2** — embeddings, hybrid index and retrieval, RRF, hardcoded queries. **Next.**
+- **M3** — query planner and rerank. *(the pure logic is built; needs the index under it)*
 - **M4** — async orchestration and streaming. **The milestone that kills the timeout.**
 - **M5** — breadth: Discourse, Stack Exchange, Reddit, source registry, Stage 2 classifier.
 - **M6** — enrichment, verification, live-crawl fallback with writeback.

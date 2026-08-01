@@ -1,0 +1,67 @@
+{
+  "_comment": [
+    "Atlas Search and Vector Search indexes for the `corpus` collection. These are CLUSTER-LEVEL",
+    "resources — the Node driver cannot create them, so they are applied through the Atlas UI",
+    "(Database > Search > Create Index > JSON Editor) or the Atlas CLI:",
+    "",
+    "  atlas clusters search indexes create --clusterName <cluster> --file docs/atlas-indexes.json",
+    "",
+    "Both must exist before hybrid retrieval works. The ordinary btree indexes are created by",
+    "ensureIngestIndexes() in lib/ingest/collections.ts and need no manual step.",
+    "",
+    "NOTE: Atlas Vector Search requires an M10 cluster or above. It is NOT available on the M0",
+    "free tier — this is the one hard infrastructure cost in the architecture, and it is worth",
+    "confirming the cluster tier before building against it."
+  ],
+
+  "vectorIndex": {
+    "_apply_to": "corpus",
+    "name": "corpus_vector",
+    "type": "vectorSearch",
+    "definition": {
+      "fields": [
+        {
+          "type": "vector",
+          "path": "embedding",
+          "numDimensions": 1024,
+          "similarity": "cosine"
+        },
+        {
+          "_comment": "Pre-filter fields. Declaring them here is what lets $vectorSearch filter by intent and recency in the same stage instead of over-fetching and filtering after.",
+          "type": "filter",
+          "path": "intentType"
+        },
+        {
+          "type": "filter",
+          "path": "postedAt"
+        },
+        {
+          "type": "filter",
+          "path": "platform"
+        }
+      ]
+    }
+  },
+
+  "searchIndex": {
+    "_apply_to": "corpus",
+    "name": "corpus_lexical",
+    "type": "search",
+    "definition": {
+      "_comment": "The lexical half of hybrid retrieval. This is what handles competitor names, product names, error strings and jargon — the queries where an embedding confidently returns something semantically similar but factually wrong. Roughly a third of the highest-value queries are name lookups, so this is not optional.",
+      "mappings": {
+        "dynamic": false,
+        "fields": {
+          "title": { "type": "string", "analyzer": "lucene.english" },
+          "body": { "type": "string", "analyzer": "lucene.english" },
+          "problemStatement": { "type": "string", "analyzer": "lucene.english" },
+          "namedProducts": { "type": "string", "analyzer": "lucene.keyword" },
+          "intentType": { "type": "token" },
+          "platform": { "type": "token" },
+          "postedAt": { "type": "date" },
+          "personFingerprint": { "type": "token" }
+        }
+      }
+    }
+  }
+}

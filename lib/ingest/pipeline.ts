@@ -1,0 +1,249 @@
+import { ObjectId } from "mongodb";
+import { Corpus, People, Sources, type CorpusDoc } from "./collections";
+import { normalizeDocument, type RawDocument } from "./normalize";
+import { lexicalGate } from "../search/intent";
+import { LEXICON_VERSION } from "../search/intent";
+import { personFingerprint } from "../credits/fingerprint";
+import { classifyBatch, needsReview, CLASSIFIER_VERSION, CLASSIFY_BATCH_SIZE, type ClassifyInput } from "./classify";
+
+// normalize -> gate -> store -> classify -> resolve person.
+//
+// Split deliberately into an ingest pass and a classify pass rather than one pipeline. Storing
+// gate survivors immediately means a crawl is never lost when the classifier is slow, rate limited
+// or down — the backlog just grows and drains later. Coupling them would make every model outage a
+// crawl outage.
+
+export type IngestStats = {
+  fetched: number;
+  droppedShort: number;
+  droppedLanguage: number;
+  droppedGate: number;
+  duplicates: number;
+  stored: number;
+};
+
+/**
+ * Ingest pass. Everything here is cheap: no model calls, no embeddings. Documents land
+ * unclassified (`classifierStage: 1`) for the classify pass to pick up.
+ */
+export async function ingestDocuments(opts: { sourceId: string; documents: RawDocument[] }): Promise<IngestStats> {
+  const { sourceId, documents } = opts;
+  const stats: IngestStats = {
+    fetched: documents.length,
+    droppedShort: 0,
+    droppedLanguage: 0,
+    droppedGate: 0,
+    duplicates: 0,
+    stored: 0,
+  };
+  if (documents.length === 0) return stats;
+
+  const corpus = await Corpus();
+  const seenHashes = new Set<string>();
+  const toStore: CorpusDoc[] = [];
+  const now = new Date();
+
+  for (const raw of documents) {
+    const normalized = normalizeDocument(raw);
+    if ("drop" in normalized) {
+      if (normalized.drop === "wrong_language") stats.droppedLanguage += 1;
+      else stats.droppedShort += 1;
+      continue;
+    }
+    const doc = normalized.doc;
+
+    // Crossposts and mirrors are rampant; within-batch dedupe is free.
+    if (seenHashes.has(doc.contentHash)) {
+      stats.duplicates += 1;
+      continue;
+    }
+    seenHashes.add(doc.contentHash);
+
+    // Stage 1. Microseconds, no model call, and it removes the overwhelming majority.
+    if (!lexicalGate(doc.body).passed) {
+      stats.droppedGate += 1;
+      continue;
+    }
+
+    const fingerprint = personFingerprint({ platform: doc.platform, authorHandle: doc.authorRef });
+    if (!fingerprint) continue;
+
+    toStore.push({
+      sourceId,
+      platform: doc.platform,
+      externalId: doc.externalId,
+      url: doc.url,
+      parentExternalId: doc.parentExternalId,
+      authorRef: doc.authorRef,
+      personFingerprint: fingerprint,
+      title: doc.title,
+      body: doc.body,
+      lang: doc.lang,
+      postedAt: doc.postedAt,
+      fetchedAt: now,
+      engagement: doc.engagement,
+      contentHash: doc.contentHash,
+      classifierStage: 1,
+      lexiconVersion: LEXICON_VERSION,
+    });
+  }
+
+  if (toStore.length > 0) {
+    // Upsert on (platform, externalId) so re-polling the same window is idempotent. $setOnInsert
+    // rather than $set: re-seeing a document must never reset a classification already made.
+    const ops = toStore.map((d) => ({
+      updateOne: {
+        filter: { platform: d.platform, externalId: d.externalId },
+        update: { $setOnInsert: d },
+        upsert: true,
+      },
+    }));
+    const res = await corpus.bulkWrite(ops, { ordered: false });
+    stats.stored = res.upsertedCount ?? 0;
+    stats.duplicates += toStore.length - stats.stored;
+  }
+
+  await resolvePeople(toStore);
+  return stats;
+}
+
+/** Person resolution. Runs per ingest batch; cross-platform linking is a separate, slower job. */
+async function resolvePeople(docs: CorpusDoc[]): Promise<void> {
+  if (docs.length === 0) return;
+  const people = await People();
+  const byFingerprint = new Map<string, CorpusDoc[]>();
+  for (const d of docs) {
+    const bucket = byFingerprint.get(d.personFingerprint);
+    if (bucket) bucket.push(d);
+    else byFingerprint.set(d.personFingerprint, [d]);
+  }
+
+  const ops = [...byFingerprint.entries()].map(([fingerprint, theirDocs]) => {
+    const newest = theirDocs.reduce((a, b) => (a.postedAt > b.postedAt ? a : b));
+    const oldest = theirDocs.reduce((a, b) => (a.postedAt < b.postedAt ? a : b));
+    return {
+      updateOne: {
+        filter: { fingerprint },
+        update: {
+          $setOnInsert: {
+            fingerprint,
+            platform: newest.platform,
+            handle: newest.authorRef,
+            firstSeen: oldest.postedAt,
+            activityScore: 0.5,
+          },
+          $max: { lastSeen: newest.postedAt },
+          $inc: { postCount: theirDocs.length },
+        },
+        upsert: true,
+      },
+    };
+  });
+  await people.bulkWrite(ops, { ordered: false });
+}
+
+export type ClassifyStats = {
+  considered: number;
+  classified: number;
+  leads: number;
+  none: number;
+  forReview: number;
+};
+
+/**
+ * Classify pass. Drains the unclassified backlog oldest-first in batches.
+ *
+ * Documents the model omits from its response are left unclassified rather than marked `none` —
+ * a dropped item is a retry, not a verdict.
+ */
+export async function classifyBacklog(opts: { limit?: number; timeoutMs?: number }): Promise<ClassifyStats> {
+  const { limit = CLASSIFY_BATCH_SIZE, timeoutMs } = opts;
+  const corpus = await Corpus();
+  const stats: ClassifyStats = { considered: 0, classified: 0, leads: 0, none: 0, forReview: 0 };
+
+  const pending = await corpus
+    .find({ classifierStage: 1 })
+    .sort({ fetchedAt: 1 })
+    .limit(limit)
+    .toArray();
+  stats.considered = pending.length;
+  if (pending.length === 0) return stats;
+
+  const inputs: ClassifyInput[] = pending.map((d) => ({
+    id: String(d._id),
+    platform: d.platform,
+    title: d.title,
+    body: d.body,
+    postedAt: d.postedAt,
+  }));
+
+  const verdicts = await classifyBatch({ documents: inputs, timeoutMs });
+  const byId = new Map(pending.map((d) => [String(d._id), d]));
+  const now = new Date();
+
+  const ops = verdicts
+    .filter((v) => byId.has(v.id))
+    .map((v) => {
+      stats.classified += 1;
+      if (v.intentType === "none") stats.none += 1;
+      else stats.leads += 1;
+      if (needsReview(v)) stats.forReview += 1;
+      return {
+        updateOne: {
+          filter: { _id: byId.get(v.id)!._id },
+          update: {
+            $set: {
+              intentType: v.intentType,
+              intentConfidence: v.confidence,
+              problemStatement: v.problemStatement,
+              namedProducts: v.namedProducts,
+              roleGuess: v.roleGuess,
+              companyContext: v.companyContext,
+              urgency: v.urgency,
+              classifierStage: 3 as const,
+              modelVersion: CLASSIFIER_VERSION,
+              classifiedAt: now,
+            },
+          },
+        },
+      };
+    });
+
+  if (ops.length > 0) await corpus.bulkWrite(ops, { ordered: false });
+  return stats;
+}
+
+/**
+ * Recomputes `docYield30d` — documents that PASSED the intent filter, not documents fetched. This
+ * is what the scheduler orders by, so it has to measure the thing that actually matters.
+ */
+export async function refreshSourceYield(sourceId: string): Promise<number> {
+  const corpus = await Corpus();
+  const since = new Date(Date.now() - 30 * 86_400_000);
+  const yield30d = await corpus.countDocuments({
+    sourceId,
+    fetchedAt: { $gte: since },
+    intentType: { $exists: true, $ne: "none" },
+  });
+
+  const sources = await Sources();
+  await sources.updateOne(
+    { _id: new ObjectId(sourceId) },
+    { $set: { docYield30d: yield30d, pollIntervalMinutes: pollIntervalForYield(yield30d), updatedAt: new Date() } },
+  );
+  return yield30d;
+}
+
+/**
+ * Adapts polling frequency to observed yield. A subreddit producing 40 intent-positive posts a day
+ * earns a 10-minute interval; one producing two a week does not, and polling it as often just burns
+ * rate limit that a productive source could have used.
+ */
+export function pollIntervalForYield(docYield30d: number): number {
+  const perDay = docYield30d / 30;
+  if (perDay >= 30) return 10;
+  if (perDay >= 10) return 20;
+  if (perDay >= 3) return 60;
+  if (perDay >= 1) return 240;
+  return 1440;
+}

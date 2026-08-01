@@ -7,7 +7,9 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
-    "test": "tsc -p tsconfig.test.json && node scripts/fix-test-esm.mjs && node --test lib/search/__tests__/*.test.mjs"
+    "test": "tsc -p tsconfig.test.json && node scripts/fix-test-esm.mjs && node --test lib/search/__tests__/*.test.mjs",
+    "worker": "tsx worker/index.ts",
+    "worker:build": "tsc -p tsconfig.worker.json"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.115.0",
@@ -30,6 +32,7 @@
     "eslint": "^9",
     "eslint-config-next": "16.2.12",
     "playwright-core": "^1.62.1",
+    "tsx": "^4.23.1",
     "typescript": "^5"
   }
 }
