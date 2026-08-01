@@ -63,6 +63,8 @@ export interface CorpusDoc {
   companyContext?: string;
   urgency?: string;
   classifierStage?: 1 | 2 | 3;
+  /** Failed classification attempts. Stops one poison document blocking the queue forever. */
+  classifyAttempts?: number;
   lexiconVersion?: number;
   modelVersion?: string;
   classifiedAt?: Date;
@@ -117,7 +119,7 @@ export async function ensureIngestIndexes(): Promise<void> {
     // The retrieval filter: only classified, intent-positive documents are ever searched.
     corpus.createIndex({ intentType: 1, intentConfidence: -1 }, { name: "doc_intent" }),
     // Finds the backlog for the classifier worker.
-    corpus.createIndex({ classifierStage: 1, fetchedAt: 1 }, { name: "doc_unclassified" }),
+    corpus.createIndex({ classifierStage: 1, classifyAttempts: 1, fetchedAt: 1 }, { name: "doc_unclassified" }),
     people.createIndex({ fingerprint: 1 }, { unique: true, name: "person_identity" }),
   ]);
 }

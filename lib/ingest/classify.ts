@@ -41,12 +41,35 @@ const VerdictSchema = z.object({
           "ONE sentence, present tense, neutral third person, describing what the author needs. Empty string if not a lead.",
         ),
       namedProducts: z.array(z.string()).describe("Products the author names as ones they use or considered. Empty if none."),
-      roleGuess: z.enum(["founder", "developer", "marketer", "ops", "designer", "sales", "consumer", "unknown"]),
+      // Deliberately permissive strings rather than z.enum, and this is not laziness.
+      //
+      // These were enums, and in production the model occasionally returned a role outside the list
+      // ("engineer", "student", "researcher"). Zod then rejected the WHOLE response, so one
+      // out-of-vocabulary word on document 14 destroyed the other 19 perfectly good
+      // classifications — and the batch retried forever, paying for a full model call each time.
+      //
+      // These two fields are descriptive metadata that nothing gates on, so an unrecognised value
+      // is worth normalising away, never worth losing a batch over. Normalisation happens below.
+      roleGuess: z.string().describe("One of: founder, developer, marketer, ops, designer, sales, consumer, unknown."),
       companyContext: z.string().describe("Short freeform, e.g. '3-person agency'. Empty string if unclear."),
-      urgency: z.enum(["now", "evaluating", "someday", "unknown"]),
+      urgency: z.string().describe("One of: now, evaluating, someday, unknown."),
     }),
   ),
 });
+
+const ROLES = ["founder", "developer", "marketer", "ops", "designer", "sales", "consumer", "unknown"];
+const URGENCIES = ["now", "evaluating", "someday", "unknown"];
+
+/** Coerces a free-text answer onto the known vocabulary, falling back to "unknown". */
+export function normalizeChoice(value: string | undefined, allowed: string[]): string {
+  const v = (value ?? "").trim().toLowerCase();
+  if (allowed.includes(v)) return v;
+  // Near-misses are common and cheap to rescue: "ops manager" -> "ops", "software developer" ->
+  // "developer". Only accepted when exactly one option matches, so an ambiguous answer still
+  // becomes "unknown" rather than being guessed at.
+  const hits = allowed.filter((a) => a !== "unknown" && v.includes(a));
+  return hits.length === 1 ? hits[0] : "unknown";
+}
 
 const SYSTEM = [
   "You classify forum and social posts for a lead-generation index. For each post, determine whether",
@@ -131,6 +154,8 @@ export async function classifyBatch(opts: { documents: ClassifyInput[]; timeoutM
       ...v,
       intentType: v.intentType as IntentType,
       confidence: Math.max(0, Math.min(1, v.confidence)),
+      roleGuess: normalizeChoice(v.roleGuess, ROLES),
+      urgency: normalizeChoice(v.urgency, URGENCIES),
     }));
 }
 

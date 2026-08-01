@@ -5,6 +5,7 @@ import { crawlDiscourse } from "../lib/ingest/sources/discourse";
 import { crawlStackExchange } from "../lib/ingest/sources/stackexchange";
 import { backfillEmbeddings, classifyBacklog, ingestDocuments, refreshSourceYield } from "../lib/ingest/pipeline";
 import { hasEmbeddingProvider } from "../lib/ingest/embed";
+import { isPermanentSourceError } from "../lib/ingest/errors";
 
 // The ingestion worker. Runs on Railway, NOT on Vercel.
 //
@@ -84,8 +85,20 @@ async function pollSource(source: SourceDoc & { _id?: ObjectId }): Promise<void>
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
     log(`ERROR polling ${source.platform}:${source.identifier} — ${message}`);
-    // Back off rather than hammer. Three strikes and it stops being polled at all until a human
-    // looks — a blocked source that keeps being hit is how API access gets revoked.
+
+    // A permanent failure retires the source immediately. Retrying a slug that does not exist is
+    // not politeness, it is waste — and it hides the real failures in the log.
+    if (isPermanentSourceError(err)) {
+      log(`RETIRED ${source.platform}:${source.identifier} — permanent failure, will not be polled again`);
+      await sources.updateOne(
+        { _id: source._id },
+        { $set: { health: "retired", enabled: false, lastPolled: new Date(), updatedAt: new Date() } },
+      );
+      return;
+    }
+
+    // Otherwise back off rather than hammer. Three strikes and it stops being polled at all until a
+    // human looks — a blocked source that keeps being hit is how API access gets revoked.
     const degraded = source.health === "degraded";
     await sources.updateOne(
       { _id: source._id },
@@ -156,7 +169,9 @@ async function seedSources(): Promise<void> {
       "freelancing",
       "webmasters",
       "softwarerecs",
-      "productivity",
+      // "productivity" was here and returns 400 — Stack Exchange closed Personal Productivity, so
+      // the slug no longer resolves. Kept as a note so nobody re-adds it from the site list.
+      "projectmanagement",
       "cooking",
       "gardening",
       "photo",

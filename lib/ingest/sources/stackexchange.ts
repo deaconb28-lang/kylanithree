@@ -1,5 +1,6 @@
 import { htmlToText } from "../../htmlText";
 import type { RawDocument } from "../normalize";
+import { PermanentSourceError } from "../errors";
 
 // Stack Exchange. Free API, permissive terms, and the network spans ~180 topical sites — so this is
 // emphatically not just a developer source: Cooking, Gardening, Personal Finance, Parenting,
@@ -63,7 +64,15 @@ export async function crawlStackExchange(opts: {
     headers: { Accept: "application/json", "User-Agent": "kylani-ingest/1.0 (+https://kylani.app)" },
     signal: AbortSignal.timeout(timeoutMs),
   });
-  if (!res.ok) throw new Error(`Stack Exchange ${site} failed: ${res.status}`);
+  if (!res.ok) {
+    // A 400 from this API means the site slug does not exist (or the site was archived) — it is a
+    // permanent fact about the source, not a transient failure, so it is marked as such. Otherwise
+    // the generic backoff spends three polls rediscovering the same thing on every restart.
+    if (res.status === 400) {
+      throw new PermanentSourceError(`Stack Exchange has no site "${site}" (or it is archived).`);
+    }
+    throw new Error(`Stack Exchange ${site} failed: ${res.status}`);
+  }
   const json = (await res.json()) as { items?: SEQuestion[]; has_more?: boolean; quota_remaining?: number };
 
   const documents: RawDocument[] = [];

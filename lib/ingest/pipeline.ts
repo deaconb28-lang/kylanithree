@@ -143,6 +143,10 @@ async function resolvePeople(docs: CorpusDoc[]): Promise<void> {
   await people.bulkWrite(ops, { ordered: false });
 }
 
+// Three tries, then the document is left unclassified rather than retried indefinitely. It stays
+// in the corpus as a raw record — useful for author history — it just never enters retrieval.
+const MAX_CLASSIFY_ATTEMPTS = 3;
+
 export type ClassifyStats = {
   considered: number;
   classified: number;
@@ -163,8 +167,16 @@ export async function classifyBacklog(opts: { limit?: number; timeoutMs?: number
   const corpus = await Corpus();
   const stats: ClassifyStats = { considered: 0, classified: 0, leads: 0, none: 0, forReview: 0, embedded: 0 };
 
+  // Documents that have already failed MAX_CLASSIFY_ATTEMPTS times are skipped. Without this a
+  // single document the model cannot produce valid output for sits at the head of the
+  // oldest-first queue forever, and every tick pays for a full model call to fail on it again.
+  //
+  // $not/$gte rather than $lt, and the difference is not cosmetic: in MongoDB `{f: {$lt: 3}}`
+  // requires the field to EXIST. Every document stored before this counter was introduced has no
+  // `classifyAttempts` at all, so $lt would have excluded the entire existing backlog and quietly
+  // stalled the classifier. $not/$gte matches a missing field as well as a low one.
   const pending = await corpus
-    .find({ classifierStage: 1 })
+    .find({ classifierStage: 1, classifyAttempts: { $not: { $gte: MAX_CLASSIFY_ATTEMPTS } } })
     .sort({ fetchedAt: 1 })
     .limit(limit)
     .toArray();
@@ -179,7 +191,16 @@ export async function classifyBacklog(opts: { limit?: number; timeoutMs?: number
     postedAt: d.postedAt,
   }));
 
-  const verdicts = await classifyBatch({ documents: inputs, timeoutMs });
+  let verdicts;
+  try {
+    verdicts = await classifyBatch({ documents: inputs, timeoutMs });
+  } catch (err) {
+    // Charge the whole batch an attempt. A structured-output rejection is a property of one
+    // document's content, but we cannot tell which, so the batch shares the cost — and after a few
+    // tries the offenders drop out and the rest classify normally on their own.
+    await corpus.updateMany({ _id: { $in: pending.map((d) => d._id) } }, { $inc: { classifyAttempts: 1 } });
+    throw err;
+  }
   const byId = new Map(pending.map((d) => [String(d._id), d]));
   const now = new Date();
 
@@ -212,6 +233,14 @@ export async function classifyBacklog(opts: { limit?: number; timeoutMs?: number
     });
 
   if (ops.length > 0) await corpus.bulkWrite(ops, { ordered: false });
+
+  // Anything the model silently omitted from its response also counts as an attempt, or an
+  // always-skipped document would loop just as forever as a failing one.
+  const answered = new Set(verdicts.map((v) => v.id));
+  const unanswered = pending.filter((d) => !answered.has(String(d._id))).map((d) => d._id);
+  if (unanswered.length > 0) {
+    await corpus.updateMany({ _id: { $in: unanswered } }, { $inc: { classifyAttempts: 1 } });
+  }
 
   // Embed only what turned out to be a lead. A document classified `none` never enters retrieval,
   // so embedding it would be paying for a vector nothing can ever match against.
