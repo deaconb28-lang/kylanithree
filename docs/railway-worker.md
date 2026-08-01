@@ -23,14 +23,16 @@ a crawl outage.
 Railway → New Project → Deploy from GitHub repo → this repo, branch
 `claude/kylanithree-data-organization-v7j15s`.
 
-**Settings → Start Command:**
+`railway.json` in the repo root sets the build and start commands, so Railway needs no manual
+configuration beyond variables. Two things in it are load-bearing and were both learned the hard
+way on the first failed deploy:
 
-```
-npm run worker
-```
-
-`railway.json` in the repo root already sets the build and start command, so Railway needs no
-manual configuration beyond variables.
+- **No explicit builder.** Pinning `NIXPACKS` made the build fail before it emitted a single log
+  line — Railway's current default is Railpack.
+- **`node .worker-build/worker/index.js`, not `tsx worker/index.ts`.** `tsx` is a devDependency and
+  Railway prunes those from the runtime image, so a tsx start command works locally and then dies
+  with `tsx: not found` in production. The worker is compiled at build time instead, which keeps
+  TypeScript out of the runtime path entirely.
 
 **Settings → Variables:**
 

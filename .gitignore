@@ -42,3 +42,6 @@ next-env.d.ts
 
 # offline test build output
 .test-build
+
+# Compiled ingestion worker (built on deploy)
+.worker-build/
