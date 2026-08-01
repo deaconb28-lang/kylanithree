@@ -116,6 +116,7 @@ export default function DiagnosticsPage() {
     ["Lemmy", (checks.lemmy ?? {}) as Json],
     ["Bluesky", (checks.bluesky ?? {}) as Json],
     ["Stack Exchange", (checks.stackExchange ?? {}) as Json],
+    ["Quora", (checks.quora ?? {}) as Json],
   ];
   const runTrace = (run?.trace ?? {}) as { stages?: StageMetric[] };
   const stages = useMemo(() => runTrace.stages ?? [], [runTrace.stages]);

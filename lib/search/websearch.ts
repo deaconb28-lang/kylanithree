@@ -80,6 +80,51 @@ async function anthropicForumSearch(niche: string, buyer: string, timeoutMs: num
   return (result.parsed_output?.forums ?? []).map((f) => ({ title: f.name, url: f.url, snippet: f.why }));
 }
 
+const UrlsSchema = z.object({
+  urls: z.array(z.string().describe("A real URL copied exactly from a search result. Never guessed, never constructed.")),
+});
+
+// Returns raw URLs for a shaped query. Deliberately returns URLs ONLY: callers fetch and parse the
+// page themselves, so a model can suggest where to look but never supplies the content that ends
+// up in front of a founder. Used by the Quora source, which has no API to call instead.
+export async function findUrlsOnWeb(opts: {
+  query: string;
+  instruction: string;
+  limit?: number;
+  timeoutMs?: number;
+}): Promise<string[]> {
+  const { query, instruction, limit = 8, timeoutMs = 8000 } = opts;
+  const provider = webSearchProvider();
+  if (provider === "none") return [];
+
+  if (provider === "brave") {
+    try {
+      const results = await braveSearch(query, limit, Math.min(timeoutMs, 5000));
+      return results.map((r) => r.url);
+    } catch {
+      return [];
+    }
+  }
+
+  try {
+    const result = await getAnthropic().messages.parse(
+      {
+        model: "claude-sonnet-5",
+        max_tokens: 1200,
+        tools: [{ type: "web_search_20260209", name: "web_search", max_uses: 2 }],
+        system: `${instruction} Return at most ${limit} URLs.`,
+        messages: [{ role: "user", content: query }],
+        output_config: { effort: "low", format: zodOutputFormat(UrlsSchema) },
+      },
+      { timeout: timeoutMs },
+    );
+    return (result.parsed_output?.urls ?? []).slice(0, limit);
+  } catch {
+    // A dead search provider degrades this source to nothing; it never fails the run.
+    return [];
+  }
+}
+
 export async function findCommunitiesOnWeb(opts: {
   niche: string;
   buyer: string;

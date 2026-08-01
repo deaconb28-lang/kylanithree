@@ -23,6 +23,7 @@
     "lib/search/queries.ts",
     "lib/relativeTime.ts",
     "lib/search/explain.ts",
-    "lib/search/deadline.ts"
+    "lib/search/deadline.ts",
+    "lib/search/extract.ts"
   ]
 }

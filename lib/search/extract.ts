@@ -5,6 +5,7 @@ import { searchX } from "./x";
 import { searchDiscourse } from "./discourse";
 import { searchBluesky } from "./bluesky";
 import { searchStackExchange } from "./stackexchange";
+import { searchQuora } from "./quora";
 import { cheapFilter } from "./filter";
 import { scoreCandidates } from "./score";
 import { settleWithBudget, Trace } from "./trace";
@@ -33,6 +34,39 @@ const RESPONSE_RESERVE_MS = 2_000;
 // Cap on what reaches the expensive pass per shard. The cheap filter ranks by signal first, so
 // this is a "best N", not a truncation of something unsorted.
 const MAX_TO_SCORE = 40;
+
+// Takes the best N while keeping as many DIFFERENT communities represented as possible.
+//
+// A plain `slice(0, N)` on a signal-ranked list is quietly biased: one busy subreddit that matches
+// the query well can fill the entire batch, and the run then reports leads from one place as though
+// it had searched everywhere. Ten people across eight communities is a better answer than ten
+// people from one — it tests more of the map, and it is far more useful to a founder deciding where
+// to spend their time.
+//
+// Round-robin by venue preserves the ranking within each community (the list arrives sorted) while
+// guaranteeing every community gets a turn before any community gets a second.
+export function spreadAcrossVenues(candidates: Candidate[], limit: number): Candidate[] {
+  const byVenue = new Map<string, Candidate[]>();
+  for (const c of candidates) {
+    const bucket = byVenue.get(c.venueId);
+    if (bucket) bucket.push(c);
+    else byVenue.set(c.venueId, [c]);
+  }
+  // Venues ordered by their own strongest candidate, so the best community still goes first.
+  const buckets = [...byVenue.values()];
+  const out: Candidate[] = [];
+  for (let round = 0; out.length < limit; round++) {
+    let placed = false;
+    for (const bucket of buckets) {
+      if (round >= bucket.length) continue;
+      out.push(bucket[round]);
+      placed = true;
+      if (out.length >= limit) break;
+    }
+    if (!placed) break;
+  }
+  return out;
+}
 
 export async function extractLeads(opts: {
   venues: Venue[];
@@ -75,6 +109,10 @@ export async function extractLeads(opts: {
         jobs.push(() => searchLemmy({ ...common, limit: 20 }));
       } else if (v.id === "bsky:all") {
         jobs.push(() => searchBluesky({ ...common, limit: 50 }));
+      } else if (v.id === "quora:all") {
+        // Fewer per query than the API-backed sources: each result costs a page fetch, so this is
+        // deliberately shallow rather than letting one slow source eat the fan-out budget.
+        jobs.push(() => searchQuora({ ...common, limit: 6 }));
       } else if (v.id.startsWith("stackexchange:")) {
         jobs.push(() => searchStackExchange({ ...common, site: v.id.slice("stackexchange:".length) }));
       } else if (v.id.startsWith("discourse:")) {
@@ -107,7 +145,7 @@ export async function extractLeads(opts: {
 
   if (filtered.length === 0) return { leads: [] };
 
-  const toScore = filtered.slice(0, MAX_TO_SCORE);
+  const toScore = spreadAcrossVenues(filtered, MAX_TO_SCORE);
   const leads = await trace.stage(`extract:score:w${wave}`, toScore.length, async () => {
     // Skipping is the honest outcome when there isn't room: starting a call that gets cut off
     // mid-flight costs the same and returns nothing, and takes the trace down with it.

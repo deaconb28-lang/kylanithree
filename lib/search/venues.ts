@@ -38,6 +38,7 @@ const VENUE_HINTS: Record<string, string> = {
   "hn:all": "founders, engineers, and technical operators. Keep only if this buyer is plausibly technical or startup-adjacent; drop for consumer, lifestyle, or retail buyers.",
   "lemmy:all": "federated general-interest communities, Reddit-like in tone and topic spread. Reasonable for most buyers.",
   "x:all": "short public posts across every topic. Keep if this buyer complains publicly; drop for private or enterprise-only buyers.",
+  "quora:all": "questions people ask in public, skewing consumer and professional-advice rather than technical. Every item is someone explicitly asking for help, so keep it for almost any buyer.",
 };
 
 // Always in the candidate pool, and the reason a run still produces leads when Reddit is
@@ -83,6 +84,22 @@ const BLUESKY: Venue = {
   rank: 0.55,
 };
 
+// No API and hostile to scrapers, so this one goes through web search to find question URLs and
+// then fetches each page itself — see lib/search/quora.ts. Worth the extra work because every item
+// is a question, and it reaches consumer and professional-advice buyers the technical sources miss.
+const QUORA: Venue = {
+  id: "quora:all",
+  platform: "Forum",
+  name: "Quora",
+  url: "https://www.quora.com/",
+  members: null,
+  membersLabel: "size unknown",
+  fit: "Untested",
+  note: "Answer the question properly. A useful answer that happens to mention what you built outperforms a pitch.",
+  searchable: true,
+  rank: 0.5,
+};
+
 const X_VENUE: Venue = {
   id: "x:all",
   platform: "X",
@@ -113,7 +130,7 @@ function alwaysAvailableVenues(lexiconTerms: string[] = []): Venue[] {
     searchable: true,
     rank: 0.6,
   }));
-  return [HACKER_NEWS, LEMMY, ...(hasBlueskyCredentials() ? [BLUESKY] : []), ...seVenues, ...(hasXCredentials() ? [X_VENUE] : [])];
+  return [HACKER_NEWS, LEMMY, ...(hasBlueskyCredentials() ? [BLUESKY] : []), QUORA, ...seVenues, ...(hasXCredentials() ? [X_VENUE] : [])];
 }
 
 export interface VenueCacheDoc {
@@ -150,7 +167,10 @@ export async function resolveVenues(opts: {
   /** The request's clock, so the two model-backed stages here shrink to fit what is actually left. */
   deadline?: Deadline;
 }): Promise<{ venues: Venue[]; cached: boolean }> {
-  const { nicheKey, buyers, whatYouSell, lexiconTerms, trace, maxVenues = 8, deadline } = opts;
+  // More communities means more people AND a wider read on where this buyer actually is — the
+  // extraction stage now spreads its budget across venues rather than letting one fill the batch,
+  // so a longer list genuinely widens the result instead of just adding tail.
+  const { nicheKey, buyers, whatYouSell, lexiconTerms, trace, maxVenues = 12, deadline } = opts;
   // Both slow stages run concurrently, so each may claim the same slice of the remaining time.
   const webBudget = deadline ? deadline.budgetFor(WEB_DISCOVERY_BUDGET_MS, RESOLVE_RESERVE_MS) : WEB_DISCOVERY_BUDGET_MS;
   const annotateBudget = deadline ? deadline.budgetFor(ANNOTATION_BUDGET_MS, RESOLVE_RESERVE_MS) : ANNOTATION_BUDGET_MS;
@@ -203,7 +223,7 @@ export async function resolveVenues(opts: {
   const webVenuesPromise = withTimeout(discoverWebForums({ nicheKey, buyers, trace }), webBudget, [] as Venue[]);
 
   const ranked = discovered
-    .map((s) => ({ sub: s, rank: termRelevance(`${s.name} ${s.description}`, lexiconTerms) * 0.6 + sizeFit(s.subscribers) * 0.4 }))
+    .map((s) => ({ sub: s, rank: termRelevance(`${s.name} ${s.description}`, lexiconTerms) * 0.78 + sizeFit(s.subscribers) * 0.22 }))
     .sort((a, b) => b.rank - a.rank)
     .slice(0, maxVenues * 2);
 

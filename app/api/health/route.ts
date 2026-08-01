@@ -182,6 +182,26 @@ export async function GET(req: NextRequest) {
     checks.stackExchange = { reachable: false, ms: Date.now() - seT0, error: (err instanceof Error ? err.message : String(err)).slice(0, 200) };
   }
 
+  // Quora has no API — the source finds question URLs via web search and then fetches each page
+  // itself, so what matters here is whether Quora serves us a page at all. It blocks datacenter IPs
+  // aggressively, and when it does this source contributes nothing rather than degrading.
+  const quoraT0 = Date.now();
+  try {
+    const res = await fetch("https://www.quora.com/", {
+      headers: { "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36" },
+      signal: AbortSignal.timeout(6000),
+    });
+    checks.quora = {
+      reachable: res.ok,
+      status: res.status,
+      ms: Date.now() - quoraT0,
+      note: res.ok ? undefined : "Quora is blocking this IP. The source will return nothing — it never falls back to model output.",
+      needsWebSearch: webSearchProvider() === "none" ? "No web-search provider, so Quora question URLs cannot be found at all." : undefined,
+    };
+  } catch (err) {
+    checks.quora = { reachable: false, ms: Date.now() - quoraT0, error: (err instanceof Error ? err.message : String(err)).slice(0, 200) };
+  }
+
   // --- open-web discovery -------------------------------------------------
   const provider = webSearchProvider();
   checks.webSearch = {
@@ -201,7 +221,8 @@ export async function GET(req: NextRequest) {
       (checks.hackerNews as { reachable?: boolean }).reachable ||
       (checks.lemmy as { reachable?: boolean }).reachable ||
       (checks.bluesky as { reachable?: boolean }).reachable ||
-      (checks.stackExchange as { reachable?: boolean }).reachable,
+      (checks.stackExchange as { reachable?: boolean }).reachable ||
+      (checks.quora as { reachable?: boolean }).reachable,
   );
 
   return NextResponse.json(
