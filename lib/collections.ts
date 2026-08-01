@@ -192,6 +192,44 @@ export interface SuppressionDoc {
   createdAt: Date;
 }
 
+// --- credits -------------------------------------------------------------------------------
+// See docs/credits.md. The rule that shapes these: meter every plan, bill only some. A usage event
+// is written on Free, Pro and Founder alike; only Free debits a wallet. That gives per-account COGS
+// and abuse detection now, and lets plan rules change later without re-plumbing anything.
+
+export interface UsageEventDoc {
+  userId: string;
+  planAtTime: string;
+  action: string;
+  resourceId?: string;
+  credits: number;
+  /** False on unlimited plans — the event is still recorded, it just doesn't move a balance. */
+  billed: boolean;
+  /** What this actually cost US. Why metering unlimited plans pays for itself. */
+  vendorCostCents?: number;
+  rateCardVersion: number;
+  /** Workers retry. A retry that double-debits ends in a chargeback, so this is not optional. */
+  idempotencyKey: string;
+  createdAt: Date;
+}
+
+/** One row per person per account, ever. Enforces "charged once for a person, lifetime". */
+export interface LeadChargeDoc {
+  userId: string;
+  personFingerprint: string;
+  tier: string;
+  credits: number;
+  createdAt: Date;
+}
+
+export async function UsageEvents() {
+  return (await getDb()).collection<UsageEventDoc>("usageEvents");
+}
+
+export async function LeadCharges() {
+  return (await getDb()).collection<LeadChargeDoc>("leadCharges");
+}
+
 export async function Campaigns() {
   return (await getDb()).collection<CampaignDoc>("campaigns");
 }

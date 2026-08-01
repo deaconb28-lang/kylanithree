@@ -2,6 +2,8 @@ import { Campaigns, Communities, Hypotheses, Leads, type CampaignDoc } from "./c
 import { generateCampaignSeed, type GeneratedSeed } from "./generateCampaignSeed";
 import { scoreLead } from "./search/leadScore";
 import { CHANNELS } from "./data";
+import { meterLeads } from "./credits/meter";
+import { ensureCreditIndexes } from "./credits/indexes";
 
 export function slugify(text: string) {
   return text.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)/g, "") || "buyer";
@@ -33,6 +35,8 @@ export async function persistGeneratedSeed(params: {
   generated: GeneratedSeed;
   relevanceWindowDays?: number;
   dedupe?: { authors: Set<string>; communityNames: Set<string> };
+  /** Recorded on the usage event so per-account COGS can be read by plan later. */
+  plan?: string | null;
 }): Promise<{ insertedLeads: number; insertedCommunities: number }> {
   const now = new Date();
   const { userId, campaignId: cid, buyers, generated, dedupe, relevanceWindowDays = 60 } = params;
@@ -111,6 +115,30 @@ export async function persistGeneratedSeed(params: {
         rev: "no pipeline yet",
         updatedAt: now,
       })),
+    );
+  }
+
+  // Meter what was actually delivered. Recorded on every plan and debited on none yet — see
+  // docs/credits.md. Deliberately after the inserts and deliberately unawaited-for-failure: this
+  // is bookkeeping, and a search that found real people must never fail because bookkeeping did.
+  if (leadsToInsert.length) {
+    await ensureCreditIndexes();
+    const metered = await meterLeads({
+      userId,
+      plan: params.plan,
+      leads: leadsToInsert.map((l) => ({
+        // Search never resolves an email — that is what a contact unlock is for — so every lead
+        // from here is basic or standard, never verified. The role comes from the buyer persona
+        // the scorer matched, which is exactly what lifts a bare handle to "standard".
+        email: null,
+        role: buyers[l.buyerIndex]?.name ?? null,
+        platform: l.platform ?? null,
+        authorHandle: l.author ?? null,
+        intentTier: l.intentTier ?? null,
+      })),
+    });
+    console.error(
+      `[credits] user=${userId} charged=${metered.charged} credits=${metered.credits} deduped=${metered.deduped} unidentifiable=${metered.unidentifiable}`,
     );
   }
 

@@ -127,6 +127,10 @@ export default function HomePage() {
   const waiting = leads.filter((l) => l.status === "waiting");
   const drafted = leads.filter((l) => l.draft);
   const latestFinding = findings[0] ?? null;
+  // Null rather than 0% until something has actually been sent — a 0% reply rate on zero sends is
+  // a fabricated stat, not a bad result.
+  const replyRate =
+    campaign.stats.contactedTotal > 0 ? Math.round((campaign.stats.repliedTotal / campaign.stats.contactedTotal) * 100) : null;
 
   // Each stage is done only if it actually produced something. The first stage that hasn't is the
   // one you're on — which is also the honest answer when a search came back thin.
@@ -156,6 +160,12 @@ export default function HomePage() {
   }));
 
   const topWaiting = [...waiting].sort((a, b) => scoreOf(b) - scoreOf(a)).slice(0, 3);
+  // Ranked by people actually found there, not by member count — a huge community that yielded
+  // nobody is not a good place to spend time, whatever its size says.
+  const topCommunities = communities
+    .map((c) => ({ ...c, leadCount: leads.filter((l) => l.source === c.name).length }))
+    .sort((a, b) => b.leadCount - a.leadCount)
+    .slice(0, 5);
 
   return (
     <DashboardShell active="home">
@@ -175,6 +185,52 @@ export default function HomePage() {
 
         <div style={{ background: "var(--card)", border: "1px solid var(--border)", borderRadius: 16, padding: "14px 18px" }}>
           <StepRail steps={steps} />
+        </div>
+
+        {/* The numbers that answer "how is this actually going" without opening another page.
+            Every one is counted from real rows — a zero shows as a zero. */}
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(150px, 1fr))", gap: 12 }}>
+          {(
+            [
+              { label: "People found", value: leads.length, href: "/app/queue" },
+              { label: "Waiting on you", value: waiting.length, href: "/app/queue", accent: waiting.length > 0 },
+              { label: "Communities", value: communities.length, href: "/app/map" },
+              { label: "Approved", value: leads.filter((l) => l.status === "approved" || l.status === "sent").length, href: "/app/queue" },
+              { label: "Replied", value: leads.filter((l) => l.status === "replied").length, href: "/app/queue" },
+              { label: "Reply rate", value: replyRate === null ? "—" : `${replyRate}%`, href: "/app/findings" },
+            ] as { label: string; value: number | string; href: string; accent?: boolean }[]
+          ).map((s) => (
+            <Link
+              key={s.label}
+              href={s.href}
+              style={{
+                background: "var(--card)",
+                border: `1px solid ${s.accent ? "var(--ember)" : "var(--border)"}`,
+                borderRadius: 14,
+                padding: "14px 16px",
+                display: "flex",
+                flexDirection: "column",
+                gap: 2,
+                textDecoration: "none",
+                color: "inherit",
+                minWidth: 0,
+              }}
+            >
+              <span
+                style={{
+                  fontFamily: "var(--font-outfit)",
+                  fontWeight: 800,
+                  fontSize: 26,
+                  letterSpacing: "-.03em",
+                  fontVariantNumeric: "tabular-nums",
+                  color: s.accent ? "var(--ember)" : "var(--ink)",
+                }}
+              >
+                {s.value}
+              </span>
+              <span style={{ fontSize: 12.5, color: "var(--muted)" }}>{s.label}</span>
+            </Link>
+          ))}
         </div>
 
         <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
@@ -205,8 +261,11 @@ export default function HomePage() {
           )}
         </div>
 
-        <div style={{ display: "grid", gridTemplateColumns: "1.4fr 1fr", gap: 16 }} className="home-lower">
-          <style>{`@media (max-width: 900px) { .home-lower { grid-template-columns: 1fr !important; } }`}</style>
+        <div style={{ display: "grid", gridTemplateColumns: "1.5fr 1fr 1fr", gap: 16 }} className="home-lower">
+          <style>{`
+            @media (max-width: 1100px) { .home-lower { grid-template-columns: 1fr 1fr !important; } }
+            @media (max-width: 760px) { .home-lower { grid-template-columns: 1fr !important; } }
+          `}</style>
 
           <div style={{ background: "var(--card)", border: "1px solid var(--border)", borderRadius: 16, padding: "20px 22px", display: "flex", flexDirection: "column", gap: 14, minWidth: 0 }}>
             <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", gap: 12 }}>
@@ -251,6 +310,28 @@ export default function HomePage() {
                   ? "Nothing found yet. Run a search and anything real will land here."
                   : "Everything found so far has been reviewed. Search again when you want more."}
               </span>
+            )}
+          </div>
+
+          <div style={{ background: "var(--card)", border: "1px solid var(--border)", borderRadius: 16, padding: "20px 22px", display: "flex", flexDirection: "column", gap: 12, minWidth: 0 }}>
+            <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", gap: 12 }}>
+              <span style={{ fontFamily: "var(--font-outfit)", fontWeight: 700, fontSize: 16, letterSpacing: "-.02em" }}>Where they are</span>
+              <Link href="/app/map" style={{ fontSize: 13, color: "var(--ember)", fontWeight: 700, textDecoration: "none" }}>
+                Map →
+              </Link>
+            </div>
+            {topCommunities.length > 0 ? (
+              <div style={{ display: "flex", flexDirection: "column" }}>
+                {topCommunities.map((c, i) => (
+                  <div key={c._id} style={{ display: "flex", alignItems: "baseline", gap: 10, padding: "9px 0", borderTop: i === 0 ? "none" : "1px solid var(--border)", minWidth: 0 }}>
+                    <span style={{ fontSize: 14, fontWeight: 600, flex: 1, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{c.name}</span>
+                    <span style={{ fontSize: 12.5, color: "var(--muted)", whiteSpace: "nowrap" }}>{c.leadCount} found</span>
+                    <span style={{ fontSize: 11.5, fontWeight: 700, color: c.fit === "Strong fit" ? "var(--green)" : "var(--muted)", whiteSpace: "nowrap" }}>{c.fit}</span>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <span style={{ fontSize: 14, color: "var(--muted)", lineHeight: 1.55 }}>No communities confirmed yet.</span>
             )}
           </div>
 

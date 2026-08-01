@@ -1,9 +1,7 @@
 import NextAuth from "next-auth";
 import Google from "next-auth/providers/google";
-import Credentials from "next-auth/providers/credentials";
 import { MongoDBAdapter } from "@auth/mongodb-adapter";
-import bcrypt from "bcryptjs";
-import clientPromise, { getDb } from "./lib/mongodb";
+import clientPromise from "./lib/mongodb";
 
 export const { handlers, auth, signIn, signOut } = NextAuth({
   adapter: MongoDBAdapter(clientPromise, { databaseName: "kylani" }),
@@ -14,8 +12,14 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
   // and sign-in fails at the callback. Set AUTH_URL to the canonical origin as well to remove any
   // remaining ambiguity.
   trustHost: true,
-  // Credentials sign-in can't hydrate a database session (Auth.js persists
-  // no session row for it), so the whole app runs on JWT sessions instead.
+  // Google is the only way in. Email/password was removed: it meant maintaining a password store,
+  // a reset flow and a second class of "wrong password" failure, all to reach the same Google
+  // account most founders were going to use anyway — and Gmail sending needs a Google OAuth grant
+  // regardless, so a password account could never actually send anything.
+  //
+  // JWT sessions are kept rather than switching to database sessions: the session shape, the
+  // `token.id` callback below and every `requireUserId()` call site depend on it, and there is no
+  // benefit to churning that.
   session: { strategy: "jwt" },
   providers: [
     Google({
@@ -33,37 +37,6 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         params: {
           scope: "openid email profile",
         },
-      },
-    }),
-    Credentials({
-      credentials: {
-        email: { label: "Email", type: "email" },
-        password: { label: "Password", type: "password" },
-      },
-      async authorize(credentials) {
-        const email = (credentials?.email as string | undefined)?.trim().toLowerCase();
-        const password = credentials?.password as string | undefined;
-        if (!email || !password) return null;
-
-        let db;
-        try {
-          db = await getDb();
-        } catch (err) {
-          // A real connectivity failure (bad/missing MONGODB_URI, Atlas Network Access blocking
-          // Vercel, a paused cluster) — log the actual cause here so it's visible in Vercel's
-          // function logs, then rethrow. Returning null instead would surface to the user as
-          // "wrong password", which is wrong and would send them chasing the wrong problem.
-          console.error("[auth/credentials] MongoDB unreachable:", err instanceof Error ? err.message : err);
-          throw new Error("DatabaseUnavailable");
-        }
-
-        const user = await db.collection("users").findOne({ email });
-        if (!user?.passwordHash) return null;
-
-        const valid = await bcrypt.compare(password, user.passwordHash as string);
-        if (!valid) return null;
-
-        return { id: user._id.toString(), email: user.email, name: user.name ?? null, image: user.image ?? null };
       },
     }),
   ],

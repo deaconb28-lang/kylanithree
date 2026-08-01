@@ -24,6 +24,9 @@
     "lib/relativeTime.ts",
     "lib/search/explain.ts",
     "lib/search/deadline.ts",
-    "lib/search/extract.ts"
+    "lib/search/extract.ts",
+    "lib/credits/fingerprint.ts",
+    "lib/credits/rateCard.ts",
+    "lib/credits/estimate.ts"
   ]
 }

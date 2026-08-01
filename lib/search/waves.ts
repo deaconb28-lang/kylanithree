@@ -3,7 +3,9 @@
 // A wave is the unit of "look harder". Volume is reached by covering more phrases and deeper
 // pages — never by loosening the filter or the scoring gate, which are identical in every wave.
 
-export const PHRASES_PER_WAVE = 3;
+// Four rather than three: each phrase is one query per venue, and the fan-out is parallel, so a
+// wider wave costs almost nothing in wall-clock time while covering more of the real vocabulary.
+export const PHRASES_PER_WAVE = 4;
 
 // Interleaves the two phrase pools so each wave mixes "shopping right now" with "describing the
 // pain". A previous build concatenated them and then sliced to two, which meant problemPhrases

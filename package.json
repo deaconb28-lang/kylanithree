@@ -13,7 +13,6 @@
     "@anthropic-ai/sdk": "^0.115.0",
     "@auth/mongodb-adapter": "^3.11.3",
     "@vercel/analytics": "^2.0.1",
-    "bcryptjs": "^3.0.3",
     "googleapis": "^173.0.0",
     "mongodb": "^6.21.0",
     "next": "16.2.12",
@@ -25,7 +24,6 @@
     "zod": "^4.4.3"
   },
   "devDependencies": {
-    "@types/bcryptjs": "^2.4.6",
     "@types/node": "^20",
     "@types/react": "^19",
     "@types/react-dom": "^19",

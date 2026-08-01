@@ -15,7 +15,10 @@ import { rankLeads } from "../../lib/search/leadScore";
 // loading state for one. Extraction then runs as several parallel shards, each its own request, so
 // leads appear in batches as they confirm and no single request has to fit the whole run inside
 // Vercel's function ceiling.
-const VENUES_PER_SHARD = 3;
+// Smaller shards mean MORE parallel requests, and each request carries its own server-side time
+// budget — so halving the shard size roughly doubles the total compute the search can spend inside
+// the same wall-clock wait. With 12 venues resolved this is 6 concurrent requests per wave.
+const VENUES_PER_SHARD = 2;
 // Client-side ceilings, set just under each route's own. A function killed by the platform never
 // sends a response, so the browser reports a generic connection failure — indistinguishable from
 // being offline unless we time out first and say which one it was.
@@ -24,8 +27,11 @@ const EXTRACT_TIMEOUT_MS = 50_000;
 // What a founder is actually asking for when they say "find my buyers" — a batch worth working
 // through, not a token handful. The search widens toward this across successive waves; it never
 // relaxes the quality gate to reach it, so finishing under target is a normal, honest outcome.
-const TARGET_LEADS = 50;
-const MAX_WAVES = 4;
+const TARGET_LEADS = 60;
+// Each wave moves to the NEXT set of phrases and, once the pool wraps, the next page of results.
+// More waves is therefore more genuine coverage of the founder's own vocabulary, not the same
+// search run harder.
+const MAX_WAVES = 6;
 
 type Phase = "venues" | "leads" | "done";
 
@@ -140,6 +146,7 @@ export default function StepSearch({
         // budget re-searching ground that is already exhausted.
         const collected: ScoredLead[] = [];
         const seenAuthors = new Set<string>();
+        let emptyWaves = 0;
 
         for (let wave = 0; wave < MAX_WAVES; wave++) {
           if (cancelled) return;
@@ -195,8 +202,15 @@ export default function StepSearch({
             }),
           );
 
-          // A wave that produced nothing new means this lexicon and these venues are tapped out.
-          if (collected.length === before) break;
+          // One empty wave is NOT proof the ground is exhausted: the next wave searches different
+          // phrases entirely, so stopping on the first blank gave up while half the founder's
+          // vocabulary was still unsearched. Two consecutive blanks is a real signal.
+          if (collected.length === before) {
+            emptyWaves += 1;
+            if (emptyWaves >= 2) break;
+          } else {
+            emptyWaves = 0;
+          }
         }
 
         if (!cancelled) setPhase("done");
