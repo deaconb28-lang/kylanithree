@@ -257,6 +257,10 @@ button {
   border-radius: 2px;
   background: var(--field-idle);
   transform-origin: bottom center;
+  /* The scroll wave. A scale, never a height, so 110 oscillating bars cannot reflow the page —
+     same reason the entrance is a transform. Defaults to 1, so the server render and every
+     reduced-motion render is the field at rest and JavaScript only ever moves it from there. */
+  transform: scaleY(var(--ky-wave, 1));
 }
 .ky-bar-found {
   background: var(--ember);
@@ -273,10 +277,18 @@ button {
       background-color 520ms cubic-bezier(0.16, 1, 0.3, 1);
   }
   /* Pre-entrance: a found bar occupies its full height in layout from the start and is squashed
-     down to idle by a transform, so growing it cannot move anything around it. */
+     down to idle by a transform, so growing it cannot move anything around it.
+     Declared after .ky-bar on purpose — same specificity, so source order is what lets the idle
+     squash win over the wave's resting scale for exactly as long as the entrance is pending. */
   .ky-bar-waiting {
     background: var(--field-idle);
     transform: scaleY(var(--ky-idle-fraction, 0.4));
+  }
+  /* Once the wave is driving, the entrance's 720ms transform transition has to go: it would damp
+     every frame the scroll handler writes and the wave would lag the scroll by most of a second.
+     Colour keeps its transition — nothing writes background-color per frame. */
+  .ky-field-live .ky-bar-found {
+    transition: background-color 520ms cubic-bezier(0.16, 1, 0.3, 1);
   }
 }
 

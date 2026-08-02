@@ -6,6 +6,7 @@ import { crawlStackExchange } from "../lib/ingest/sources/stackexchange";
 import { backfillEmbeddings, classifyBacklog, ingestDocuments, refreshSourceYield } from "../lib/ingest/pipeline";
 import { hasEmbeddingProvider } from "../lib/ingest/embed";
 import { isPermanentSourceError } from "../lib/ingest/errors";
+import { enrichPeopleBacklog } from "../lib/ingest/people";
 
 // The ingestion worker. Runs on Railway, NOT on Vercel.
 //
@@ -23,6 +24,10 @@ const SOURCES_PER_TICK = 20;
 // Classification is the only paid step here. Draining a few batches per tick keeps the backlog
 // moving without letting a large crawl spike the Anthropic bill in one go.
 const CLASSIFY_BATCHES_PER_TICK = 3;
+// People looked up per tick. Free, but rate-limited by the platforms rather than by cost, and
+// every one is a separate request — 25/tick is ~36k/day, which drains any realistic backlog while
+// staying far under Stack Exchange's quota and well inside Discourse's tolerance.
+const ENRICH_PEOPLE_PER_TICK = 25;
 
 let running = true;
 
@@ -138,6 +143,23 @@ async function tick(): Promise<void> {
     }
   }
 
+  // Scraping people, not just posts. Runs every tick regardless of whether a source was polled —
+  // the backlog outlives any single crawl, and a tick with nothing due is exactly when there is
+  // spare budget to put faces to the names already collected.
+  if (running) {
+    try {
+      const enriched = await enrichPeopleBacklog({ limit: ENRICH_PEOPLE_PER_TICK });
+      if (enriched.considered > 0) {
+        log(
+          `enriched people considered=${enriched.considered} ok=${enriched.enriched} ` +
+            `failed=${enriched.failed} unaddressable=${enriched.unaddressable}`,
+        );
+      }
+    } catch (err) {
+      log(`ERROR enriching people — ${err instanceof Error ? err.message : err}`);
+    }
+  }
+
   for (let i = 0; i < CLASSIFY_BATCHES_PER_TICK && running; i++) {
     try {
       const stats = await classifyBacklog({});
@@ -164,18 +186,39 @@ async function seedSources(): Promise<void> {
   const seeds: Omit<SourceDoc, "createdAt" | "updatedAt">[] = [
     { platform: "hn", identifier: "all", accessMethod: "api", baseUrl: "https://hn.algolia.com/api/v1", pollIntervalMinutes: 15, health: "ok", docYield30d: 0, enabled: true },
     ...[
-      "workplace",
-      "money",
-      "freelancing",
-      "webmasters",
-      "softwarerecs",
-      // "productivity" was here and returns 400 — Stack Exchange closed Personal Productivity, so
-      // the slug no longer resolves. Kept as a note so nobody re-adds it from the site list.
-      "projectmanagement",
-      "cooking",
-      "gardening",
-      "photo",
-      "diy",
+      // Every niche, not a shortlist — this is the whole Stack Exchange network, all 166 sites that
+      // are currently live and not a meta. A corpus covering ten topics can only find buyers for
+      // products in those ten, and the failure is invisible: a founder outside them gets the
+      // live-shallow fallback and never learns the corpus simply had nothing for their niche.
+      //
+      // The list is derived from GET /2.3/sites rather than typed from memory. That matters — of
+      // ten slugs guessed by hand for this change, seven did not exist, and "projectmanagement" in
+      // the previous seed was one of them (the real slug is "pm"). A wrong slug 400s, gets retired
+      // by isPermanentSourceError, and silently never contributes.
+      //
+      // Ordering is irrelevant: dueSources() sorts by observed yield, so whichever sites actually
+      // produce leads rise on their own within a day or two and the rest cost one poll an hour.
+      "3dprinting", "academia", "ai", "alcohol", "android", "anime", "apple", "arduino", "askubuntu",
+      "astronomy", "aviation", "bicycles", "bioinformatics", "biology", "bitcoin", "blender", "boardgames",
+      "bricks", "buddhism", "cardano", "chemistry", "chess", "chinese", "christianity", "civicrm",
+      "codegolf", "codereview", "coffee", "computergraphics", "cooking", "craftcms", "crafts", "crypto",
+      "cs", "cseducators", "cstheory", "datascience", "dba", "devops", "diy", "drones", "drupal", "dsp",
+      "earthscience", "ebooks", "economics", "electronics", "ell", "emacs", "engineering", "english",
+      "eosio", "es.stackoverflow", "esperanto", "ethereum", "expatriates", "expressionengine", "fitness",
+      "freelancing", "french", "gamedev", "gaming", "gardening", "genealogy", "german", "gis",
+      "graphicdesign", "ham", "hermeneutics", "hinduism", "history", "homebrew", "hsm", "iot", "iota",
+      "islam", "italian", "ja.stackoverflow", "japanese", "joomla", "judaism", "korean",
+      "languagelearning", "latin", "law", "lifehacks", "linguistics", "literature", "magento",
+      "martialarts", "math", "matheducators", "mathematica", "mathoverflow.net", "mattermodeling",
+      "mechanics", "monero", "money", "movies", "music", "mythology", "networkengineering", "opensource",
+      "or", "outdoors", "parenting", "pets", "philosophy", "photo", "physics", "pm", "poker", "politics",
+      "portuguese", "psychology", "pt.stackoverflow", "puzzling", "quant", "quantumcomputing",
+      "raspberrypi", "retrocomputing", "reverseengineering", "robotics", "rpg", "ru.stackoverflow", "rus",
+      "russian", "salesforce", "scicomp", "scifi", "security", "serverfault", "sharepoint", "sitecore",
+      "skeptics", "softwareengineering", "softwarerecs", "solana", "sound", "space", "spanish", "sports",
+      "sqa", "stackapps", "stackoverflow", "stats", "stellar", "superuser", "sustainability", "tex",
+      "tezos", "tor", "travel", "tridion", "ukrainian", "unix", "ux", "vi", "video", "webapps",
+      "webmasters", "woodworking", "wordpress", "workplace", "worldbuilding", "writing",
     ].map((site) => ({
       platform: "stackexchange" as const,
       identifier: site,
@@ -187,12 +230,19 @@ async function seedSources(): Promise<void> {
     })),
     // Discourse instances that are public, active, and run by communities that discuss tooling and
     // process rather than the product hosting the forum.
+    //
+    // Each host below was verified by actually calling /latest.json before being added — of 42
+    // plausible-looking candidates, 11 were not reachable Discourse JSON at all (404, 403, 503, or
+    // an HTML login wall), so a hand-written list would have seeded a quarter dead sources.
     ...[
-      "meta.discourse.org",
-      "forum.obsidian.md",
-      "community.n8n.io",
-      "forum.rclone.org",
-      "community.home-assistant.io",
+      "community.auth0.com", "community.cloudflare.com", "community.frame.work", "community.grafana.com",
+      "community.home-assistant.io", "community.letsencrypt.org", "community.n8n.io",
+      "community.openai.com", "community.shopify.com", "community.wanikani.com", "discourse.mozilla.org",
+      "discourse.nixos.org", "discuss.circleci.com", "discuss.hashicorp.com", "discuss.python.org",
+      "discuss.pytorch.org", "discuss.streamlit.io", "forum.bubble.io", "forum.djangoproject.com",
+      "forum.ghost.org", "forum.gitlab.com", "forum.makerforums.info", "forum.manjaro.org",
+      "forum.obsidian.md", "forum.photostructure.com", "forum.rclone.org", "forum.snapcraft.io",
+      "forums.docker.com", "meta.discourse.org", "talk.tiddlywiki.org", "users.rust-lang.org"
     ].map((host) => ({
       platform: "discourse" as const,
       identifier: host,

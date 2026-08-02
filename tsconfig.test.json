@@ -35,6 +35,7 @@
     "lib/ingest/normalize.ts",
     "lib/ingest/pipeline.ts",
     "lib/ingest/sources/hackernews.ts",
+    "lib/ingest/people.ts",
     "lib/ingest/classify.ts",
     "lib/discover/merge.ts",
     "lib/discover/collections.ts",

@@ -84,7 +84,12 @@ export async function crawlStackExchange(opts: {
       platform: "stackexchange",
       externalId: `${site}:${q.question_id}`,
       url: q.link ?? `https://${site}.stackexchange.com/q/${q.question_id}`,
-      authorRef: q.owner.display_name,
+      // Display names repeat across the network and are not addressable; the numeric user_id is
+      // what /users/{id} takes. Identity stays on the qualified display name so existing
+      // fingerprints are untouched, and the id rides along purely as the lookup key.
+      authorRef: `${site}/${q.owner.display_name}`,
+      authorId: q.owner.user_id ? String(q.owner.user_id) : undefined,
+      authorScope: site,
       title: q.title,
       body,
       postedAt: new Date(q.creation_date * 1000),

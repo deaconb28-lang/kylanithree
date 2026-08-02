@@ -42,6 +42,13 @@ export interface CorpusDoc {
   url: string;
   parentExternalId?: string;
   authorRef: string;
+  /**
+   * The platform's own stable id for the author, when it gives one that differs from `authorRef`.
+   * Stack Exchange is the case that forces this: its posts carry `owner.display_name`, which is
+   * neither unique nor addressable, while every profile lookup needs the numeric `user_id`.
+   * Never part of the fingerprint — it is a lookup handle, not an identity.
+   */
+  authorId?: string;
   /** Stable person key, so retrieval can collapse to people without a join. */
   personFingerprint: string;
   title?: string;
@@ -78,6 +85,14 @@ export interface PersonDoc {
   fingerprint: string;
   platform: string;
   handle: string;
+  /**
+   * Which instance of the platform this person posts on — a Discourse host, a Stack Exchange site,
+   * "all" for flat sources like HN. Profile lookups are per-instance, so enrichment cannot find
+   * anyone without it.
+   */
+  scope?: string;
+  /** Platform-native id, when the platform uses one for profile lookups (Stack Exchange). */
+  authorId?: string;
   displayName?: string;
   bio?: string;
   profileUrl?: string;
@@ -87,6 +102,16 @@ export interface PersonDoc {
   accountAgeDays?: number;
   /** Proxy for "is this a real active human". Filters bots; does not rank leads. */
   activityScore: number;
+
+  // --- enrichment (the person-scraping pass) ---
+  /** Set once a profile fetch has succeeded. Absent means "still in the backlog". */
+  enrichedAt?: Date;
+  /** Failed lookups. Stops one deleted or private profile being retried forever. */
+  enrichAttempts?: number;
+  /** Platform-reported reputation/karma, normalised to a number. Not comparable across platforms. */
+  reputation?: number;
+  /** Public post/answer count as the platform reports it, which is broader than what we crawled. */
+  platformPostCount?: number;
 }
 
 export async function Sources() {
@@ -133,6 +158,10 @@ export async function ensureIngestIndexes(): Promise<void> {
     // but a different key, and MongoDB will not redefine one in place — a rename is the migration.
     [corpus, { classifierStage: 1, classifyAttempts: 1, fetchedAt: 1 }, { name: "doc_unclassified_v2" }],
     [people, { fingerprint: 1 }, { name: "person_identity", unique: true }],
+    // The enrichment backlog: people never successfully looked up, fewest attempts first. Mongo
+    // does NOT match a missing field with {$lt: n}, so the worker's query uses {$not: {$gte: n}} —
+    // this index has to serve that shape, which is why enrichAttempts leads over lastSeen.
+    [people, { enrichedAt: 1, enrichAttempts: 1, lastSeen: -1 }, { name: "person_enrich_backlog" }],
   ];
 
   for (const [collection, keys, options] of specs) {

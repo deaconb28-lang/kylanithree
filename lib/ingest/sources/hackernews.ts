@@ -86,6 +86,8 @@ export async function crawlHackerNews(opts: {
       externalId: h.objectID,
       url: `https://news.ycombinator.com/item?id=${h.objectID}`,
       authorRef: h.author,
+      // HN is one flat site, so the bare username is already globally unique — nothing to qualify.
+      authorScope: "all",
       title: title || undefined,
       body: body || title,
       postedAt: new Date(h.created_at_i * 1000),

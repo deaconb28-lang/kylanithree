@@ -11,7 +11,16 @@ export type RawDocument = {
   platform: string;
   externalId: string;
   url: string;
+  /**
+   * Identity, and therefore the thing the person fingerprint is built from. A crawler whose
+   * platform namespaces handles per instance — every Discourse forum does — MUST qualify this,
+   * or two unrelated people who both picked "john" become one person.
+   */
   authorRef: string;
+  /** Platform-native author id where it differs from `authorRef`; a lookup key, never identity. */
+  authorId?: string;
+  /** The instance this came from: Discourse host, Stack Exchange site, "all" for flat sources. */
+  authorScope?: string;
   title?: string;
   body: string;
   postedAt: Date;

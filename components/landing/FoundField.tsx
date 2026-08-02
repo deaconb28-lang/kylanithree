@@ -20,6 +20,18 @@ const MIN_BARS = 32;
 const MAX_BARS = 110;
 const STAGGER_MS = 80;
 
+// --- the scroll wave -----------------------------------------------------------------------------
+// Scrolling runs a travelling sine through the field, the way a waveform moves across a scrubbing
+// audio display. Scroll POSITION is the phase, not scroll velocity: position is absolute, so the
+// field looks identical every time you return to a given offset, and reversing the scroll reverses
+// the wave instead of restarting it.
+/** Radians of phase per pixel scrolled. Roughly one full cycle per 520px of travel. */
+const WAVE_PHASE_PER_PX = 0.012;
+/** Radians between neighbouring bars — how many visible crests span the field at once. */
+const WAVE_PHASE_PER_BAR = 0.42;
+/** Peak deviation from resting scale. 0.42 keeps troughs visible rather than collapsing them. */
+const WAVE_AMPLITUDE = 0.42;
+
 /**
  * Deterministic pseudo-noise. Same index, same value, forever — on the server, on the client, and
  * across every resize. That last part is what keeps the field from reshuffling as the window moves.
@@ -83,6 +95,60 @@ export default function FoundField({ caption }: { caption: string }) {
     const timer = setTimeout(() => setEntered(true), 90);
     return () => clearTimeout(timer);
   }, []);
+
+  // The scroll wave.
+  //
+  // Reduced motion is read here rather than in CSS, which is the opposite of the entrance above —
+  // and deliberately so. The entrance has a meaningful final state that CSS can render on the first
+  // paint; a scroll animation's "final state" is just the field at rest, which is what --ky-wave
+  // already defaults to. So there is nothing for the stylesheet to gate, and the honest fix is to
+  // never attach the listener at all: no work per frame for someone who asked for no motion.
+  useEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    const reduced = window.matchMedia("(prefers-reduced-motion: reduce)");
+    if (reduced.matches) return;
+
+    let frame = 0;
+    let onScreen = true;
+
+    const paint = () => {
+      frame = 0;
+      const phase = window.scrollY * WAVE_PHASE_PER_PX;
+      const bars = el.children;
+      for (let i = 0; i < bars.length; i++) {
+        const scale = 1 + WAVE_AMPLITUDE * Math.sin(i * WAVE_PHASE_PER_BAR + phase);
+        (bars[i] as HTMLElement).style.setProperty("--ky-wave", scale.toFixed(3));
+      }
+    };
+
+    const onScroll = () => {
+      // Hand the transform transition over to the wave the first time it actually runs, rather than
+      // on a timer racing the entrance — whichever finishes first, the handover happens once.
+      el.classList.add("ky-field-live");
+      if (!onScreen || frame) return;
+      frame = requestAnimationFrame(paint);
+    };
+
+    // Below the fold this is pure waste: the work is invisible and still costs a style recalc on
+    // every frame of a long scroll down the page.
+    const observer = new IntersectionObserver(
+      ([entry]) => {
+        onScreen = entry.isIntersecting;
+        if (onScreen) onScroll();
+      },
+      { rootMargin: "120px" },
+    );
+    observer.observe(el);
+
+    window.addEventListener("scroll", onScroll, { passive: true });
+    return () => {
+      window.removeEventListener("scroll", onScroll);
+      observer.disconnect();
+      cancelAnimationFrame(frame);
+    };
+    // Re-attached when the bar count changes, so the loop always walks the current children.
+  }, [count]);
 
   const found = foundIndices(count);
   let foundSoFar = 0;

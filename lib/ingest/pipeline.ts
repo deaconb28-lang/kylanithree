@@ -42,6 +42,9 @@ export async function ingestDocuments(opts: { sourceId: string; documents: RawDo
   const corpus = await Corpus();
   const seenHashes = new Set<string>();
   const toStore: CorpusDoc[] = [];
+  // Scope belongs to the person, not the document, so it is carried alongside rather than stored on
+  // every row — the corpus already namespaces platform+externalId and does not need it twice.
+  const scopeByFingerprint = new Map<string, string>();
   const now = new Date();
 
   for (const raw of documents) {
@@ -68,6 +71,7 @@ export async function ingestDocuments(opts: { sourceId: string; documents: RawDo
 
     const fingerprint = personFingerprint({ platform: doc.platform, authorHandle: doc.authorRef });
     if (!fingerprint) continue;
+    if (doc.authorScope) scopeByFingerprint.set(fingerprint, doc.authorScope);
 
     toStore.push({
       sourceId,
@@ -76,6 +80,7 @@ export async function ingestDocuments(opts: { sourceId: string; documents: RawDo
       url: doc.url,
       parentExternalId: doc.parentExternalId,
       authorRef: doc.authorRef,
+      authorId: doc.authorId,
       personFingerprint: fingerprint,
       title: doc.title,
       body: doc.body,
@@ -104,12 +109,12 @@ export async function ingestDocuments(opts: { sourceId: string; documents: RawDo
     stats.duplicates += toStore.length - stats.stored;
   }
 
-  await resolvePeople(toStore);
+  await resolvePeople(toStore, scopeByFingerprint);
   return stats;
 }
 
 /** Person resolution. Runs per ingest batch; cross-platform linking is a separate, slower job. */
-async function resolvePeople(docs: CorpusDoc[]): Promise<void> {
+async function resolvePeople(docs: CorpusDoc[], scopeByFingerprint?: Map<string, string>): Promise<void> {
   if (docs.length === 0) return;
   const people = await People();
   const byFingerprint = new Map<string, CorpusDoc[]>();
@@ -122,6 +127,15 @@ async function resolvePeople(docs: CorpusDoc[]): Promise<void> {
   const ops = [...byFingerprint.entries()].map(([fingerprint, theirDocs]) => {
     const newest = theirDocs.reduce((a, b) => (a.postedAt > b.postedAt ? a : b));
     const oldest = theirDocs.reduce((a, b) => (a.postedAt < b.postedAt ? a : b));
+    const scope = scopeByFingerprint?.get(fingerprint);
+    // The lookup keys are $set, not $setOnInsert: a person first seen before enrichment existed
+    // has neither, and would otherwise sit in the backlog forever being skipped for want of a
+    // scope we now have in hand. Identity fields stay $setOnInsert — those must never move.
+    const lookupKeys: Record<string, string> = {};
+    if (scope) lookupKeys.scope = scope;
+    const withAuthorId = theirDocs.find((d) => d.authorId);
+    if (withAuthorId?.authorId) lookupKeys.authorId = withAuthorId.authorId;
+
     return {
       updateOne: {
         filter: { fingerprint },
@@ -133,6 +147,7 @@ async function resolvePeople(docs: CorpusDoc[]): Promise<void> {
             firstSeen: oldest.postedAt,
             activityScore: 0.5,
           },
+          ...(Object.keys(lookupKeys).length > 0 ? { $set: lookupKeys } : {}),
           $max: { lastSeen: newest.postedAt },
           $inc: { postCount: theirDocs.length },
         },

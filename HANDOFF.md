@@ -163,6 +163,34 @@ a compiled `.worker-build/`, not `tsx`). It crawls sources into a flat `corpus` 
 because Atlas `$search`/`$vectorSearch` must be the first stage on a *single* collection.
 `lib/ingest/` holds normalize → Stage 1 lexical gate → Stage 3 LLM classify → embeddings.
 
+**It scrapes people as well as posts.** `lib/ingest/people.ts` runs every tick and fills the
+`people` collection with real profiles — display name, bio in their own words, profile URL, account
+age, reputation. HN uses the Firebase API, Stack Exchange `/users/{id}`, Discourse `/u/{name}.json`.
+All verified against the live APIs with real accounts. Two things to know before touching it:
+
+- **The Stack Exchange filter id is minted, not invented.** `SE_USER_FILTER` came from
+  `/2.3/filters/create?include=…&base=default`. The default filter omits `about_me`, which is the
+  whole reason for the call, and a made-up filter returns `400 Invalid filter specified` — which
+  `getJson` swallows, so every SE lookup silently returns null. Mint a new one the same way.
+- **Nothing is invented when a platform stays quiet.** A missing bio stays `undefined`, never `""`;
+  a missing account age stays absent rather than becoming `0`, which would render as "joined today"
+  for a ten-year account. Discourse post counts are deliberately absent — `/u/{name}.json` has no
+  such field, and the second request to `/summary.json` is not worth the rate limit.
+
+**Registry: all niches.** All 166 live non-meta Stack Exchange sites and 31 Discourse forums, up
+from 10 and 5. Both lists were **verified by calling the APIs**, not typed from memory — 7 of 10
+hand-guessed SE slugs did not exist, and 11 of 42 candidate Discourse hosts were not reachable
+Discourse JSON. `projectmanagement` in the old seed was one of the dead ones; the real slug is `pm`.
+Regenerate with `GET /2.3/sites` and a `/latest.json` probe rather than editing by hand.
+
+**Person identity is namespaced, and this was a real bug.** `personFingerprint` is built from
+platform + handle, so a bare Discourse username collapsed every forum's "john" into one person —
+one identity wearing several strangers' posts, silently. Discourse and Stack Exchange crawlers now
+qualify `authorRef` as `scope/handle`; HN stays bare because it is one flat site. Covered by
+`lib/search/__tests__/people.test.mjs`. **This changed existing Discourse/SE fingerprints**, so any
+rows from before the change are orphaned — harmless today because the credits system meters without
+debiting and the corpus is pre-production, but it would not be harmless once billing is live.
+
 ---
 
 ## Design system
@@ -191,6 +219,20 @@ hydration mismatch, and reshuffles on every resize); the entrance is transform+c
 cannot cause layout shift; and the pre-entrance state lives inside `@media (prefers-reduced-motion:
 no-preference)` so the *finished* field is the default render — a JS-driven version reads the
 preference after hydration and snaps.
+
+The field also **oscillates like a sound wave as you scroll**. Scroll *position* is the phase, not
+velocity, so the field looks identical every time you return to an offset and reversing the scroll
+reverses the wave rather than restarting it. Three constraints, all load-bearing:
+
+- It writes `--ky-wave`, a **scale**, never a height — 110 oscillating bars must not reflow the page,
+  same reason the entrance is a transform. Verified: the field's box and the URL input's box do not
+  move by a pixel across the whole scroll range.
+- `--ky-wave` defaults to `1`, so the server render and every reduced-motion render is the field at
+  rest. Reduced motion is read in **JS here** (the opposite of the entrance, which is gated in CSS)
+  because a scroll animation's final state *is* the resting field — there is nothing for the
+  stylesheet to gate, so the honest fix is to never attach the listener and do no work per frame.
+- The entrance's 720ms transform transition is dropped once the wave takes over (`.ky-field-live`),
+  or it damps every frame and the wave lags the scroll by most of a second.
 
 `components/discover/SearchField.tsx` is the sibling graphic on the search screen: the product at
 the centre, real communities around it, lines lighting up as each is searched.

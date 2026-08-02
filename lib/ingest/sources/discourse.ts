@@ -102,7 +102,12 @@ export async function crawlDiscourse(opts: {
         // Namespaced by host — two forums can both have topic 42.
         externalId: `${host}:${t.id}`,
         url: `${base}/t/${t.slug ?? "topic"}/${t.id}`,
-        authorRef: first.username,
+        // Qualified by host, exactly like externalId above and for the same reason. Discourse
+        // usernames are unique within a forum and meaningless across them, so the bare username
+        // collapsed "john" on every forum we crawl into a single person — one identity wearing
+        // several strangers' posts, and one profile lookup that could only ever be right once.
+        authorRef: `${host}/${first.username}`,
+        authorScope: host,
         title: detail.title ?? t.title,
         body,
         postedAt: new Date(first.created_at ?? t.created_at ?? Date.now()),
