@@ -3,7 +3,7 @@ import { getDb } from "@/lib/mongodb";
 import { redditAuthMode } from "@/lib/search/reddit";
 import { hasBlueskyCredentials, searchBluesky } from "@/lib/search/bluesky";
 import { webSearchProvider } from "@/lib/search/websearch";
-import { apolloHealth, hasApolloKey } from "@/lib/enrich/apollo";
+import { apolloHealth, enrichCompanyByDomain, hasApolloKey } from "@/lib/enrich/apollo";
 
 // One request that answers "which piece is actually broken?" — built because three failures at
 // once (signup, Google sign-in, empty searches) are usually one or two root causes wearing
@@ -224,6 +224,52 @@ export async function GET(req: NextRequest) {
       ms: Date.now() - apolloT0,
       error: (err instanceof Error ? err.message : String(err)).slice(0, 200),
     };
+  }
+
+  // Opt-in, because it SPENDS ONE APOLLO CREDIT per call — which is exactly why it must never run
+  // on the ordinary health check that uptime monitors hit every minute.
+  //
+  // It exists because the sandbox cannot authenticate to Apollo: Railway and Vercel redact variable
+  // values, so `toRecord()`'s field mapping was written from Apollo's published schema and never
+  // run against a real payload. This runs it where the key actually is and reports which fields
+  // came back populated, so the mapping is confirmed against live output rather than assumed.
+  //
+  // Returns field NAMES plus a few public facts about a well-known company. No key, no secrets.
+  if (req.nextUrl.searchParams.get("apollo") === "probe") {
+    const probeT0 = Date.now();
+    const domain = req.nextUrl.searchParams.get("domain") || "stripe.com";
+    try {
+      const record = await enrichCompanyByDomain(domain);
+      checks.apolloProbe = record
+        ? {
+            domain,
+            ms: Date.now() - probeT0,
+            // Which of our normalized fields Apollo actually filled. An empty list here would mean
+            // the mapping is wrong even though the request succeeded — the silent failure this
+            // whole probe exists to rule out.
+            populated: Object.entries(record)
+              .filter(([, v]) => v !== undefined && !(Array.isArray(v) && v.length === 0))
+              .map(([k]) => k)
+              .sort(),
+            missing: (
+              ["name", "domain", "industry", "employeeCount", "foundedYear", "country", "description"] as const
+            ).filter((k) => record[k] === undefined),
+            sample: {
+              name: record.name,
+              industry: record.industry,
+              employeeCount: record.employeeCount,
+              foundedYear: record.foundedYear,
+              country: record.country,
+            },
+          }
+        : { domain, ms: Date.now() - probeT0, record: null, note: "Apollo authenticated but has no record for this domain." };
+    } catch (err) {
+      checks.apolloProbe = {
+        domain,
+        ms: Date.now() - probeT0,
+        error: (err instanceof Error ? err.message : String(err)).slice(0, 300),
+      };
+    }
   }
 
   // Quora has no API — the source finds question URLs via web search and then fetches each page
