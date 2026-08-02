@@ -507,16 +507,10 @@ button {
    can be recoloured. invert + hue-rotate flips lightness while returning each hue to roughly where
    it started, so Berth stays teal and Salt & Pine keeps its orange ampersand — they just stop
    being drawn in ink nobody can see. */
-.ky-logo-plate {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-@media (prefers-color-scheme: dark) {
-  .ky-logo-plate {
-    filter: invert(1) hue-rotate(180deg);
-  }
-}
+/* .ky-logo-plate is gone with the wordmark PNGs it existed for. It carried an
+   `invert(1) hue-rotate(180deg)` for dark mode — a trick that only works on flat two-tone artwork
+   and would mangle the coloured tiles that replaced them. The app icons are opaque and legible on
+   either background, so they need no dark-mode treatment at all. */
 
 .ky-marquee-mask {
   -webkit-mask-image: linear-gradient(

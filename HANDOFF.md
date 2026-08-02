@@ -237,6 +237,16 @@ reverses the wave rather than restarting it. Three constraints, all load-bearing
 `components/discover/SearchField.tsx` is the sibling graphic on the search screen: the product at
 the centre, real communities around it, lines lighting up as each is searched.
 
+The gallery marquee (`components/landing/Marquee.tsx`) shows **drawn app icons, not images**.
+`components/landing/AppIcon.tsx` renders a rounded tile plus one of twelve marks as inline SVG; the
+twelve wordmark PNGs and `public/gallery/` are gone. The reason is dark mode: the old plates used
+`filter: invert(1) hue-rotate(180deg)`, which only works on flat two-tone artwork and would wreck
+anything with real colour in it. An opaque coloured tile is legible on cream and on near-black
+untouched, so there is no dark-mode rule at all now. Tile colours are literal hex rather than design
+tokens **on purpose** — pointing twelve invented brands at `--ember` would render them as one
+company's app suite instead of a shelf of other people's products. The brand name is real text
+under the icon, in a box that is always two lines tall so the row cannot unlevel itself.
+
 ---
 
 ## Known working / verified

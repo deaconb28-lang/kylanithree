@@ -205,27 +205,53 @@ export const FEED: FeedRow[] = [
   { tag: "!", text: "Signal: asking how others sequence 6am appointments", meta: "4:48" },
 ];
 
+/** The shapes `AppIcon` knows how to draw. One per product, chosen to suit its category. */
+export type GalleryMark =
+  | "bars"
+  | "calendar"
+  | "prompt"
+  | "coins"
+  | "vessel"
+  | "north"
+  | "tag"
+  | "ring"
+  | "wing"
+  | "amp"
+  | "flag"
+  | "columns";
+
 export type GalleryProduct = {
   name: string;
   category: string;
-  image: string;
-  alt: string;
+  mark: GalleryMark;
+  /**
+   * Literal hex, not a design token, and deliberately so. These are twelve invented brands and the
+   * point of the row is that they do not all look like Kylani — pointing them at --ember or --ink
+   * would produce twelve tiles in the product's own palette, which reads as one company's app
+   * suite rather than a shelf of other people's products.
+   *
+   * Every pair below clears 4.5:1, and each tile is opaque, so the page behind it never changes
+   * the contrast: one set of colours is correct in both light and dark mode.
+   */
+  bg: string;
+  fg: string;
+  accent?: string;
   mrr: string;
 };
 
 export const GALLERY_PRODUCTS: GalleryProduct[] = [
-  { name: "Fathom", category: "Analytics SaaS", image: "/gallery/fathom.png", alt: "Fathom logo in bold navy sans-serif", mrr: "$6,200 MRR" },
-  { name: "Berth", category: "Scheduling tool", image: "/gallery/berth.png", alt: "Berth logo in bold teal condensed sans-serif", mrr: "$4,800 MRR" },
-  { name: "Rill", category: "Developer CLI", image: "/gallery/rill.png", alt: "rill logo in bold monospace with a green dot", mrr: "$3,100 MRR" },
-  { name: "Pocket Ledger", category: "Finance app", image: "/gallery/pocket-ledger.png", alt: "Pocket Ledger logo in bold green sans-serif", mrr: "$9,400 MRR" },
-  { name: "Kiln & Co.", category: "Ceramics studio", image: "/gallery/kiln-co.png", alt: "Kiln & Co. logo in terracotta serif", mrr: "$2,300 MRR" },
-  { name: "Northbound Coffee", category: "Roasted coffee", image: "/gallery/northbound-coffee.png", alt: "Northbound Coffee logo in brown serif with tracked caps", mrr: "$3,900 MRR" },
-  { name: "Fieldwork Apparel", category: "Indie apparel", image: "/gallery/fieldwork-apparel.png", alt: "Fieldwork Apparel logo in bold olive condensed caps", mrr: "$5,100 MRR" },
-  { name: "loop", category: "Hardware gadget", image: "/gallery/loop-charger.png", alt: "loop logo in bold blue sans-serif with a ring mark", mrr: "$7,600 MRR" },
-  { name: "Greywing Studio", category: "Design studio", image: "/gallery/greywing-studio.png", alt: "Greywing studio logo in charcoal serif", mrr: "$4,400 MRR" },
-  { name: "Salt & Pine", category: "Brand consultancy", image: "/gallery/salt-pine.png", alt: "Salt & Pine logo in navy bold with an orange ampersand", mrr: "$11,200 MRR" },
-  { name: "Halyard", category: "Creative agency", image: "/gallery/halyard-agency.png", alt: "Halyard logo in bold crimson condensed caps", mrr: "$8,300 MRR" },
-  { name: "Fenwick Partners", category: "Advisory firm", image: "/gallery/fenwick-partners.png", alt: "Fenwick Partners logo in navy serif with tracked caps", mrr: "$6,900 MRR" },
+  { name: "Fathom", category: "Analytics SaaS", mark: "bars", bg: "#23366E", fg: "#F4F1EC", accent: "#7FB2F0", mrr: "$6,200 MRR" },
+  { name: "Berth", category: "Scheduling tool", mark: "calendar", bg: "#0F6F78", fg: "#F2F7F6", accent: "#8FE0DA", mrr: "$4,800 MRR" },
+  { name: "Rill", category: "Developer CLI", mark: "prompt", bg: "#232A38", fg: "#EDF0F4", accent: "#7BD88F", mrr: "$3,100 MRR" },
+  { name: "Pocket Ledger", category: "Finance app", mark: "coins", bg: "#186A52", fg: "#F1F7F3", accent: "#93DCB4", mrr: "$9,400 MRR" },
+  { name: "Kiln & Co.", category: "Ceramics studio", mark: "vessel", bg: "#A54B27", fg: "#FAF1EA", accent: "#F0BE96", mrr: "$2,300 MRR" },
+  { name: "Northbound Coffee", category: "Roasted coffee", mark: "north", bg: "#5E412A", fg: "#F8F1E7", accent: "#DFB183", mrr: "$3,900 MRR" },
+  { name: "Fieldwork Apparel", category: "Indie apparel", mark: "tag", bg: "#4F5C2C", fg: "#F4F5EC", accent: "#C4D68A", mrr: "$5,100 MRR" },
+  { name: "loop", category: "Hardware gadget", mark: "ring", bg: "#2456B8", fg: "#F0F4FB", accent: "#F0F4FB", mrr: "$7,600 MRR" },
+  { name: "Greywing Studio", category: "Design studio", mark: "wing", bg: "#3A404B", fg: "#F2F3F5", accent: "#A9B2C0", mrr: "$4,400 MRR" },
+  { name: "Salt & Pine", category: "Brand consultancy", mark: "amp", bg: "#1B3350", fg: "#F1F4F8", accent: "#E88B4E", mrr: "$11,200 MRR" },
+  { name: "Halyard", category: "Creative agency", mark: "flag", bg: "#9B2233", fg: "#FAF0F1", accent: "#F2A9AF", mrr: "$8,300 MRR" },
+  { name: "Fenwick Partners", category: "Advisory firm", mark: "columns", bg: "#2A3F5C", fg: "#F1F4F8", accent: "#9FB8D6", mrr: "$6,900 MRR" },
 ];
 
 export const TESTIMONIALS = [
