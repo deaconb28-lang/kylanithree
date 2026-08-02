@@ -144,7 +144,7 @@ export default function SegmentCard({ segment }: { segment: Segment }) {
 
       <div style={{ marginTop: "auto", paddingTop: 4, display: "flex", alignItems: "center", gap: 12 }}>
         <Link
-          href={`/app/queue?filter=${encodeURIComponent(segment.key)}`}
+          href={`/campaign/work?filter=${encodeURIComponent(segment.key)}`}
           style={{ fontSize: 13, fontWeight: 700, color: "var(--ember)", textDecoration: "none" }}
         >
           {segment.waiting > 0 ? `Review ${segment.waiting} waiting →` : "Open in Queue →"}

@@ -155,7 +155,7 @@ function TrialInner() {
 
   if (loadError) {
     return (
-      <DashboardShell active="home">
+      <DashboardShell active="campaign">
         <div style={{ padding: "36px 5vw", display: "flex", flexDirection: "column", alignItems: "flex-start", gap: 14 }}>
           <span style={{ fontFamily: "var(--font-display)", fontWeight: 700, fontSize: 18 }}>Couldn&apos;t load Trial.</span>
           <span style={{ fontSize: 14.5, color: "var(--muted)" }}>{loadError}</span>
@@ -169,7 +169,7 @@ function TrialInner() {
 
   if (!campaign) {
     return (
-      <DashboardShell active="home">
+      <DashboardShell active="campaign">
         <div style={{ padding: "36px 5vw", color: "var(--muted)" }}>Loading…</div>
       </DashboardShell>
     );
@@ -182,7 +182,7 @@ function TrialInner() {
   const isActive = subscription?.status === "active";
 
   return (
-    <DashboardShell active="home">
+    <DashboardShell active="campaign">
       <div style={{ position: "relative", overflow: "hidden", padding: "56px 5vw", boxSizing: "border-box", display: "flex", flexDirection: "column", gap: 34, alignItems: "center", textAlign: "center" }}>
         <div
           style={{

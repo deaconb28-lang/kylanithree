@@ -137,7 +137,7 @@ export default function DiscoverPage({ params }: { params: Promise<{ id: string 
           </Link>
           {leads.length > 0 && (
             <Link
-              href={`/signin?callbackUrl=${encodeURIComponent(`/app/queue?claim=${id}`)}`}
+              href={`/signin?callbackUrl=${encodeURIComponent(`/campaign/work?claim=${id}`)}`}
               onClick={() => {
                 markInteraction();
                 trackClient("save_clicked", { flow: "discover", searchId: id, ms: sinceFlowStart() });

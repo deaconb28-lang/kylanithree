@@ -3,23 +3,22 @@
 import Link from "next/link";
 import { signOut, useSession } from "next-auth/react";
 import { useEffect, useState, type ReactNode } from "react";
-import { ChannelsIcon, FindingsIcon, HomeIcon, MapIcon, QueueIcon, SuppressedIcon, TodayIcon } from "../icons/NavIcons";
+import { HomeIcon, QueueIcon } from "../icons/NavIcons";
 import KylaniLogo from "../icons/KylaniLogo";
 import { clearOnboardingResult, readOnboardingResult } from "../../lib/onboardingStorage";
 import { PLAN_COPY } from "../../lib/billing";
 
-type Surface = "home" | "today" | "queue" | "map" | "findings" | "channels" | "suppressed" | "settings";
+// Two surfaces, not nine. "campaign" is the command center and "work" is the merged queue;
+// everything else is a destination you enter from one of them rather than a permanent nav slot.
+// `map` / `findings` / `channels` / `suppressed` stay in the union because those routes still
+// exist and still pass an `active` — they simply no longer render a sidebar entry.
+type Surface = "campaign" | "work" | "map" | "findings" | "channels" | "suppressed" | "settings";
 
-const OUTREACH_NAV: { key: Surface; href: string; label: string; Icon: typeof TodayIcon }[] = [
-  { key: "today", href: "/app/today", label: "Today", Icon: TodayIcon },
-  { key: "queue", href: "/app/queue", label: "Queue", Icon: QueueIcon },
-  { key: "map", href: "/app/map", label: "Map", Icon: MapIcon },
-  { key: "findings", href: "/app/findings", label: "Findings", Icon: FindingsIcon },
-];
-
-const CHANNELS_NAV: { key: Surface; href: string; label: string; Icon: typeof TodayIcon }[] = [
-  { key: "channels", href: "/app/channels", label: "Channels", Icon: ChannelsIcon },
-  { key: "suppressed", href: "/app/suppressed", label: "Suppressed", Icon: SuppressedIcon },
+// Work is the only thing beside the campaign itself that earns a permanent slot: it is the one
+// place the product asks the founder to do something. Map and Findings fold into the campaign
+// screen as sections; Channels and Suppressed live behind the campaign settings gear.
+const OUTREACH_NAV: { key: Surface; href: string; label: string; Icon: typeof QueueIcon }[] = [
+  { key: "work", href: "/campaign/work", label: "Work", Icon: QueueIcon },
 ];
 
 /**
@@ -45,9 +44,8 @@ export default function DashboardShell({
 }) {
   const { data: session } = useSession();
   const [counts, setCounts] = useState<Record<Surface, string | null>>({
-    home: null,
-    today: null,
-    queue: null,
+    campaign: null,
+    work: null,
     map: null,
     findings: null,
     channels: null,
@@ -71,9 +69,11 @@ export default function DashboardShell({
     fetch("/api/leads")
       .then((r) => r.json())
       .then((leads: { timeSensitive: boolean; status: string }[]) => {
-        const today = leads.filter((l) => l.timeSensitive && l.status === "waiting").length;
-        const queue = leads.filter((l) => !l.timeSensitive && l.status === "waiting").length;
-        setCounts((c) => ({ ...c, today: String(today), queue: String(queue) }));
+        // One badge, one number. The old split counted time-sensitive and everything else
+        // separately, which made the sidebar report two figures for one pile of work — and the
+        // split was never something a founder could act on.
+        const waiting = leads.filter((l) => l.status === "waiting").length;
+        setCounts((c) => ({ ...c, work: String(waiting) }));
       })
       .catch(() => {});
   const loadCampaign = () =>
@@ -296,7 +296,7 @@ export default function DashboardShell({
           boxSizing: "border-box",
         }}
       >
-        <Link href="/app" style={{ display: "flex", alignItems: "center", gap: 8, padding: "0 6px" }}>
+        <Link href="/campaign" style={{ display: "flex", alignItems: "center", gap: 8, padding: "0 6px" }}>
           <KylaniLogo size={26} />
           <span style={{ fontFamily: "var(--font-display)", fontWeight: 700, fontSize: 17, color: "var(--ink)" }}>Kylani</span>
         </Link>
@@ -316,9 +316,9 @@ export default function DashboardShell({
           <span style={{ fontSize: 12.5, color: "var(--muted)" }}>{product?.url ?? ""} · campaign 1</span>
         </div>
 
-        <Link href="/app" className={`ky-sidebar-link${active === "home" ? " active" : ""}`}>
-          <HomeIcon color={active === "home" ? "var(--ember)" : "var(--muted)"} />
-          <span style={{ flex: 1 }}>Home</span>
+        <Link href="/campaign" className={`ky-sidebar-link${active === "campaign" ? " active" : ""}`}>
+          <HomeIcon color={active === "campaign" ? "var(--ember)" : "var(--muted)"} />
+          <span style={{ flex: 1 }}>Campaign</span>
         </Link>
 
         <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
@@ -326,13 +326,6 @@ export default function DashboardShell({
             Outreach
           </span>
           <nav style={{ display: "flex", flexDirection: "column", gap: 3 }}>{OUTREACH_NAV.map(renderLink)}</nav>
-        </div>
-
-        <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-          <span style={{ fontSize: 11, fontWeight: 700, letterSpacing: ".08em", textTransform: "uppercase", color: "var(--muted)", padding: "0 12px" }}>
-            Channels
-          </span>
-          <nav style={{ display: "flex", flexDirection: "column", gap: 3 }}>{CHANNELS_NAV.map(renderLink)}</nav>
         </div>
 
         <div style={{ marginTop: "auto", display: "flex", flexDirection: "column", gap: 12 }}>

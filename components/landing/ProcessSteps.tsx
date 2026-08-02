@@ -50,7 +50,7 @@ const CARDS = [
     title: "I write the first draft",
     body: "Anchored to something that person actually said. You approve, edit, or skip — sent from your own inbox.",
     time: "Waiting on you, not the other way round →",
-    href: "/app/queue",
+    href: "/campaign/work",
     dark: true,
     artifact: (
       <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
