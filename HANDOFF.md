@@ -79,12 +79,36 @@ until projects exist.
 - **Rotate the Bluesky app password.** It was pasted into chat in an earlier session.
 - Founder/Studio plan naming is undecided, which blocks the billing half of the credits system
   (`lib/credits/`, `docs/credits.md`). Metering works and records; nothing is debited.
-- Google sign-in was failing in production with `?error=Configuration`. `/api/auth/providers`
-  returns normal JSON, which proves the config is fine — so it is the Mongo adapter failing on the
-  callback. `7a3fa1e` fixed a real bug there (a rejected connection promise was cached for the life
-  of a warm lambda, with no retry). **If it still fails after that deploy, read `/api/health` →
-  `checks.mongo.likelyCause` and `checks.googleOAuth.configurationErrorCause`, which now name the
-  cause directly.** Most likely: Atlas Network Access not allowing `0.0.0.0/0`, or a paused cluster.
+- ~~Google sign-in failing with `?error=Configuration`~~ — **resolved.** `MONGODB_URI` is set in
+  production and `/api/health` now reports `mongo.ok: true` (~115ms, database `kylani`, 4 users),
+  `googleOAuth.configurationErrorCause: null`, and `summary.signupAndGoogleSignIn: "should work"`.
+  The onboarding flow was verified end to end against production afterwards: `POST /api/discover`
+  returns 202 and the SSE stream runs inference → leads → venues → `complete` with real Hacker News
+  permalinks. Nothing in that path errors any more.
+- **`STACKEXCHANGE_KEY` is not set in production** (`/api/health` → `stackExchange.keyed: false`).
+  Everything still works unkeyed, but the quota is 300 requests/day/IP instead of 10,000, and the
+  people-enrichment pass added to the worker spends that quota one person at a time. Set it in
+  Railway before the enrichment backlog is expected to drain at any speed.
+
+### Lead quality: keyword routing is the weak spot
+
+`lib/search/seSites.ts` maps a product's inferred keywords to Stack Exchange sites, and it has now
+produced two distinct bugs of the same family. Both were found by running the real flow against
+production, not by reading the code.
+
+1. **Substring matching.** `haystack.includes(k)` had no word boundaries, so "s**cat**tered feature
+   requests" routed an issue tracker to **Pets**, and "communi**cat**ion" did the same to every CRM.
+   Fixed with a whole-word regex that still allows `s/es/ing/ed`.
+2. **Generic vocabulary.** Boundaries alone did not save it: "roadmap planning **tools**" is a real
+   whole-word match for DIY's `tool`, and "**grow** revenue" / "**seed** round" are real matches for
+   Gardening. Those keywords are gone; a keyword only belongs here if it is unlikely to appear in a
+   sentence about software.
+
+Both are covered in `lib/search/__tests__/people.test.mjs`. **When adding a keyword, ask whether a
+B2B SaaS landing page could contain it** — that is the failure mode, and it is silent, because a
+wrong site returns few results rather than an error. A dev tool now correctly matches no Stack
+Exchange site at all and falls through to HN/Lemmy/Bluesky; routing it to `stackoverflow` would need
+keywords about pain rather than about technology, which is a real gap but not a bug.
 
 ### Settled — do not re-raise
 
@@ -279,9 +303,16 @@ closed from a sandbox session at all. It needs a look at a real deployment.
 ## Sandbox limitations (they will bite you again)
 
 - `api.anthropic.com` **is** reachable — Claude-backed logic can be tested with a real key.
-- **MongoDB Atlas is NOT reachable.** Can't test Mongo-backed flows end to end.
-- **`kylani.app` and `vercel.com` are NOT reachable** — the agent proxy 403s them. You cannot check
-  production, read Vercel logs, or deploy from here.
+- **MongoDB Atlas is NOT reachable.** Can't test Mongo-backed flows against the database directly —
+  a `mongodb+srv://` connect times out on server selection even with a valid URI.
+- **`kylani.app` and `vercel.com` ARE reachable now** (they used to 403). This changes what a
+  sandbox session can do more than anything else in this file: `curl https://www.kylani.app/api/health`
+  answers the Mongo and Google-OAuth questions directly, and the whole discover flow can be driven
+  in production with `POST /api/discover` followed by streaming `/api/discover/{id}/stream`. That is
+  how the Stack Exchange routing bug above was found.
+  - **`curl` reaches production; a Playwright browser does not.** Chromium gets
+    `ERR_CONNECTION_RESET` even when launched with `--proxy-server=$HTTPS_PROXY`. So production can
+    be exercised at the API level but not screenshotted — anything visual still needs a local build.
 - **`explee.com` is not reachable either.**
 - Playwright works: `playwright-core` is in `node_modules`, Chromium at `/opt/pw-browsers/chromium`.
   Import it as CJS (`import pw from ".../playwright-core/index.js"; const { chromium } = pw;`).
