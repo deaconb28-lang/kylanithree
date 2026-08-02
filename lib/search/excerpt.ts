@@ -161,3 +161,49 @@ function trimTo(text: string, maxChars: number): string {
   const lastStop = Math.max(cut.lastIndexOf(". "), cut.lastIndexOf("! "), cut.lastIndexOf("? "));
   return lastStop > maxChars * 0.5 ? cut.slice(0, lastStop + 1) : `${cut.trimEnd()}…`;
 }
+
+/**
+ * Which of the founder's terms this text actually contains.
+ *
+ * `matchedFor` used to be `keywords.filter(k => text.includes(k))` — a whole-phrase substring test
+ * against inferred keywords that are long phrases ("scattered feature requests everywhere"). Those
+ * never appear verbatim in a real post, so in production every lead shipped with an EMPTY
+ * matchedFor: the card could not say why the person was there, which is the one thing a founder
+ * needs to trust it.
+ *
+ * Matching on the significant words instead means the answer is the terms that genuinely appear.
+ * Returned as the original phrases, since that is the founder's own vocabulary and what the UI
+ * should show back to them.
+ */
+export function matchedTerms(text: string, keywords: string[]): string[] {
+  const present = new Set(text.toLowerCase().match(/[a-z0-9']+/g) ?? []);
+  const out: string[] = [];
+  for (const phrase of keywords) {
+    const significant = (phrase.toLowerCase().match(/[a-z0-9']+/g) ?? []).filter(
+      (w) => w.length >= 3 && !IGNORED.has(w),
+    );
+    if (significant.length === 0) continue;
+    const hits = significant.filter((w) => present.has(w)).length;
+    // Half the phrase's significant words, so "scattered feature requests everywhere" needs a real
+    // overlap rather than the single word "requests" appearing anywhere in a long post.
+    if (hits / significant.length >= 0.5) out.push(phrase);
+  }
+  return out;
+}
+
+/**
+ * How strongly a document speaks the founder's vocabulary, 0..1.
+ *
+ * Used as a floor rather than a ranking signal. Atlas `$search` with `minimumShouldMatch: 1` will
+ * happily return a document that matched exactly one common word — which is how a post about
+ * verifying a Bitcoin node surfaced for an issue tracker, the same generic-vocabulary failure that
+ * once routed software products to the Pets Stack Exchange.
+ */
+export function vocabularyOverlap(text: string, keywords: string[]): number {
+  const wanted = terms(keywords);
+  if (wanted.size === 0) return 1;
+  const present = new Set(text.toLowerCase().match(/[a-z0-9']+/g) ?? []);
+  let hits = 0;
+  for (const w of wanted) if (present.has(w)) hits += 1;
+  return hits / wanted.size;
+}

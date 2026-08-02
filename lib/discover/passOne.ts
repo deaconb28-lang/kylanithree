@@ -3,7 +3,7 @@ import { searchHackerNews } from "../search/hackernews";
 import { searchStackExchange } from "../search/stackexchange";
 import { personFingerprint } from "../credits/fingerprint";
 import { lexicalGate, normalizeForIntent, INTENT_WEIGHT, INTENT_TYPES, type IntentType } from "../search/intent";
-import { relevantExcerpt } from "../search/excerpt";
+import { relevantExcerpt, matchedTerms, vocabularyOverlap } from "../search/excerpt";
 import { communitiesForNiche } from "./nicheMap";
 import type { DiscoverLead } from "./collections";
 
@@ -31,6 +31,14 @@ const PER_SOURCE_TIMEOUT_MS = 3_000;
 /** Below this, try the live sources as well rather than shipping a near-empty screen. */
 const THIN_THRESHOLD = 5;
 const TARGET = 12;
+/**
+ * Share of the founder's significant vocabulary a corpus document must contain to ship.
+ *
+ * Deliberately low. This is a floor that removes the obviously-unrelated, not a ranking function —
+ * pushing it higher starts dropping real leads who described the same problem in different words,
+ * which is exactly what the vector half of retrieval exists to catch.
+ */
+const MIN_VOCAB_OVERLAP = 0.12;
 
 /** The same relevance bar pass 2 applies. Deliberately shared, not a looser copy. */
 function clearsFloor(lead: { excerpt: string; intentType?: IntentType }): boolean {
@@ -55,6 +63,7 @@ type CorpusRow = {
   authorRef: string;
   platform: string;
   url: string;
+  title?: string;
   body: string;
   problemStatement?: string;
   intentType?: IntentType;
@@ -76,7 +85,7 @@ function toLeadFromCorpus(r: CorpusRow, keywords: string[]): DiscoverLead {
     excerpt: relevantExcerpt(source, keywords),
     postedAt: r.postedAt,
     intentType: r.intentType,
-    matchedFor: keywords.filter((k) => `${r.problemStatement ?? ""} ${r.body}`.toLowerCase().includes(k.toLowerCase())),
+    matchedFor: matchedTerms(`${r.problemStatement ?? ""} ${r.body}`, keywords),
     score: scoreOf(r.intentType, r.postedAt),
     foundInPass: 1 as const,
   };
@@ -146,6 +155,7 @@ async function fromCorpus(opts: {
             authorRef: 1,
             platform: 1,
             url: 1,
+            title: 1,
             body: 1,
             problemStatement: 1,
             intentType: 1,
@@ -155,7 +165,14 @@ async function fromCorpus(opts: {
       ])
       .toArray();
 
-    return { leads: rows.map((r) => toLeadFromCorpus(r, keywords)), route: "search" };
+    // $search with minimumShouldMatch 1 returns anything that matched a single common word, which
+    // is how a post about verifying a Bitcoin node reached an issue tracker's results. A document
+    // that barely speaks the founder's vocabulary is not their buyer, and shipping it costs more
+    // trust than the extra row is worth — the quality floor is the point of this whole design.
+    const relevant = rows.filter(
+      (r) => vocabularyOverlap(`${r.problemStatement ?? ""} ${r.title ?? ""} ${r.body}`, keywords) >= MIN_VOCAB_OVERLAP,
+    );
+    return { leads: relevant.map((r) => toLeadFromCorpus(r, keywords)), route: "search" };
   } catch (err) {
     if (!isMissingSearchIndex(err)) throw err;
     if (!warnedNoSearchIndex) {
@@ -214,7 +231,7 @@ async function fromLiveSources(opts: { keywords: string[]; venueIds: string[]; b
       permalink: c.permalink,
       excerpt: relevantExcerpt(c.body || c.title, queries),
       postedAt: c.postedAt,
-      matchedFor: queries.filter((k) => text.toLowerCase().includes(k.toLowerCase())),
+      matchedFor: matchedTerms(text, queries),
       score: scoreOf(undefined, c.postedAt),
       foundInPass: 1 as const,
     };
