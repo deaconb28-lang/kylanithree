@@ -21,10 +21,36 @@ import { ensureSearchIndexes, searchIndexStatus } from "../lib/ingest/searchInde
 // Run: npm run worker
 
 const TICK_MS = 60_000;
-const SOURCES_PER_TICK = 20;
+// Was 20, with 197 sources in the registry — a ceiling of 20 polls a minute could not keep even one
+// pass over the registry moving, and the corpus grew at a fraction of its potential.
+const SOURCES_PER_TICK = 60;
+
+/**
+ * How many sources of one platform may be in flight at once.
+ *
+ * Polling used to be strictly sequential, with a comment saying per-platform caps would arrive
+ * "when the registry has real breadth". It has: 166 Stack Exchange sites and 31 Discourse forums.
+ * Sequential polling meant one slow host stalled every other source behind it, and a tick could not
+ * finish inside its own 60 seconds.
+ *
+ * Capped per platform rather than globally, because politeness is per host. Stack Exchange sites
+ * are one API with a shared quota, Discourse forums are 31 unrelated servers, and Hacker News is a
+ * single endpoint that gets exactly one request at a time.
+ */
+const CONCURRENCY: Record<string, number> = {
+  hn: 1,
+  stackexchange: 4,
+  discourse: 5,
+};
+const DEFAULT_CONCURRENCY = 2;
 // Classification is the only paid step here. Draining a few batches per tick keeps the backlog
 // moving without letting a large crawl spike the Anthropic bill in one go.
-const CLASSIFY_BATCHES_PER_TICK = 3;
+//
+// Raised with the crawl rate, and it has to be: retrieval only ever reads documents with an
+// intentType, so an unclassified document is invisible to search. Crawling faster without
+// classifying faster would grow the collection and not the corpus — storage with nothing to show
+// for it. 6 batches x 20 documents is 120/tick, which stays ahead of the new poll rate.
+const CLASSIFY_BATCHES_PER_TICK = 6;
 // People looked up per tick. Free, but rate-limited by the platforms rather than by cost, and
 // every one is a separate request — 25/tick is ~36k/day, which drains any realistic backlog while
 // staying far under Stack Exchange's quota and well inside Discourse's tolerance.
@@ -155,19 +181,44 @@ async function pollSource(source: SourceDoc & { _id?: ObjectId }, correlationId:
   }
 }
 
+/** Runs `work` over `items`, at most `limit` at a time. Stops early if the worker is shutting down. */
+async function pool<T>(items: T[], limit: number, work: (item: T) => Promise<void>): Promise<void> {
+  let next = 0;
+  const runners = Array.from({ length: Math.max(1, Math.min(limit, items.length)) }, async () => {
+    for (;;) {
+      if (!running) return;
+      const i = next++;
+      if (i >= items.length) return;
+      await work(items[i]);
+    }
+  });
+  await Promise.all(runners);
+}
+
 async function tick(): Promise<void> {
   // One id per tick, so every row a single pass wrote can be pulled back together afterwards.
   const correlationId = `tick:${new Date().toISOString()}`;
   const sources = await dueSources(SOURCES_PER_TICK);
   if (sources.length > 0) {
-    log(`polling ${sources.length} source(s)`);
-    // Sequential on purpose for M1: one source, one platform, and a polite crawler is worth more
-    // than a fast one. Per-platform concurrency caps go in when the registry has real breadth.
+    // Grouped by platform, each group with its own cap, all groups running at once. A slow
+    // Discourse host now delays only the other Discourse hosts behind it in its own lane, instead
+    // of every Stack Exchange site in the tick.
+    const byPlatform = new Map<string, SourceDoc[]>();
     for (const s of sources) {
-      if (!running) return;
-      await pollSource(s, correlationId);
-      await refreshSourceYield(String((s as SourceDoc & { _id?: ObjectId })._id)).catch(() => {});
+      const list = byPlatform.get(s.platform);
+      if (list) list.push(s);
+      else byPlatform.set(s.platform, [s]);
     }
+    log(`polling ${sources.length} source(s) across ${byPlatform.size} platform(s)`);
+
+    await Promise.all(
+      [...byPlatform.entries()].map(([platform, list]) =>
+        pool(list, CONCURRENCY[platform] ?? DEFAULT_CONCURRENCY, async (s) => {
+          await pollSource(s, correlationId);
+          await refreshSourceYield(String((s as SourceDoc & { _id?: ObjectId })._id)).catch(() => {});
+        }),
+      ),
+    );
   }
 
   // Catches anything classified while the embedding provider was unset or failing. Without this
@@ -243,7 +294,9 @@ async function seedSources(): Promise<void> {
   // Stack Exchange sites are chosen to span consumer and professional topics as well as technical
   // ones: the network is ~180 sites, and treating it as a developer-only source wastes most of it.
   const seeds: Omit<SourceDoc, "createdAt" | "updatedAt">[] = [
-    { platform: "hn", identifier: "all", accessMethod: "api", baseUrl: "https://hn.algolia.com/api/v1", pollIntervalMinutes: 15, health: "ok", docYield30d: 0, enabled: true },
+    // 5 minutes, down from 15. Algolia's HN index needs no auth, has generous limits, and is one
+    // endpoint polled one request at a time — it is the cheapest volume in the whole registry.
+    { platform: "hn", identifier: "all", accessMethod: "api", baseUrl: "https://hn.algolia.com/api/v1", pollIntervalMinutes: 5, health: "ok", docYield30d: 0, enabled: true },
     ...[
       // Every niche, not a shortlist — this is the whole Stack Exchange network, all 166 sites that
       // are currently live and not a meta. A corpus covering ten topics can only find buyers for
@@ -282,7 +335,12 @@ async function seedSources(): Promise<void> {
       platform: "stackexchange" as const,
       identifier: site,
       accessMethod: "api" as const,
-      pollIntervalMinutes: 60,
+      // 45 minutes, down from 60, and the arithmetic matters here because this is the one platform
+      // with a hard quota. 166 sites at 45min is ~5,300 requests/day against a keyed limit of
+      // 10,000 — which deliberately leaves room for people enrichment, which spends the same quota
+      // one profile at a time. Going to 20 minutes would put crawling alone over the limit and the
+      // failure would present as sources mysteriously degrading, not as a quota error.
+      pollIntervalMinutes: 45,
       health: "ok" as const,
       docYield30d: 0,
       enabled: true,
@@ -307,7 +365,10 @@ async function seedSources(): Promise<void> {
       identifier: host,
       accessMethod: "json" as const,
       baseUrl: `https://${host}`,
-      pollIntervalMinutes: 60,
+      // 30 minutes, down from 60. These are 31 unrelated servers rather than one shared API, so
+      // the constraint is per-host politeness rather than a global quota — and a Discourse poll
+      // costs one list request plus a fetch per new topic, which is why it is not lower.
+      pollIntervalMinutes: 30,
       health: "ok" as const,
       docYield30d: 0,
       enabled: true,
@@ -324,6 +385,22 @@ async function seedSources(): Promise<void> {
     })),
     { ordered: false },
   );
+  // Seeding is $setOnInsert, so every source already in the registry keeps whatever interval it was
+  // created with. Without this, changing the defaults above would silently do nothing at all for
+  // the 197 sources that already exist — the change would look applied and have no effect.
+  //
+  // Healthy sources only. A degraded or blocked source has had its interval deliberately doubled by
+  // the backoff in pollSource, and resetting that here would undo the one mechanism that stops the
+  // crawler hammering a host that is already unhappy with it.
+  const intervals: Record<string, number> = { hn: 5, stackexchange: 45, discourse: 30 };
+  for (const [platform, minutes] of Object.entries(intervals)) {
+    const res = await sources.updateMany(
+      { platform, health: "ok", pollIntervalMinutes: { $gt: minutes } },
+      { $set: { pollIntervalMinutes: minutes, updatedAt: new Date() } },
+    );
+    if (res.modifiedCount > 0) log(`retimed ${res.modifiedCount} ${platform} source(s) to ${minutes}min`);
+  }
+
   log(`registry seeded with ${seeds.length} source(s)`);
 }
 
