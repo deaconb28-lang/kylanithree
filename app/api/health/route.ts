@@ -212,6 +212,40 @@ export async function GET(req: NextRequest) {
     checks.stackExchange = { reachable: false, ms: Date.now() - seT0, error: (err instanceof Error ? err.message : String(err)).slice(0, 200) };
   }
 
+  // How big the corpus actually is, and how much of it is reachable.
+  //
+  // These are different numbers and the gap is the thing worth watching. Retrieval only ever reads
+  // documents that have an intentType, so an unclassified document is stored but invisible — it
+  // costs storage and contributes nothing. A large `documents` with a small `classified` means the
+  // classifier has stalled, which is exactly what an exhausted Anthropic balance looks like from
+  // the outside: crawling keeps working, the collection keeps growing, and search keeps returning
+  // the same thin results.
+  const corpusT0 = Date.now();
+  try {
+    const db = await getDb();
+    const corpus = db.collection("corpus");
+    const [documents, classified, people] = await Promise.all([
+      corpus.estimatedDocumentCount(),
+      corpus.countDocuments({ intentType: { $exists: true, $ne: "none" } }),
+      db.collection("people").estimatedDocumentCount(),
+    ]);
+    const backlog = await corpus.countDocuments({ intentType: { $exists: false } });
+    checks.corpus = {
+      ms: Date.now() - corpusT0,
+      documents,
+      classified,
+      unclassifiedBacklog: backlog,
+      people,
+      searchableShare: documents > 0 ? `${Math.round((classified / documents) * 100)}%` : "—",
+      note:
+        backlog > classified
+          ? "More documents are waiting on the classifier than have cleared it. Check the worker logs for classify errors — an exhausted ANTHROPIC_API_KEY balance stops classification while crawling continues, so the collection grows and search does not."
+          : "Classifier is keeping up with the crawl.",
+    };
+  } catch (err) {
+    checks.corpus = { ms: Date.now() - corpusT0, error: (err instanceof Error ? err.message : String(err)).slice(0, 200) };
+  }
+
   // The Atlas Search indexes. `queryable` is the field that matters: creation returns immediately
   // but the build takes minutes, and until it is true a $search still errors — which pass 1 reads
   // as "index missing" and downgrades to a regex scan. Without this, "still building" and "never

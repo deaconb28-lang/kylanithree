@@ -120,6 +120,27 @@ Apollo renaming a field would present as "this company has no data" rather than 
 Running the equivalent `curl` locally proves nothing: there is no key in the sandbox, so it just
 returns `{"error":"Api key required"}`.
 
+### The classifier is stopped — this is why the corpus looks small
+
+Railway worker logs, every tick:
+
+```
+ERROR classifying — 400 "Your credit balance is too low to access the Anthropic API."
+```
+
+**Crawling is fine.** Sources are polling and storing (`stored=26`, `stored=25`, …), people
+enrichment is running at ~22 profiles a tick. What has stopped is classification, and that is the
+step that decides whether a document is *reachable*: retrieval filters on `intentType`, so an
+unclassified document is stored and invisible. The collection grows, the searchable corpus does not.
+
+Top up the Anthropic balance and it drains on its own — `classifyBacklog` picks up where it left
+off, oldest first, and nothing was lost. `/api/health` → `checks.corpus` now reports `documents`,
+`classified`, `unclassifiedBacklog` and `searchableShare`, so this is visible without reading
+Railway logs. A backlog larger than the classified count is the tell.
+
+Worth knowing: this is not a code bug, and no amount of crawl tuning fixes it. Raising throughput
+while the classifier is down just grows the invisible half faster.
+
 ### Also outstanding
 
 - ~~Atlas Search + Vector Search indexes~~ — **done, and the shallow pass now reads the database.**
