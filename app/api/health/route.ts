@@ -4,6 +4,7 @@ import { redditAuthMode } from "@/lib/search/reddit";
 import { hasBlueskyCredentials, searchBluesky } from "@/lib/search/bluesky";
 import { webSearchProvider } from "@/lib/search/websearch";
 import { apolloHealth, enrichCompanyByDomain, hasApolloKey } from "@/lib/enrich/apollo";
+import { searchIndexStatus } from "@/lib/ingest/searchIndexes";
 
 // One request that answers "which piece is actually broken?" — built because three failures at
 // once (signup, Google sign-in, empty searches) are usually one or two root causes wearing
@@ -209,6 +210,28 @@ export async function GET(req: NextRequest) {
     checks.stackExchange = { reachable: res.ok, status: res.status, ms: Date.now() - seT0, keyed: Boolean(process.env.STACKEXCHANGE_KEY) };
   } catch (err) {
     checks.stackExchange = { reachable: false, ms: Date.now() - seT0, error: (err instanceof Error ? err.message : String(err)).slice(0, 200) };
+  }
+
+  // The Atlas Search indexes. `queryable` is the field that matters: creation returns immediately
+  // but the build takes minutes, and until it is true a $search still errors — which pass 1 reads
+  // as "index missing" and downgrades to a regex scan. Without this, "still building" and "never
+  // created" look identical from the outside.
+  const idxT0 = Date.now();
+  try {
+    const indexes = await searchIndexStatus();
+    checks.searchIndexes = {
+      ms: Date.now() - idxT0,
+      found: indexes.length,
+      indexes,
+      note:
+        indexes.length === 0
+          ? "None reported. Either the worker has not run since the M10 upgrade, or the cluster cannot list them."
+          : indexes.every((i) => i.queryable)
+            ? "Both queryable — pass 1 is reading the corpus via $search."
+            : "At least one is still building; pass 1 stays on the regex fallback until it is queryable.",
+    };
+  } catch (err) {
+    checks.searchIndexes = { ms: Date.now() - idxT0, error: (err instanceof Error ? err.message : String(err)).slice(0, 200) };
   }
 
   // Apollo. `/auth/health` answers WITHOUT a key, so "reachable" and "the key works" are two

@@ -36,7 +36,7 @@ const SOURCES = [
 /**
  * Accepts what a founder actually types.
  *
- * "dockside.app", "www.dockside.app" and "https://dockside.app/pricing" are the same answer, and
+ * "berth.app", "www.berth.app" and "https://berth.app/pricing" are the same answer, and
  * rejecting two of the three for a missing protocol would be the page failing at the one question
  * it asks.
  */
@@ -152,7 +152,7 @@ export default function Hero() {
                 setTypedUrl(e.target.value);
                 if (error) setError(null);
               }}
-              placeholder="dockside.app"
+              placeholder="berth.app"
               inputMode="url"
               autoComplete="url"
               style={{

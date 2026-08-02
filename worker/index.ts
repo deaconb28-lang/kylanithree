@@ -7,6 +7,7 @@ import { backfillEmbeddings, classifyBacklog, ingestDocuments, refreshSourceYiel
 import { hasEmbeddingProvider } from "../lib/ingest/embed";
 import { isPermanentSourceError } from "../lib/ingest/errors";
 import { enrichPeopleBacklog } from "../lib/ingest/people";
+import { ensureSearchIndexes, searchIndexStatus } from "../lib/ingest/searchIndexes";
 
 // The ingestion worker. Runs on Railway, NOT on Vercel.
 //
@@ -381,6 +382,23 @@ async function main(): Promise<void> {
   // logged and stepped over rather than thrown. It threw once, and the worker crash-looped
   // indefinitely because one index definition had changed shape.
   await ensureIngestIndexes();
+
+  // The Atlas Search and Vector Search indexes. These were a manual Atlas-console step and the top
+  // blocker on the whole retrieval path for months; on M10 with driver v6 they are just a call.
+  // Non-fatal like every other index here — retrieval degrading is survivable, a worker that will
+  // not start is not.
+  for (const r of await ensureSearchIndexes()) {
+    if (r.state === "created") log(`search index ${r.name} CREATED — it will take a few minutes to build`);
+    else if (r.state === "exists") log(`search index ${r.name} already present`);
+    else if (r.state === "unsupported") log(`search index ${r.name} NOT SUPPORTED on this cluster tier — ${r.detail}`);
+    else log(`ERROR creating search index ${r.name} — ${r.detail}`);
+  }
+  // Creation returns before the build finishes, and until `queryable` is true a $search still
+  // errors — which pass 1 reads as "missing index" and downgrades to a regex scan. Logging the
+  // build state is what makes that window explainable instead of looking like a regression.
+  for (const s of await searchIndexStatus()) {
+    log(`search index ${s.name}: status=${s.status ?? "?"} queryable=${s.queryable ?? "?"}`);
+  }
   try {
     await seedSources();
   } catch (err) {
