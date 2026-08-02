@@ -52,3 +52,112 @@ export function resolveExcerpt(attempted: string, body: string): string | null {
   if (isVerbatim(attempted, body)) return normalize(attempted);
   return salvageExcerpt(attempted, body);
 }
+
+// --- relevance-selected excerpts ----------------------------------------------------------------
+//
+// Which part of a post a founder is shown.
+//
+// The first ~240 characters used to be it, which is the wrong 240 characters most of the time: a
+// forum post opens with context and greetings and reaches the problem in the third sentence. A
+// lead whose excerpt is "Hi all, first time posting here, apologies if this is the wrong place"
+// gives a founder no way to tell whether the person is worth writing to.
+//
+// So the excerpt is chosen by overlap with the founder's own inferred vocabulary — the same
+// keywords the search ran on. What they read is the part of the post that is about their product.
+//
+// It stays a LITERAL SPAN of the real post. Not a generated summary, deliberately: a summary would
+// break the invariant this whole module exists to enforce (everything quoted is checkably the
+// person's own words), add a model call inside pass 1's 8-second budget, and introduce exactly the
+// fabrication risk the product's first design principle forbids. Picking the right real sentences
+// gets the same benefit with none of that.
+
+/** Words too common to be evidence of anything. Kept tiny — this is a tie-breaker, not a stoplist. */
+const IGNORED = new Set([
+  "the", "and", "for", "with", "that", "this", "you", "your", "our", "are", "was", "have", "has",
+  "not", "but", "all", "any", "can", "how", "why", "what", "when", "who", "from", "they", "them",
+  "its", "it's", "get", "got", "just", "like", "some", "more", "than", "then", "into", "out",
+]);
+
+function terms(list: string[]): Set<string> {
+  const out = new Set<string>();
+  for (const phrase of list) {
+    for (const w of phrase.toLowerCase().match(/[a-z0-9']+/g) ?? []) {
+      if (w.length >= 3 && !IGNORED.has(w)) out.add(w);
+    }
+  }
+  return out;
+}
+
+function splitSentences(body: string): string[] {
+  return normalize(body)
+    .split(/(?<=[.!?])\s+|\n+/)
+    .map((s) => s.trim())
+    .filter(Boolean);
+}
+
+/**
+ * The span of `body` most about `keywords`, capped at `maxChars`.
+ *
+ * Scores each sentence by how many of the founder's terms it contains, then grows a window around
+ * the best one so the quote reads as speech rather than as a clipped fragment. Falls back to the
+ * opening of the post when nothing matches — an honest "here is what they said" beats an empty
+ * card, and `matchedFor` on the lead already tells the founder whether anything matched at all.
+ */
+export function relevantExcerpt(body: string, keywords: string[], maxChars = 260): string {
+  const clean = normalize(body);
+  if (clean.length <= maxChars) return clean;
+
+  const sentences = splitSentences(clean);
+  if (sentences.length === 0) return clean.slice(0, maxChars).trimEnd() + "…";
+
+  const wanted = terms(keywords);
+  if (wanted.size === 0) return trimTo(clean, maxChars);
+
+  const scores = sentences.map((s) => {
+    const sw = new Set(s.toLowerCase().match(/[a-z0-9']+/g) ?? []);
+    let hits = 0;
+    for (const w of wanted) if (sw.has(w)) hits += 1;
+    // Per-sentence density, so one long rambling sentence does not out-score a precise short one
+    // purely by containing more words.
+    return hits === 0 ? 0 : hits + hits / Math.sqrt(sw.size || 1);
+  });
+
+  let bestAt = 0;
+  for (let i = 1; i < scores.length; i++) if (scores[i] > scores[bestAt]) bestAt = i;
+  if (scores[bestAt] === 0) return trimTo(clean, maxChars);
+
+  // Grow outward from the best sentence while there is room, preferring the sentence after — a
+  // problem statement is usually followed by its consequence, which is the part worth reading.
+  let start = bestAt;
+  let end = bestAt;
+  let length = sentences[bestAt].length;
+  for (;;) {
+    const next = end + 1 < sentences.length ? sentences[end + 1] : null;
+    const prev = start - 1 >= 0 ? sentences[start - 1] : null;
+    if (next && length + next.length + 1 <= maxChars) {
+      end += 1;
+      length += next.length + 1;
+      continue;
+    }
+    if (prev && length + prev.length + 1 <= maxChars) {
+      start -= 1;
+      length += prev.length + 1;
+      continue;
+    }
+    break;
+  }
+
+  const span = sentences.slice(start, end + 1).join(" ");
+  // Leading ellipsis only when the quote genuinely starts mid-post, so a founder can tell at a
+  // glance whether they are reading the opening or something from further down.
+  const prefix = start > 0 ? "…" : "";
+  const suffix = end < sentences.length - 1 ? "…" : "";
+  return `${prefix}${trimTo(span, maxChars)}${suffix}`;
+}
+
+function trimTo(text: string, maxChars: number): string {
+  if (text.length <= maxChars) return text;
+  const cut = text.slice(0, maxChars);
+  const lastStop = Math.max(cut.lastIndexOf(". "), cut.lastIndexOf("! "), cut.lastIndexOf("? "));
+  return lastStop > maxChars * 0.5 ? cut.slice(0, lastStop + 1) : `${cut.trimEnd()}…`;
+}

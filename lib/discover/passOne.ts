@@ -3,6 +3,7 @@ import { searchHackerNews } from "../search/hackernews";
 import { searchStackExchange } from "../search/stackexchange";
 import { personFingerprint } from "../credits/fingerprint";
 import { lexicalGate, normalizeForIntent, INTENT_WEIGHT, INTENT_TYPES, type IntentType } from "../search/intent";
+import { relevantExcerpt } from "../search/excerpt";
 import { communitiesForNiche } from "./nicheMap";
 import type { DiscoverLead } from "./collections";
 
@@ -46,14 +47,6 @@ function scoreOf(intentType: IntentType | undefined, postedAt: Date): number {
   return intent * 0.7 + recency * 0.3;
 }
 
-function excerptFrom(text: string, max = 240): string {
-  const clean = normalizeForIntent(text);
-  if (clean.length <= max) return clean;
-  const cut = clean.slice(0, max);
-  const lastStop = Math.max(cut.lastIndexOf(". "), cut.lastIndexOf("! "), cut.lastIndexOf("? "));
-  return lastStop > max * 0.5 ? cut.slice(0, lastStop + 1) : `${cut.trimEnd()}…`;
-}
-
 /** Which route actually produced the corpus half, so a thin screen can be explained afterwards. */
 export type CorpusRoute = "search" | "regex" | "none";
 
@@ -70,13 +63,17 @@ type CorpusRow = {
 
 /** Shared by both routes so a swap between them cannot change what a lead looks like. */
 function toLeadFromCorpus(r: CorpusRow, keywords: string[]): DiscoverLead {
+  // The classifier's one-line restatement when it made one, otherwise the span of the real post
+  // most about this founder's vocabulary. Both are the person's actual problem rather than the
+  // first 240 characters, which on a forum is usually a greeting.
+  const source = r.problemStatement || r.body;
   return {
     personFingerprint: r.personFingerprint,
     author: r.authorRef,
     platform: r.platform,
     venueName: r.platform === "hn" ? "Hacker News" : r.platform,
     permalink: r.url,
-    excerpt: excerptFrom(r.problemStatement || r.body),
+    excerpt: relevantExcerpt(source, keywords),
     postedAt: r.postedAt,
     intentType: r.intentType,
     matchedFor: keywords.filter((k) => `${r.problemStatement ?? ""} ${r.body}`.toLowerCase().includes(k.toLowerCase())),
@@ -215,7 +212,7 @@ async function fromLiveSources(opts: { keywords: string[]; venueIds: string[]; b
       platform: c.platform,
       venueName: c.venueName,
       permalink: c.permalink,
-      excerpt: excerptFrom(c.body || c.title),
+      excerpt: relevantExcerpt(c.body || c.title, queries),
       postedAt: c.postedAt,
       matchedFor: queries.filter((k) => text.toLowerCase().includes(k.toLowerCase())),
       score: scoreOf(undefined, c.postedAt),

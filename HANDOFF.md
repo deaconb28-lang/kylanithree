@@ -122,22 +122,22 @@ returns `{"error":"Api key required"}`.
 
 ### Also outstanding
 
-- **Atlas Search + Vector Search indexes are still not created — this is the top blocker.** The
-  definitions are written and ready in `docs/atlas-indexes.json`; applying them is an Atlas UI/CLI
-  action the driver cannot perform. Vector Search requires **M10+**, not M0 (the user has approved
-  the upgrade). Until they exist:
-  - `fromCorpus()` in `lib/discover/passOne.ts` runs its `$search` against `corpus_lexical`, catches
-    the missing-index error, logs once, and falls back to a recency-ordered `$regex` scan. So pass 1
-    works but finds far less than it should, and **that is why a search still reaches the internet**:
-    a thin corpus result drops under `THIN_THRESHOLD` and triggers the live-shallow fill.
-  - The fallback is **not silent**. `runPassOne` returns `corpusRoute: "search" | "regex" | "none"`
-    plus `corpusLeads` / `corpusTimedOut`; the stream persists them to `searches.passOneRoute` and
-    emits a `pass_one_route` SSE event. `corpusRoute: "regex"` means the index is missing;
-    `"search"` with `usedLive: true` means the index answered and the niche is genuinely cold.
-  - `isMissingSearchIndex()` is deliberately narrow and unit-tested. A timeout or an auth failure
-    must **not** be reclassified as "the corpus was thin" — that is the silent failure being removed.
-  - Once the indexes have been live a while, delete the regex branch; it exists only to cover the
-    provisioning gap.
+- ~~Atlas Search + Vector Search indexes~~ — **done, and the shallow pass now reads the database.**
+  The cluster is on M10, and the indexes are created by the worker rather than by hand:
+  `lib/ingest/searchIndexes.ts` calls the driver's `createSearchIndex`, which works on M10+ with
+  driver v6. The old note that "the driver cannot create them" was true of the free tier and is not
+  true now. Verified in production:
+  - `/api/health` → `searchIndexes` reports both `corpus_lexical` and `corpus_vector` as
+    `READY / queryable`. **`queryable` is the field that matters** — creation returns immediately
+    while the build takes minutes, and until it flips, `$search` still errors and pass 1 quietly
+    downgrades to the regex scan.
+  - A live `POST /api/discover` on linear.app then reported
+    `corpusRoute: "search", corpusLeads: 36, usedCorpus: true, usedLive: false, ms: 299`.
+    **`usedLive: false` is the whole point**: the shallow pass no longer touches the internet. Before
+    the indexes existed the same product returned 2 leads from live sources.
+  - The regex branch in `fromCorpus()` is now dead weight on a working cluster. Leave it one more
+    cycle in case the indexes are rebuilt, then delete it.
+
 - **Rotate the Bluesky app password.** It was pasted into chat in an earlier session.
 - Founder/Studio plan naming is undecided, which blocks the billing half of the credits system
   (`lib/credits/`, `docs/credits.md`). Metering works and records; nothing is debited.
