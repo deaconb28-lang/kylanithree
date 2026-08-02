@@ -197,7 +197,11 @@ button {
   font-size: 64px;
   line-height: 1.06;
   letter-spacing: -0.02em;
-  font-weight: 400;
+  /* Real bold off the wght axis, not a synthesised smear: Fraunces is loaded as a full variable
+     font with no pinned weight, and .ky-display's font-variation-settings deliberately omits wght,
+     so font-weight still drives that axis. Bold sets wider than 400 — the two-line break at 1440
+     and the absence of overflow at 390 are re-measured in a browser after any change here. */
+  font-weight: 700;
 }
 /* The break is an element rather than a <br> so it can be switched off by a media query — a <br>
    would need a second copy of the headline to remove it. */

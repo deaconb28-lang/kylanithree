@@ -46,25 +46,30 @@ a18ad44 Discover: the one-screen onboarding, end to end
 b8bee50 Discover: niche map, pass 1, and the merge policy
 ```
 
-### The one thing that is NOT done
+### Explee — the details finally arrived, and it is not what the old handoff assumed
 
-**The Explee scraper was requested but never built.** The user said "the api is ready in railway and
-vercel", meaning the key is set as an environment variable in both — but three things were never
-established and are needed before a line of code makes sense:
+The three blockers are answered. The env var is **`EXPLEE_API_KEY`**, the base URL is
+**`https://api.explee.com`**, auth is the header `X-API-Key: <key>` on every request, and the API
+documents itself: `/public/api/llms.txt` is the prose guide and `/public/api/openapi.json` the full
+schema. **Read the guide before calling** — it is written for agents and describes the whole id
+chain (projects → campaigns → leads). `api.explee.com` **is** reachable from the sandbox even
+though `explee.com` is not.
 
-1. **The env var name** they used (guessing `EXPLEE_API_KEY` would be a coin flip).
-2. **The base URL and endpoint shape.**
-3. **A sample response**, or a docs link.
+**But it is not a lead source.** Explee is a B2B outreach platform that runs campaigns end to end —
+projects → campaigns → leads/inbox, with budgets, autopilot, start/stop and analytics. The old
+handoff called it a "scraper" to slot into `lib/search/` or `lib/ingest/sources/`; nothing seen so
+far supports that reading. It does have `/search/people`, `/search/companies` and `/enrich/*`
+endpoints, which *could* back a Kylani lead source — but **no such integration has been asked for
+or built**, and the user's actual request was to operate their account, not to wire it into the
+product. Do not build the scraper on the strength of the old note alone; confirm first.
 
-`explee.com` is not reachable from the sandbox (the agent proxy 403s it), so the shape cannot be
-discovered by calling it. **Ask for these three things before starting.** Tell the user to keep the
-key itself in Railway/Vercel and out of chat — anything pasted into a conversation should be
-treated as exposed.
+Nothing is stored in this repo. The key belongs in Railway/Vercel env only — it has been pasted
+into chat once already and should be treated as compromised until rotated.
 
-Where it slots in once the details arrive: if Explee is a query-time search source it belongs in
-`lib/search/` (see `bluesky.ts`, `quora.ts` for the shape a source module takes) and gets
-registered in `lib/search/venues.ts`. If it is a *corpus* source it belongs in
-`lib/ingest/sources/` next to `hackernews.ts`, and gets seeded in `worker/index.ts`.
+As of the last check the account was **empty**: `GET /autogtm/projects`, `/autogtm/campaigns` and
+`/autogtm/hot-leads` all returned `total: 0` on HTTP 200 (a deliberately invalid key returns 401,
+so the emptiness is real and not an auth artifact). There is nothing to summarise or operate on
+until projects exist.
 
 ### Also outstanding
 
@@ -202,9 +207,11 @@ the centre, real communities around it, lines lighting up as each is searched.
   without navigating; bare / `www.` / full URLs all normalize.
 - **The rebalanced headline, re-verified after the Fraunces sweep** (this was the open caveat from
   `d7c42be`, whose last screenshot pass predated the break move). Measured in a real browser against
-  a production build: two lines at 1440, one at 768, two at 390, no horizontal overflow at any of
-  them — the three-line wrap is gone. Fraunces genuinely loads rather than falling back to Georgia,
-  with `SOFT 20, WONK 1, opsz 48` applied.
+  a production build: no horizontal overflow at any of them — the three-line wrap is gone. Fraunces
+  genuinely loads rather than falling back to Georgia, with `SOFT 20, WONK 1, opsz 48` applied.
+  Since `.ky-h1` went to `font-weight: 700` the headline sets two lines at all three widths; before
+  the bold it fitted on one at 768. Bold sets wider, so **re-measure the wrap after any change to
+  the headline's weight, size or copy** — that is the axis this hero fails on.
   - One false alarm worth not re-investigating: `h1.innerText` reads `"firsthundred"` with no space,
     which looks exactly like the `.ky-h1-break` pseudo-element collapsing at narrow widths. It is
     not. `::before` content never appears in `innerText`; the rendered space is correct in both the
@@ -253,7 +260,8 @@ STACKEXCHANGE_KEY=
 BLUESKY_IDENTIFIER= / BLUESKY_APP_PASSWORD=
 STRIPE_CLIENT_ID= / STRIPE_SECRET_KEY=   # optional
 NEXT_PUBLIC_ONBOARDING_FLOW=             # set to "legacy" to roll onboarding back
-EXPLEE_?=               # name unknown — ask the user
+EXPLEE_API_KEY=         # https://api.explee.com, sent as the X-API-Key header. Nothing in this
+                        # repo reads it yet — see the Explee section above before wiring it in.
 ```
 
 Treat any credential pasted into a chat as exposed and suggest rotation.
