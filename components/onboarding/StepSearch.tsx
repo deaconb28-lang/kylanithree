@@ -10,7 +10,7 @@ import { useNotificationPermission } from "../../lib/useNotificationPermission";
 import LeadStars from "../LeadStars";
 import { rankLeads } from "../../lib/search/leadScore";
 import { sinceFlowStart, trackClient } from "../../lib/discover/clientTrack";
-import SedimentField, { type FieldVenue } from "../discover/SedimentField";
+import WaveField, { type FieldVenue } from "../discover/WaveField";
 
 // Orchestrates the real two-phase pipeline from the client, which is what makes results stream.
 // Venues resolve first and render the moment they land — communities ARE the first result, not a
@@ -428,7 +428,7 @@ export default function StepSearch({
           {/* The same map the new flow draws. Every wave fans out across all shards at once here,
               so during extraction every community really is being searched simultaneously. */}
           {field.length > 0 && (
-            <SedimentField
+            <WaveField
               centerLabel={analysis?.nicheKey?.replace(/-/g, " ") ?? "your product"}
               venues={field}
               scanningIds={phase === "leads" ? field.map((v) => v.id) : []}

@@ -6,7 +6,7 @@ import KylaniLogo from "../../../components/icons/KylaniLogo";
 import { relativeTime } from "../../../lib/relativeTime";
 import type { DiscoverLead } from "../../../lib/discover/collections";
 import { anonId as getAnonId, sinceFlowStart, trackClient } from "../../../lib/discover/clientTrack";
-import SedimentField, { type FieldVenue } from "../../../components/discover/SedimentField";
+import WaveField, { type FieldVenue } from "../../../components/discover/WaveField";
 
 // The whole onboarding, on one screen.
 //
@@ -111,7 +111,7 @@ export default function DiscoverPage({ params }: { params: Promise<{ id: string 
   }, [leads]);
 
   const fieldFor = (compact: boolean) => (
-    <SedimentField
+    <WaveField
       centerLabel={fast?.nicheKey ? fast.nicheKey.replace(/-/g, " ") : "your product"}
       venues={fieldVenues}
       scanningIds={scanningIds}

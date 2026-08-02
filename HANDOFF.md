@@ -332,31 +332,28 @@ reverses the wave rather than restarting it. Three constraints, all load-bearing
 - The entrance's 720ms transform transition is dropped once the wave takes over (`.ky-field-live`),
   or it damps every frame and the wave lags the scroll by most of a second.
 
-`components/discover/SedimentField.tsx` is the sibling graphic on the search screen, and it replaced
-a radar (`SearchField.tsx`, deleted, along with `@keyframes kyRadar`). A radar was the wrong
-metaphor twice: it implies even coverage, and it implies everything it touches is a contact. What
-Kylani does is pour an enormous amount of chatter through a filter and keep almost none of it — so
-grains fall from each community, the pale ones wash away before the floor, and the rare coral ones
-settle into a seam. **The discard being visible is the point.**
+`components/discover/WaveField.tsx` is the sibling graphic on the search screen. It replaced a radar
+(`SearchField.tsx`) and then a sediment column (`SedimentField.tsx`) — both deleted, along with
+`@keyframes kyRadar`. The waveform won because it is the language the landing page already speaks: a
+field of bars where a few are coral, and a hero that oscillates like a sound wave as you scroll. The
+search screen continues that sentence rather than starting a new one.
 
-Both flows use it (the discover stream and legacy `StepSearch`), and the props contract is identical
-to the old radar's, so it is a drop-in. Load-bearing details:
+One channel per community, stacked. Each runs a live waveform; a coral scan head sweeps a channel
+while it is being searched, and every person found leaves a coral spike behind that stays. Both
+flows use it (the discover stream and legacy `StepSearch`) and the props contract is unchanged from
+the original radar's, so it is a drop-in. Load-bearing details:
 
-- **One stratum in the seam is one person found.** The layer count is the lead count, not a
-  flourish. There is deliberately no "posts examined" number anywhere, because nobody counted one —
-  the pale grains are texture and must never be readable as a measurement.
-- **Motion means work.** `animate = !reduced && working`, so a finished search shows its seam at
-  rest rather than a fall implying it is still looking. This was wrong in the first pass and caught
-  in review of the "complete, nothing settled" case.
-- **The grain filter is a displacement map, not a composite.** The first attempt clipped desaturated
-  turbulence to `SourceAlpha`, which *replaces* the artwork with grey noise — it turned the coral
-  seam grey. `feDisplacementMap` on `SourceGraphic` roughens edges while leaving token colours
-  intact, which is why it needs no dark-mode rule.
-- Positions come from the same seeded `noise(i)` the hero field uses — never `Math.random()`.
-  Verified: identical grain layout across a resize round-trip, no hydration warnings.
-- Verified in a real browser: the container box is byte-identical across a full animation run (no
-  reflow), and under reduced motion no rAF loop is attached at all while the seam, strata and counts
-  still render.
+- **One spike is one person found.** The background ticks are texture and carry no measurement —
+  there is deliberately no "posts scanned" figure, because nobody counted one.
+- **Motion means work.** `animate = !reduced && working`, so a finished search stops sweeping.
+- **A finished channel keeps its waveform.** The first pass dropped idle amplitude to ~0.06, which
+  collapsed completed channels to bare tally marks on a line — it read as a barcode, and it implied
+  the room had been silent when in fact it was noisy and few of them matched.
+- Crest spatial frequency is deliberately low (4.2 across the channel). At 9 the crests were
+  narrower than the tick pitch and the row read as bunched noise rather than a wave moving through.
+- Seeded `noise(i)`, never `Math.random()`. Verified: spike positions identical after a resize
+  round-trip, no hydration warnings, container boxes byte-identical across a full animation run, and
+  under reduced motion no rAF loop is attached while spikes and counts still render.
 
 The gallery marquee (`components/landing/Marquee.tsx`) shows **drawn app icons, not images**.
 `components/landing/AppIcon.tsx` renders a rounded tile plus one of twelve marks as inline SVG; the
