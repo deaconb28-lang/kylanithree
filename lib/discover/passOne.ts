@@ -265,11 +265,17 @@ async function fromLiveSources(opts: { keywords: string[]; venueIds: string[]; b
     }
   }
 
-  // Whatever has landed when the budget expires is what ships. A slow source is dropped, never
-  // waited on — that is the difference between a thin screen and a broken one.
+  // The same explainability rule the corpus route applies. It was corpus-only at first, and the
+  // asymmetry showed up immediately in production: being strict about the corpus pushed thin runs
+  // into this fallback, which then shipped Hacker News posts about office politics with nothing on
+  // the card able to say why they were there. A rule worth having on one route is worth having on
+  // the route that covers for it.
+  //
+  // If both routes come back thin, fewer people ship. That is the stated design — padding a first
+  // screen with weak matches is the one failure this cannot recover from.
   const guard = new Promise<DiscoverLead[][]>((resolve) => setTimeout(() => resolve([]), budgetMs));
   const settled = await Promise.race([Promise.all(jobs.map((j) => j.catch(() => []))), guard]);
-  return settled.flat();
+  return settled.flat().filter((l) => l.matchedFor.length > 0);
 }
 
 export type PassOneResult = {
