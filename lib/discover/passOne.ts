@@ -3,7 +3,7 @@ import { searchHackerNews } from "../search/hackernews";
 import { searchStackExchange } from "../search/stackexchange";
 import { personFingerprint } from "../credits/fingerprint";
 import { lexicalGate, normalizeForIntent, INTENT_WEIGHT, INTENT_TYPES, type IntentType } from "../search/intent";
-import { relevantExcerpt, matchedTerms, vocabularyOverlap } from "../search/excerpt";
+import { relevantExcerpt, matchedTerms } from "../search/excerpt";
 import { communitiesForNiche } from "./nicheMap";
 import type { DiscoverLead } from "./collections";
 
@@ -31,14 +31,6 @@ const PER_SOURCE_TIMEOUT_MS = 3_000;
 /** Below this, try the live sources as well rather than shipping a near-empty screen. */
 const THIN_THRESHOLD = 5;
 const TARGET = 12;
-/**
- * Share of the founder's significant vocabulary a corpus document must contain to ship.
- *
- * Deliberately low. This is a floor that removes the obviously-unrelated, not a ranking function —
- * pushing it higher starts dropping real leads who described the same problem in different words,
- * which is exactly what the vector half of retrieval exists to catch.
- */
-const MIN_VOCAB_OVERLAP = 0.12;
 
 /** The same relevance bar pass 2 applies. Deliberately shared, not a looser copy. */
 function clearsFloor(lead: { excerpt: string; intentType?: IntentType }): boolean {
@@ -165,14 +157,24 @@ async function fromCorpus(opts: {
       ])
       .toArray();
 
-    // $search with minimumShouldMatch 1 returns anything that matched a single common word, which
-    // is how a post about verifying a Bitcoin node reached an issue tracker's results. A document
-    // that barely speaks the founder's vocabulary is not their buyer, and shipping it costs more
-    // trust than the extra row is worth — the quality floor is the point of this whole design.
-    const relevant = rows.filter(
-      (r) => vocabularyOverlap(`${r.problemStatement ?? ""} ${r.title ?? ""} ${r.body}`, keywords) >= MIN_VOCAB_OVERLAP,
-    );
-    return { leads: relevant.map((r) => toLeadFromCorpus(r, keywords)), route: "search" };
+    // A lead has to be able to explain itself.
+    //
+    // $search with minimumShouldMatch 1 returns anything matching a single common word — which is
+    // how a post about verifying a Bitcoin Core node reached an issue tracker's results, the same
+    // generic-vocabulary failure that once routed software products to the Pets Stack Exchange.
+    //
+    // The rule is therefore not "scored highly enough" but "we can say why". If matchedFor is
+    // empty the card has no honest answer to "why is this person here", and a row a founder cannot
+    // check is worth less than no row — that is the same reasoning that keeps quotes verbatim.
+    // A run left thin by this falls through to the live fill and says so via corpusRoute, so the
+    // cost of being strict is visible rather than silent.
+    const leads = rows
+      .map((r) => toLeadFromCorpus(r, keywords))
+      .filter((l) => l.matchedFor.length > 0)
+      // Most of the founder's vocabulary present beats a single phrase, so the strongest evidence
+      // is first even before pass 2 re-ranks.
+      .sort((a, b) => b.matchedFor.length - a.matchedFor.length);
+    return { leads, route: "search" };
   } catch (err) {
     if (!isMissingSearchIndex(err)) throw err;
     if (!warnedNoSearchIndex) {
