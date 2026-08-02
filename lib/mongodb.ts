@@ -1,7 +1,8 @@
 import { MongoClient } from "mongodb";
 
 declare global {
-  // eslint-disable-next-line no-var
+  // `var` is deliberate and not interchangeable here — it is the only declaration form that adds a
+  // property to globalThis, which is what lets the promise survive a warm lambda between requests.
   var _mongoClientPromise: Promise<MongoClient> | undefined;
 }
 

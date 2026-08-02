@@ -81,6 +81,17 @@ registered in `lib/search/venues.ts`. If it is a *corpus* source it belongs in
   `checks.mongo.likelyCause` and `checks.googleOAuth.configurationErrorCause`, which now name the
   cause directly.** Most likely: Atlas Network Access not allowing `0.0.0.0/0`, or a paused cluster.
 
+### Settled — do not re-raise
+
+- **"312 founders" on the landing page stays.** It appears in `Hero.tsx`, `Testimonials.tsx` and
+  `RevenueFindings.tsx`, and it does read as a counter-example to design principle 1 below, so every
+  cold session finds it and flags it. It was put to the user directly and the answer was to leave it
+  for now. Propose a change if you have a reason, but do not treat it as an unnoticed bug.
+- **This branch is the one that ships.** `claude/kylanithree-data-organization-v7j15s` is both where
+  the work lives and Vercel's Production Branch. A session may be assigned a different working
+  branch; `main` holds only a placeholder README and is a clean ancestor of this branch. Confirmed
+  with the user: new work belongs here, not on a session-scoped branch, or it does not deploy.
+
 ---
 
 ## Design principles (do not regress these)
@@ -189,6 +200,22 @@ the centre, real communities around it, lines lighting up as each is searched.
   entrance runs once, holds 9 found bars at every width from 390 to 1440, returns byte-identical
   after a resize round-trip, never moves under reduced motion; empty submit shows the inline message
   without navigating; bare / `www.` / full URLs all normalize.
+- **The rebalanced headline, re-verified after the Fraunces sweep** (this was the open caveat from
+  `d7c42be`, whose last screenshot pass predated the break move). Measured in a real browser against
+  a production build: two lines at 1440, one at 768, two at 390, no horizontal overflow at any of
+  them — the three-line wrap is gone. Fraunces genuinely loads rather than falling back to Georgia,
+  with `SOFT 20, WONK 1, opsz 48` applied.
+  - One false alarm worth not re-investigating: `h1.innerText` reads `"firsthundred"` with no space,
+    which looks exactly like the `.ky-h1-break` pseudo-element collapsing at narrow widths. It is
+    not. `::before` content never appears in `innerText`; the rendered space is correct in both the
+    one-line and two-line cases. Measure that break with range rects or a screenshot, not `innerText`.
+- The font sweep is complete: no `Outfit` call sites remain (only a comment recording the
+  retirement), no typeface name is hardcoded outside `app/layout.tsx`, and 125 sites read
+  `var(--font-display)`. Headings resolve to Fraunces on `/onboarding`, `/signin` and `/diagnostics`.
+
+**Still unverified:** how Fraunces reads on the dashboard pages. Every `/app/*` route redirects to
+`/signin`, and getting past that needs Mongo, which the sandbox cannot reach — so this cannot be
+closed from a sandbox session at all. It needs a look at a real deployment.
 
 ## Sandbox limitations (they will bite you again)
 
