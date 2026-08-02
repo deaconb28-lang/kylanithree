@@ -170,7 +170,7 @@ export async function resolveVenues(opts: {
   // More communities means more people AND a wider read on where this buyer actually is — the
   // extraction stage now spreads its budget across venues rather than letting one fill the batch,
   // so a longer list genuinely widens the result instead of just adding tail.
-  const { nicheKey, buyers, whatYouSell, lexiconTerms, trace, maxVenues = 12, deadline } = opts;
+  const { nicheKey, buyers, whatYouSell, lexiconTerms, trace, maxVenues = 22, deadline } = opts;
   // Both slow stages run concurrently, so each may claim the same slice of the remaining time.
   const webBudget = deadline ? deadline.budgetFor(WEB_DISCOVERY_BUDGET_MS, RESOLVE_RESERVE_MS) : WEB_DISCOVERY_BUDGET_MS;
   const annotateBudget = deadline ? deadline.budgetFor(ANNOTATION_BUDGET_MS, RESOLVE_RESERVE_MS) : ANNOTATION_BUDGET_MS;

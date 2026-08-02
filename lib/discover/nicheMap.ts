@@ -28,10 +28,20 @@ async function NicheMap() {
 //     density is higher than any feed.
 // Deliberately NOT Discourse (per-topic fetches, seconds each) and not Quora (a page fetch per
 // result). Those earn their place in pass 2 where there is time for them.
+//
+// Widened from three. These are only reached when the corpus comes back thin, and each one is a
+// parallel request inside the live budget rather than a sequential one, so breadth costs latency
+// far more slowly than it costs coverage. Every site here is high-question-density and answers
+// fast; the slow platforms still stay out of pass 1 entirely.
 const FAST_DEFAULTS = [
   "hn:all",
   "stackexchange:softwarerecs",
   "stackexchange:workplace",
+  "stackexchange:pm",
+  "stackexchange:webmasters",
+  "stackexchange:ux",
+  "stackexchange:sqa",
+  "stackexchange:devops",
 ];
 
 const TTL_DAYS = 30;
@@ -50,7 +60,9 @@ export async function communitiesForNiche(nicheKey: string): Promise<{ venueIds:
       // Defaults are appended, not replaced: a cached niche should still get the reliably fast
       // sources, since the cache records what the DEEP pass found and that skews slower.
       const merged = [...new Set([...hit.venueIds, ...FAST_DEFAULTS])];
-      return { venueIds: merged.slice(0, 6), cached: true };
+      // Was 6. The cap exists to bound the live fallback's fan-out, not the corpus read — the
+      // corpus route searches every crawled community regardless of what is listed here.
+      return { venueIds: merged.slice(0, 16), cached: true };
     }
   } catch (err) {
     console.error("[nicheMap] lookup failed, using defaults:", err instanceof Error ? err.message : err);
@@ -69,7 +81,7 @@ export async function recordNicheCommunities(nicheKey: string, venueIds: string[
   try {
     const map = await NicheMap();
     const existing = await map.findOne({ nicheKey });
-    const merged = [...new Set([...(existing?.venueIds ?? []), ...venueIds])].slice(0, 20);
+    const merged = [...new Set([...(existing?.venueIds ?? []), ...venueIds])].slice(0, 40);
     await map.updateOne(
       { nicheKey },
       {
