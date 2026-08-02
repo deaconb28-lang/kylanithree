@@ -71,6 +71,45 @@ As of the last check the account was **empty**: `GET /autogtm/projects`, `/autog
 so the emptiness is real and not an auth artifact). There is nothing to summarise or operate on
 until projects exist.
 
+### Apollo — business records (`lib/enrich/`)
+
+Company firmographics for the org behind a lead: industry, headcount, location, funding, tech stack.
+`LeadDoc.company` is a bare name with nothing behind it; this is what fills that in.
+
+**Everything here was verified against the live API, not recalled** — the same discipline the SE
+filter id needed. Specifics worth not re-deriving:
+
+- **The env var is `apollo_one`** — lowercase. Read out of Railway with the MCP, not guessed;
+  `APOLLO_API_KEY` and `APOLLO_ONE` are accepted as fallbacks so a rename cannot silently disable it.
+- **Auth is the `x-api-key` request header.** Not Bearer, not an `api_key` query param.
+- **Endpoint existence is checkable without a key**, and this trick is worth keeping: a real path
+  answers `{"error":"Api key required"}`, an invented one returns an **empty body**. That is how
+  `/api/v1/organizations/job_postings` was caught — it sounds right and does not exist. Confirmed
+  real: `organizations/enrich` (GET, `?domain=`), `organizations/bulk_enrich`,
+  `organizations/search`, `mixed_companies/search`, `people/match`, `people/bulk_match`,
+  `mixed_people/search`, `auth/health`.
+- `/api/v1/auth/health` **answers unauthenticated**, so "Apollo is up" and "our key works" are
+  different questions. `apolloHealth()` returns both — `keyValid` is the one that catches a revoked
+  key, and `/api/health` reports it.
+
+**Caching is a cost requirement, not an optimisation.** Apollo bills a credit per enrichment, so
+`lib/enrich/companies.ts` is the only thing that may call it: records cached 90 days, **misses
+cached 30** (without that, a domain Apollo has never heard of is re-bought on every lead from that
+company forever). A **402/429 is never cached** — "out of credits" written down as "no such company"
+would poison the store for everything looked up during a stall. A stale hit is served in preference
+to nothing, and an unavailable domain is left absent from the batch map rather than mapped to
+`null`, because absent means "unknown" and null means "Apollo says there is nothing".
+
+**Not verified:** no successful 200 body has been parsed. Railway redacts variable values, so the
+sandbox cannot authenticate — `toRecord()`'s field mapping comes from Apollo's published response
+schema and the auth/error paths are confirmed live (bogus key → real 401, classified correctly), but
+the happy path has not run. First real call should be eyeballed. Cheapest check, from anywhere with
+the key:
+
+```
+curl -sS -H "x-api-key: $apollo_one" "https://api.apollo.io/api/v1/organizations/enrich?domain=stripe.com"
+```
+
 ### Also outstanding
 
 - **Atlas Search + Vector Search indexes are still not created — this is the top blocker.** The
@@ -98,10 +137,12 @@ until projects exist.
   The onboarding flow was verified end to end against production afterwards: `POST /api/discover`
   returns 202 and the SSE stream runs inference → leads → venues → `complete` with real Hacker News
   permalinks. Nothing in that path errors any more.
-- **`STACKEXCHANGE_KEY` is not set in production** (`/api/health` → `stackExchange.keyed: false`).
-  Everything still works unkeyed, but the quota is 300 requests/day/IP instead of 10,000, and the
-  people-enrichment pass added to the worker spends that quota one person at a time. Set it in
-  Railway before the enrichment backlog is expected to drain at any speed.
+- **`STACKEXCHANGE_KEY` is set on the Railway worker but NOT on Vercel.** `/api/health` reports the
+  Vercel app, so it shows `stackExchange.keyed: false` — which reads as "not configured anywhere"
+  and is wrong. People-enrichment and crawling run on the worker and *are* keyed (10,000 req/day);
+  it is the query-time Stack Exchange search on Vercel that is capped at 300/day/IP. Set it on
+  Vercel too. **Check both services before concluding a variable is missing** — the two deploy
+  targets have different environments, and `/api/health` can only see one of them.
 
 ### Lead quality: keyword routing is the weak spot
 
@@ -368,6 +409,8 @@ STRIPE_CLIENT_ID= / STRIPE_SECRET_KEY=   # optional
 NEXT_PUBLIC_ONBOARDING_FLOW=             # set to "legacy" to roll onboarding back
 EXPLEE_API_KEY=         # https://api.explee.com, sent as the X-API-Key header. Nothing in this
                         # repo reads it yet — see the Explee section above before wiring it in.
+apollo_one=             # Apollo. LOWERCASE — that is the name actually set in Railway and Vercel.
+                        # Sent as the x-api-key header. Read by lib/enrich/apollo.ts.
 ```
 
 Treat any credential pasted into a chat as exposed and suggest rotation.

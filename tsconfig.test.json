@@ -40,6 +40,7 @@
     "lib/discover/merge.ts",
     "lib/discover/passOne.ts",
     "lib/discover/collections.ts",
-    "lib/discover/rerank.ts"
+    "lib/discover/rerank.ts",
+    "lib/enrich/apollo.ts"
   ]
 }

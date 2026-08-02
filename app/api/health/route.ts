@@ -3,6 +3,7 @@ import { getDb } from "@/lib/mongodb";
 import { redditAuthMode } from "@/lib/search/reddit";
 import { hasBlueskyCredentials, searchBluesky } from "@/lib/search/bluesky";
 import { webSearchProvider } from "@/lib/search/websearch";
+import { apolloHealth, hasApolloKey } from "@/lib/enrich/apollo";
 
 // One request that answers "which piece is actually broken?" — built because three failures at
 // once (signup, Google sign-in, empty searches) are usually one or two root causes wearing
@@ -41,6 +42,9 @@ export async function GET(req: NextRequest) {
     BLUESKY_APP_PASSWORD: present("BLUESKY_APP_PASSWORD"),
     X_BEARER_TOKEN: present("X_BEARER_TOKEN"),
     BRAVE_SEARCH_API_KEY: present("BRAVE_SEARCH_API_KEY"),
+    // Lowercase on purpose — that is the name actually set in Railway and Vercel, confirmed by
+    // reading the deployed variables rather than assuming APOLLO_API_KEY.
+    apollo_one: present("apollo_one"),
     // Auth.js derives its callback URL from these when behind a proxy; a wrong value is a very
     // common cause of an OAuth redirect_uri mismatch.
     AUTH_URL: present("AUTH_URL"),
@@ -205,6 +209,21 @@ export async function GET(req: NextRequest) {
     checks.stackExchange = { reachable: res.ok, status: res.status, ms: Date.now() - seT0, keyed: Boolean(process.env.STACKEXCHANGE_KEY) };
   } catch (err) {
     checks.stackExchange = { reachable: false, ms: Date.now() - seT0, error: (err instanceof Error ? err.message : String(err)).slice(0, 200) };
+  }
+
+  // Apollo. `/auth/health` answers WITHOUT a key, so "reachable" and "the key works" are two
+  // different questions — `keyValid` is the one that matters, and it is the only way to catch a
+  // revoked or mistyped key before it presents as "no company records exist".
+  const apolloT0 = Date.now();
+  try {
+    checks.apollo = { ...(await apolloHealth()), ms: Date.now() - apolloT0 };
+  } catch (err) {
+    checks.apollo = {
+      configured: hasApolloKey(),
+      healthy: false,
+      ms: Date.now() - apolloT0,
+      error: (err instanceof Error ? err.message : String(err)).slice(0, 200),
+    };
   }
 
   // Quora has no API — the source finds question URLs via web search and then fetches each page
