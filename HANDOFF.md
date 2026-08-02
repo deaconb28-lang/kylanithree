@@ -332,8 +332,31 @@ reverses the wave rather than restarting it. Three constraints, all load-bearing
 - The entrance's 720ms transform transition is dropped once the wave takes over (`.ky-field-live`),
   or it damps every frame and the wave lags the scroll by most of a second.
 
-`components/discover/SearchField.tsx` is the sibling graphic on the search screen: the product at
-the centre, real communities around it, lines lighting up as each is searched.
+`components/discover/SedimentField.tsx` is the sibling graphic on the search screen, and it replaced
+a radar (`SearchField.tsx`, deleted, along with `@keyframes kyRadar`). A radar was the wrong
+metaphor twice: it implies even coverage, and it implies everything it touches is a contact. What
+Kylani does is pour an enormous amount of chatter through a filter and keep almost none of it — so
+grains fall from each community, the pale ones wash away before the floor, and the rare coral ones
+settle into a seam. **The discard being visible is the point.**
+
+Both flows use it (the discover stream and legacy `StepSearch`), and the props contract is identical
+to the old radar's, so it is a drop-in. Load-bearing details:
+
+- **One stratum in the seam is one person found.** The layer count is the lead count, not a
+  flourish. There is deliberately no "posts examined" number anywhere, because nobody counted one —
+  the pale grains are texture and must never be readable as a measurement.
+- **Motion means work.** `animate = !reduced && working`, so a finished search shows its seam at
+  rest rather than a fall implying it is still looking. This was wrong in the first pass and caught
+  in review of the "complete, nothing settled" case.
+- **The grain filter is a displacement map, not a composite.** The first attempt clipped desaturated
+  turbulence to `SourceAlpha`, which *replaces* the artwork with grey noise — it turned the coral
+  seam grey. `feDisplacementMap` on `SourceGraphic` roughens edges while leaving token colours
+  intact, which is why it needs no dark-mode rule.
+- Positions come from the same seeded `noise(i)` the hero field uses — never `Math.random()`.
+  Verified: identical grain layout across a resize round-trip, no hydration warnings.
+- Verified in a real browser: the container box is byte-identical across a full animation run (no
+  reflow), and under reduced motion no rAF loop is attached at all while the seam, strata and counts
+  still render.
 
 The gallery marquee (`components/landing/Marquee.tsx`) shows **drawn app icons, not images**.
 `components/landing/AppIcon.tsx` renders a rounded tile plus one of twelve marks as inline SVG; the
