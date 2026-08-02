@@ -68,16 +68,24 @@ function toLeadFromCorpus(r: CorpusRow, keywords: string[]): DiscoverLead {
   // most about this founder's vocabulary. Both are the person's actual problem rather than the
   // first 240 characters, which on a forum is usually a greeting.
   const source = r.problemStatement || r.body;
+  const excerpt = relevantExcerpt(source, keywords);
   return {
     personFingerprint: r.personFingerprint,
     author: r.authorRef,
     platform: r.platform,
     venueName: r.platform === "hn" ? "Hacker News" : r.platform,
     permalink: r.url,
-    excerpt: relevantExcerpt(source, keywords),
+    excerpt,
     postedAt: r.postedAt,
     intentType: r.intentType,
-    matchedFor: matchedTerms(`${r.problemStatement ?? ""} ${r.body}`, keywords),
+    // Matched against the EXCERPT, not the whole document, and that is the point.
+    //
+    // Scoring the full body produced reasons a founder could not see: a post about SSE resilience
+    // testing was labelled "losing track of feature requests" because those words appeared
+    // somewhere far from the quote on screen. A claim the reader cannot check against the text in
+    // front of them is worse than no claim — it is the fabrication problem wearing a different hat.
+    // Deriving it from the shown text makes the reason verifiable by looking.
+    matchedFor: matchedTerms(excerpt, keywords),
     score: scoreOf(r.intentType, r.postedAt),
     foundInPass: 1 as const,
   };
@@ -225,15 +233,16 @@ async function fromLiveSources(opts: { keywords: string[]; venueIds: string[]; b
     if (!lexicalGate(normalizeForIntent(text)).passed) return null;
     const fp = personFingerprint({ platform: c.platform, authorHandle: c.author });
     if (!fp) return null;
+    const liveExcerpt = relevantExcerpt(c.body || c.title, queries);
     return {
       personFingerprint: fp,
       author: c.author,
       platform: c.platform,
       venueName: c.venueName,
       permalink: c.permalink,
-      excerpt: relevantExcerpt(c.body || c.title, queries),
+      excerpt: liveExcerpt,
       postedAt: c.postedAt,
-      matchedFor: matchedTerms(text, queries),
+      matchedFor: matchedTerms(liveExcerpt, queries),
       score: scoreOf(undefined, c.postedAt),
       foundInPass: 1 as const,
     };
