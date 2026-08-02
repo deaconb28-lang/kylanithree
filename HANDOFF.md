@@ -275,6 +275,25 @@ to fail a search. Self-prunes after 30 days via a TTL index. Crawl rows record w
 not fetched — a source returning 200 documents that all fail the gate is contributing nothing, and
 "fetched" would hide that behind a healthy number.
 
+**Throughput — read this before tuning it.** Polling is parallel, grouped by platform, each group
+with its own cap (`CONCURRENCY` in `worker/index.ts`): HN 1, Stack Exchange 4, Discourse 5. It is
+capped per platform because politeness is per host — SE is one API behind a shared quota, Discourse
+is 31 unrelated servers. Sequential polling over 197 sources was the reason the corpus grew so
+slowly; one slow host stalled everything behind it and a tick could not finish in its own 60s.
+
+- Intervals: HN 5min, Discourse 30min, **Stack Exchange 45min — and that number is arithmetic, not
+  taste.** 166 sites at 45min is ~5,300 requests/day against a keyed limit of 10,000, and the
+  headroom exists because people-enrichment spends the same quota one profile at a time. At 20min
+  crawling alone exceeds the limit, and it fails as sources mysteriously degrading rather than as a
+  quota error.
+- **Seeding is `$setOnInsert`, so changing an interval default does nothing to sources that already
+  exist.** Startup retimes them explicitly — healthy ones only, because a degraded source has had
+  its interval deliberately doubled by the backoff and resetting that would undo the one thing
+  stopping the crawler hammering an unhappy host.
+- Classification rises with the crawl rate for a reason: retrieval only reads documents that have an
+  `intentType`, so an unclassified document is invisible to `$search`. Crawling faster without
+  classifying faster grows the collection and not the corpus.
+
 **Registry: all niches.** All 166 live non-meta Stack Exchange sites and 31 Discourse forums, up
 from 10 and 5. Both lists were **verified by calling the APIs**, not typed from memory — 7 of 10
 hand-guessed SE slugs did not exist, and 11 of 42 candidate Discourse hosts were not reachable
@@ -332,28 +351,21 @@ reverses the wave rather than restarting it. Three constraints, all load-bearing
 - The entrance's 720ms transform transition is dropped once the wave takes over (`.ky-field-live`),
   or it damps every frame and the wave lags the scroll by most of a second.
 
-`components/discover/WaveField.tsx` is the sibling graphic on the search screen. It replaced a radar
-(`SearchField.tsx`) and then a sediment column (`SedimentField.tsx`) — both deleted, along with
-`@keyframes kyRadar`. The waveform won because it is the language the landing page already speaks: a
-field of bars where a few are coral, and a hero that oscillates like a sound wave as you scroll. The
-search screen continues that sentence rather than starting a new one.
+`components/discover/SearchWheel.tsx` is the sibling graphic on the search screen. It has been
+through four forms — radar, sediment column, waveform channels, and now a **loading wheel** — and
+`SearchField.tsx`, `SedimentField.tsx` and `WaveField.tsx` are all deleted along with
+`@keyframes kyRadar`. The wheel is the waveform bent into a circle: bars radiate from a hub, their
+length oscillates, and a bright band travels round the rim while work is happening. That sweep is
+what makes it read as a loading wheel rather than as a chart.
 
-One channel per community, stacked. Each runs a live waveform; a coral scan head sweeps a channel
-while it is being searched, and every person found leaves a coral spike behind that stays. Both
-flows use it (the discover stream and legacy `StepSearch`) and the props contract is unchanged from
-the original radar's, so it is a drop-in. Load-bearing details:
+The rim is a map, not decoration: one arc per community, a searched arc lit, an empty community
+keeping its arc quietly. **Every coral bar is one person found**, in the arc of the community that
+produced them, and the names sit underneath as real text with real counts. Load-bearing details:
 
-- **One spike is one person found.** The background ticks are texture and carry no measurement —
-  there is deliberately no "posts scanned" figure, because nobody counted one.
-- **Motion means work.** `animate = !reduced && working`, so a finished search stops sweeping.
-- **A finished channel keeps its waveform.** The first pass dropped idle amplitude to ~0.06, which
-  collapsed completed channels to bare tally marks on a line — it read as a barcode, and it implied
-  the room had been silent when in fact it was noisy and few of them matched.
-- Crest spatial frequency is deliberately low (4.2 across the channel). At 9 the crests were
-  narrower than the tick pitch and the row read as bunched noise rather than a wave moving through.
-- Seeded `noise(i)`, never `Math.random()`. Verified: spike positions identical after a resize
-  round-trip, no hydration warnings, container boxes byte-identical across a full animation run, and
-  under reduced motion no rAF loop is attached while spikes and counts still render.
+- Rotation is an SVG attribute about the hub; scale is CSS about each bar's inner end. Two origins,
+  so they cannot share a transform.
+- `animate = !reduced && working` — motion is a claim that work is happening.
+- Seeded `noise(i)`, never `Math.random()`. No hydration warnings; nothing reflows.
 
 The gallery marquee (`components/landing/Marquee.tsx`) shows **drawn app icons, not images**.
 `components/landing/AppIcon.tsx` renders a rounded tile plus one of twelve marks as inline SVG; the
