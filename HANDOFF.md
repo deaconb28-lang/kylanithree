@@ -100,15 +100,25 @@ would poison the store for everything looked up during a stall. A stale hit is s
 to nothing, and an unavailable domain is left absent from the batch map rather than mapped to
 `null`, because absent means "unknown" and null means "Apollo says there is nothing".
 
-**Not verified:** no successful 200 body has been parsed. Railway redacts variable values, so the
-sandbox cannot authenticate — `toRecord()`'s field mapping comes from Apollo's published response
-schema and the auth/error paths are confirmed live (bogus key → real 401, classified correctly), but
-the happy path has not run. First real call should be eyeballed. Cheapest check, from anywhere with
-the key:
+**Verified end to end against production.** The sandbox has no Apollo key — Railway and Vercel both
+redact values — so the happy path was confirmed on the deployment that does, via
+`GET /api/health?apollo=probe`:
 
 ```
-curl -sS -H "x-api-key: $apollo_one" "https://api.apollo.io/api/v1/organizations/enrich?domain=stripe.com"
+$ curl -sS "https://www.kylani.app/api/health?apollo=probe"
+  keyValid: true
+  populated: all 23 normalized fields    missing: []
+  sample: Stripe · information technology & services · 8000 employees · founded 2010 · United States
 ```
+
+That probe is the tool to reach for whenever the mapping is in doubt. It **spends one Apollo credit
+per call**, which is why it is opt-in behind a query parameter rather than part of the health check
+uptime monitors hit; `?domain=` picks a different company. An empty `populated` list would mean the
+mapping broke even though the request succeeded — the silent failure worth watching for, since
+Apollo renaming a field would present as "this company has no data" rather than as an error.
+
+Running the equivalent `curl` locally proves nothing: there is no key in the sandbox, so it just
+returns `{"error":"Api key required"}`.
 
 ### Also outstanding
 
