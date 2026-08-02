@@ -85,16 +85,44 @@ export async function GET(req: NextRequest, ctx: { params: Promise<{ id: string 
         await narrate(`Looking for people saying things like "${fast.keywords[0]}"`);
 
         // --- Pass 1: 8s, hard -----------------------------------------------------------------
-        const passOne = await runPassOne({ keywords: fast.keywords, nicheKey: fast.nicheKey });
+        const passOne = await runPassOne({ keywords: fast.keywords, nicheKey: fast.nicheKey, correlationId: searchId });
         passOneFingerprints = passOne.leads.map((l) => l.personFingerprint);
 
         await emitLeads(passOne.leads);
+
+        // How pass 1 was served, recorded whether or not it found anything. Written before the
+        // `leads.length > 0` branch below on purpose: a run that found nothing is precisely the one
+        // where this needs answering, and hanging it off a lead count would lose it every time.
+        const passOneRoute = {
+          corpusRoute: passOne.corpusRoute,
+          corpusLeads: passOne.corpusLeads,
+          corpusTimedOut: passOne.corpusTimedOut,
+          usedCorpus: passOne.usedCorpus,
+          usedLive: passOne.usedLive,
+          ms: passOne.ms,
+        };
+        await searches.updateOne({ searchId }, { $set: { passOneRoute } });
+        sse(controller, { event: "pass_one_route", data: passOneRoute });
+
         // `firstLeadAt` is server truth for this run; the funnel's time-to-first-lead is reported by
         // the browser instead, so it is on the same clock as the legacy flow it is compared against.
         if (passOne.leads.length > 0) {
           await searches.updateOne({ searchId }, { $set: { firstLeadAt: new Date(), passOneFingerprints } });
         }
-        await track({ anonId, name: "pass_one_complete", flow: "discover", searchId, ms: passOne.ms, props: { corpus: passOne.usedCorpus, live: passOne.usedLive } });
+        await track({
+          anonId,
+          name: "pass_one_complete",
+          flow: "discover",
+          searchId,
+          ms: passOne.ms,
+          props: {
+            corpus: passOne.usedCorpus,
+            live: passOne.usedLive,
+            corpusRoute: passOne.corpusRoute,
+            corpusLeads: passOne.corpusLeads,
+            corpusTimedOut: passOne.corpusTimedOut,
+          },
+        });
         await narrate(
           passOne.leads.length > 0
             ? `${passOne.leads.length} so far — still finding more`

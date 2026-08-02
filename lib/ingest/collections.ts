@@ -114,8 +114,50 @@ export interface PersonDoc {
   platformPostCount?: number;
 }
 
+/**
+ * One row per unit of scraping work — a source poll, a pass-1 corpus read, a live-shallow fetch.
+ *
+ * This exists because the failure mode this system actually has is a silent one. A search that
+ * returns nothing looks identical whether the corpus was cold, an index was missing, a source 403'd
+ * or a budget expired, and `sources.health` only records the last of those. The question worth
+ * answering afterwards is "which source failed, and why", and it has to be answerable from stored
+ * rows rather than from a log line that has already scrolled away in Railway.
+ */
+export interface ScrapeLogDoc {
+  /** Ties every row from one run together: a `searchId` for query-time work, a tick id for crawls. */
+  correlationId: string;
+  /** "crawl" | "pass_one_corpus" | "pass_one_live" | "pass_two" — what kind of work this was. */
+  phase: string;
+  /** Platform plus instance, e.g. "stackexchange:cooking". "corpus" for an index read. */
+  source: string;
+  startedAt: Date;
+  ms: number;
+  /** Documents, leads or people — whatever the phase produces. Zero is a real, useful answer. */
+  itemsFound: number;
+  /** True when the phase returned early because its budget expired rather than because it finished. */
+  budgetHit: boolean;
+  /** Present only on failure. The technical message, since nothing here is shown to a customer. */
+  error?: string;
+}
+
 export async function Sources() {
   return (await getDb()).collection<SourceDoc>("sources");
+}
+
+export async function ScrapeLog() {
+  return (await getDb()).collection<ScrapeLogDoc>("scrape_log");
+}
+
+/**
+ * Records one unit of work. Never throws and never blocks the caller's result: a logging failure
+ * must not be able to fail a search, which would invert the entire point of having the log.
+ */
+export async function logScrape(entry: ScrapeLogDoc): Promise<void> {
+  try {
+    (await ScrapeLog()).insertOne(entry).catch(() => {});
+  } catch {
+    // Mongo unreachable. The console line from the caller is still the record in that case.
+  }
 }
 
 export async function Corpus() {
@@ -132,7 +174,7 @@ export async function People() {
  * Atlas UI or CLI, because the driver cannot create them.
  */
 export async function ensureIngestIndexes(): Promise<void> {
-  const [sources, corpus, people] = await Promise.all([Sources(), Corpus(), People()]);
+  const [sources, corpus, people, scrapeLog] = await Promise.all([Sources(), Corpus(), People(), ScrapeLog()]);
 
   // Every index is attempted independently and NO failure is fatal.
   //
@@ -162,6 +204,11 @@ export async function ensureIngestIndexes(): Promise<void> {
     // does NOT match a missing field with {$lt: n}, so the worker's query uses {$not: {$gte: n}} —
     // this index has to serve that shape, which is why enrichAttempts leads over lastSeen.
     [people, { enrichedAt: 1, enrichAttempts: 1, lastSeen: -1 }, { name: "person_enrich_backlog" }],
+    // "show me everything that happened during this run", which is the question a silent empty
+    // result actually raises.
+    [scrapeLog, { correlationId: 1, startedAt: -1 }, { name: "scrape_correlation" }],
+    // "which sources are failing lately", across runs.
+    [scrapeLog, { source: 1, startedAt: -1 }, { name: "scrape_source_recent" }],
   ];
 
   for (const [collection, keys, options] of specs) {
@@ -171,6 +218,15 @@ export async function ensureIngestIndexes(): Promise<void> {
     } catch (err) {
       console.error(`[ingest] index ${options.name} not created:`, err instanceof Error ? err.message : err);
     }
+  }
+
+  // scrape_log is append-only and grows with every tick forever, so it prunes itself. 30 days is
+  // well past the point where a specific run is still being investigated. Separate from the specs
+  // above because a TTL index needs `expireAfterSeconds`, which that tuple shape does not carry.
+  try {
+    await scrapeLog.createIndex({ startedAt: 1 }, { name: "scrape_ttl", expireAfterSeconds: 30 * 86_400 });
+  } catch (err) {
+    console.error("[ingest] index scrape_ttl not created:", err instanceof Error ? err.message : err);
   }
 
   // The superseded index still costs writes for a query nothing runs any more. Dropping it is a

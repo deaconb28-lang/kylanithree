@@ -38,6 +38,7 @@
     "lib/ingest/people.ts",
     "lib/ingest/classify.ts",
     "lib/discover/merge.ts",
+    "lib/discover/passOne.ts",
     "lib/discover/collections.ts",
     "lib/discover/rerank.ts"
   ]

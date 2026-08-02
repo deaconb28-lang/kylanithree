@@ -1,8 +1,8 @@
-import { Corpus } from "../ingest/collections";
+import { Corpus, logScrape } from "../ingest/collections";
 import { searchHackerNews } from "../search/hackernews";
 import { searchStackExchange } from "../search/stackexchange";
 import { personFingerprint } from "../credits/fingerprint";
-import { lexicalGate, normalizeForIntent, INTENT_WEIGHT, type IntentType } from "../search/intent";
+import { lexicalGate, normalizeForIntent, INTENT_WEIGHT, INTENT_TYPES, type IntentType } from "../search/intent";
 import { communitiesForNiche } from "./nicheMap";
 import type { DiscoverLead } from "./collections";
 
@@ -54,33 +54,23 @@ function excerptFrom(text: string, max = 240): string {
   return lastStop > max * 0.5 ? cut.slice(0, lastStop + 1) : `${cut.trimEnd()}…`;
 }
 
-/** Route 1: read the corpus. Milliseconds, and every hit is already classified. */
-async function fromCorpus(opts: { keywords: string[]; venueIds: string[]; limit: number }): Promise<DiscoverLead[]> {
-  const { keywords, limit } = opts;
-  if (keywords.length === 0) return [];
-  const corpus = await Corpus();
+/** Which route actually produced the corpus half, so a thin screen can be explained afterwards. */
+export type CorpusRoute = "search" | "regex" | "none";
 
-  // A plain regex query rather than $search: Atlas Search may not be provisioned yet, and pass 1
-  // must work on day one. The index on intentType carries the selective half of this, and the
-  // corpus is small enough that the regex scan over that subset is cheap. Swap to $search once the
-  // cluster has the index — the shape of the result does not change.
-  const pattern = keywords
-    .slice(0, 5)
-    .map((k) => k.trim().replace(/[.*+?^${}()|[\]\\]/g, "\\$&"))
-    .filter(Boolean)
-    .join("|");
-  if (!pattern) return [];
+type CorpusRow = {
+  personFingerprint: string;
+  authorRef: string;
+  platform: string;
+  url: string;
+  body: string;
+  problemStatement?: string;
+  intentType?: IntentType;
+  postedAt: Date;
+};
 
-  const rows = await corpus
-    .find({
-      intentType: { $exists: true, $ne: "none" },
-      $or: [{ problemStatement: { $regex: pattern, $options: "i" } }, { body: { $regex: pattern, $options: "i" } }],
-    })
-    .sort({ postedAt: -1 })
-    .limit(limit * 3)
-    .toArray();
-
-  return rows.map((r) => ({
+/** Shared by both routes so a swap between them cannot change what a lead looks like. */
+function toLeadFromCorpus(r: CorpusRow, keywords: string[]): DiscoverLead {
+  return {
     personFingerprint: r.personFingerprint,
     author: r.authorRef,
     platform: r.platform,
@@ -92,7 +82,107 @@ async function fromCorpus(opts: { keywords: string[]; venueIds: string[]; limit:
     matchedFor: keywords.filter((k) => `${r.problemStatement ?? ""} ${r.body}`.toLowerCase().includes(k.toLowerCase())),
     score: scoreOf(r.intentType, r.postedAt),
     foundInPass: 1 as const,
-  }));
+  };
+}
+
+/**
+ * Is this the cluster telling us `corpus_lexical` does not exist?
+ *
+ * Worth matching precisely. A missing Atlas Search index is a provisioning state that a redeploy
+ * cannot fix and that the regex route can survive; anything else — a timeout, an auth failure, a
+ * malformed query — is a real fault that must not be quietly downgraded into "the corpus was thin".
+ */
+export function isMissingSearchIndex(err: unknown): boolean {
+  const message = err instanceof Error ? err.message : String(err);
+  return /index not found|no such index|search index .* not found|SearchNotEnabled|\$search is not allowed/i.test(message);
+}
+
+let warnedNoSearchIndex = false;
+
+/**
+ * Route 1: read the corpus. This is the shallow pass, and it is a database read — never the network.
+ *
+ * `$search` against `corpus_lexical` is the intended path: it ranks by relevance rather than by
+ * recency, which is the difference between "the twelve newest documents that happen to contain a
+ * keyword" and "the twelve best matches". It must be the FIRST stage of the pipeline and operate on
+ * a single collection, which is exactly why `corpus` is flat.
+ *
+ * The regex fallback stays until the index is actually provisioned. It is not a silent fallback:
+ * the route is returned to the caller, persisted on the run, and emitted on the stream, so a thin
+ * first screen can always be attributed to the right cause. Delete this branch once the index has
+ * been live for a while — it exists only to keep pass 1 working through the provisioning gap.
+ */
+async function fromCorpus(opts: {
+  keywords: string[];
+  venueIds: string[];
+  limit: number;
+}): Promise<{ leads: DiscoverLead[]; route: CorpusRoute }> {
+  const { keywords, limit } = opts;
+  if (keywords.length === 0) return { leads: [], route: "none" };
+  const corpus = await Corpus();
+
+  const terms = keywords.slice(0, 5).map((k) => k.trim()).filter(Boolean);
+  if (terms.length === 0) return { leads: [], route: "none" };
+
+  try {
+    const rows = await corpus
+      .aggregate<CorpusRow>([
+        {
+          $search: {
+            index: "corpus_lexical",
+            compound: {
+              // One `should` per phrase rather than one joined query: Atlas scores each clause and
+              // sums them, so a document matching three of the founder's phrases outranks one that
+              // matches a single phrase three times.
+              should: terms.map((t) => ({
+                text: { query: t, path: ["title", "body", "problemStatement", "namedProducts"] },
+              })),
+              minimumShouldMatch: 1,
+              filter: [{ in: { path: "intentType", value: INTENT_TYPES } }],
+            },
+          },
+        },
+        { $limit: limit * 3 },
+        {
+          $project: {
+            personFingerprint: 1,
+            authorRef: 1,
+            platform: 1,
+            url: 1,
+            body: 1,
+            problemStatement: 1,
+            intentType: 1,
+            postedAt: 1,
+          },
+        },
+      ])
+      .toArray();
+
+    return { leads: rows.map((r) => toLeadFromCorpus(r, keywords)), route: "search" };
+  } catch (err) {
+    if (!isMissingSearchIndex(err)) throw err;
+    if (!warnedNoSearchIndex) {
+      warnedNoSearchIndex = true;
+      console.error(
+        "[passOne] Atlas Search index `corpus_lexical` is missing — falling back to a regex scan, " +
+          "which ranks by recency instead of relevance and will find much less. Apply " +
+          "docs/atlas-indexes.json to the cluster.",
+      );
+    }
+  }
+
+  // Fallback. Recency-ordered because a regex scan has no relevance score to sort on.
+  const pattern = terms.map((k) => k.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")).join("|");
+  const rows = await corpus
+    .find({
+      intentType: { $exists: true, $ne: "none" },
+      $or: [{ problemStatement: { $regex: pattern, $options: "i" } }, { body: { $regex: pattern, $options: "i" } }],
+    })
+    .sort({ postedAt: -1 })
+    .limit(limit * 3)
+    .toArray();
+
+  return { leads: rows.map((r) => toLeadFromCorpus(r, keywords)), route: "regex" };
 }
 
 /** Route 2: the live shallow search, for a niche the corpus has not reached. */
@@ -161,33 +251,88 @@ export type PassOneResult = {
   leads: DiscoverLead[];
   usedCorpus: boolean;
   usedLive: boolean;
+  /**
+   * How the corpus half was served. The whole design says the shallow pass is a database read, so
+   * when a run still reaches the network this is the field that says why: `search` means the index
+   * answered and the niche is genuinely thin, `regex` means the index is missing, `none` means the
+   * read never ran. Without it, "the corpus was cold" and "the corpus was broken" look identical
+   * from the outside — which is exactly the confusion this flow has already caused once.
+   */
+  corpusRoute: CorpusRoute;
+  corpusLeads: number;
+  /** Set when the corpus read was still running when its budget expired. */
+  corpusTimedOut: boolean;
   ms: number;
 };
 
-export async function runPassOne(opts: { keywords: string[]; nicheKey: string }): Promise<PassOneResult> {
+export async function runPassOne(opts: {
+  keywords: string[];
+  nicheKey: string;
+  /** Ties this run's scrape_log rows together. The searchId when there is one. */
+  correlationId?: string;
+}): Promise<PassOneResult> {
   const t0 = Date.now();
-  const { keywords, nicheKey } = opts;
+  const { keywords, nicheKey, correlationId = "unknown" } = opts;
   const { venueIds } = await communitiesForNiche(nicheKey);
 
   let leads: DiscoverLead[] = [];
   let usedCorpus = false;
   let usedLive = false;
+  let corpusRoute: CorpusRoute = "none";
+  let corpusTimedOut = false;
 
+  const corpusStarted = new Date();
+  let corpusError: string | undefined;
   try {
-    const corpusGuard = new Promise<DiscoverLead[]>((resolve) => setTimeout(() => resolve([]), CORPUS_BUDGET_MS));
-    leads = await Promise.race([fromCorpus({ keywords, venueIds, limit: TARGET }), corpusGuard]);
+    const timedOut = Symbol("corpus-budget");
+    const corpusGuard = new Promise<typeof timedOut>((resolve) => setTimeout(() => resolve(timedOut), CORPUS_BUDGET_MS));
+    const raced = await Promise.race([fromCorpus({ keywords, venueIds, limit: TARGET }), corpusGuard]);
+    if (raced === timedOut) {
+      corpusTimedOut = true;
+      console.error(`[passOne] corpus read exceeded its ${CORPUS_BUDGET_MS}ms budget; shipping without it`);
+    } else {
+      leads = raced.leads;
+      corpusRoute = raced.route;
+    }
     usedCorpus = leads.length > 0;
   } catch (err) {
-    console.error("[passOne] corpus read failed:", err instanceof Error ? err.message : err);
+    corpusError = err instanceof Error ? err.message : String(err);
+    console.error("[passOne] corpus read failed:", corpusError);
   }
+  const corpusLeads = leads.length;
+
+  await logScrape({
+    correlationId,
+    phase: "pass_one_corpus",
+    source: `corpus:${corpusRoute}`,
+    startedAt: corpusStarted,
+    ms: Date.now() - corpusStarted.getTime(),
+    itemsFound: corpusLeads,
+    budgetHit: corpusTimedOut,
+    error: corpusError,
+  });
 
   // The approved fallback: a niche the corpus has not covered still gets a real first screen.
   if (leads.length < THIN_THRESHOLD) {
     const remaining = Math.max(0, PASS_ONE_BUDGET_MS - (Date.now() - t0) - 500);
     if (remaining > 1_000) {
-      const live = await fromLiveSources({ keywords, venueIds, budgetMs: Math.min(LIVE_BUDGET_MS, remaining) });
+      const liveBudget = Math.min(LIVE_BUDGET_MS, remaining);
+      const liveStarted = new Date();
+      const live = await fromLiveSources({ keywords, venueIds, budgetMs: liveBudget });
       usedLive = live.length > 0;
       leads = [...leads, ...live];
+      const liveMs = Date.now() - liveStarted.getTime();
+      await logScrape({
+        correlationId,
+        phase: "pass_one_live",
+        source: venueIds.join(",") || "none",
+        startedAt: liveStarted,
+        ms: liveMs,
+        itemsFound: live.length,
+        // The live fetch resolves on its own guard timer, so hitting the budget is how it normally
+        // ends rather than an exception — this is the only place that distinction is recorded.
+        budgetHit: liveMs >= liveBudget - 50,
+      });
     }
   }
 
@@ -203,6 +348,9 @@ export async function runPassOne(opts: { keywords: string[]; nicheKey: string })
     leads: [...byPerson.values()].sort((a, b) => b.score - a.score).slice(0, TARGET),
     usedCorpus,
     usedLive,
+    corpusRoute,
+    corpusLeads,
+    corpusTimedOut,
     ms: Date.now() - t0,
   };
 }

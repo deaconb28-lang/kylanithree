@@ -67,6 +67,21 @@ export interface SearchDoc {
   leads: DiscoverLead[];
   /** Person fingerprints surfaced by pass 1, kept so shallow survival is computable at the end. */
   passOneFingerprints?: string[];
+  /**
+   * How pass 1 was actually served. The design says the shallow pass is a corpus read, so this is
+   * the record of whether it was: `corpusRoute: "search"` with `usedLive: false` is the intended
+   * shape. `"regex"` means the Atlas Search index is missing, and `usedLive: true` means the run
+   * reached the network to fill a thin screen. Persisted rather than only logged because the
+   * question "why did this search reach the internet" is asked after the fact, per run.
+   */
+  passOneRoute?: {
+    corpusRoute: "search" | "regex" | "none";
+    corpusLeads: number;
+    corpusTimedOut: boolean;
+    usedCorpus: boolean;
+    usedLive: boolean;
+    ms: number;
+  };
   narration: { at: Date; text: string }[];
   communitiesScanned: number;
   communitiesTotal: number;

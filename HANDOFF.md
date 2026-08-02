@@ -73,9 +73,22 @@ until projects exist.
 
 ### Also outstanding
 
-- **Atlas Search + Vector Search indexes are still not created.** The Railway worker fills the
-  `corpus` collection, but nothing can query it until those indexes exist in Atlas. Vector Search
-  requires **M10+**, not M0 — confirm the cluster tier.
+- **Atlas Search + Vector Search indexes are still not created — this is the top blocker.** The
+  definitions are written and ready in `docs/atlas-indexes.json`; applying them is an Atlas UI/CLI
+  action the driver cannot perform. Vector Search requires **M10+**, not M0 (the user has approved
+  the upgrade). Until they exist:
+  - `fromCorpus()` in `lib/discover/passOne.ts` runs its `$search` against `corpus_lexical`, catches
+    the missing-index error, logs once, and falls back to a recency-ordered `$regex` scan. So pass 1
+    works but finds far less than it should, and **that is why a search still reaches the internet**:
+    a thin corpus result drops under `THIN_THRESHOLD` and triggers the live-shallow fill.
+  - The fallback is **not silent**. `runPassOne` returns `corpusRoute: "search" | "regex" | "none"`
+    plus `corpusLeads` / `corpusTimedOut`; the stream persists them to `searches.passOneRoute` and
+    emits a `pass_one_route` SSE event. `corpusRoute: "regex"` means the index is missing;
+    `"search"` with `usedLive: true` means the index answered and the niche is genuinely cold.
+  - `isMissingSearchIndex()` is deliberately narrow and unit-tested. A timeout or an auth failure
+    must **not** be reclassified as "the corpus was thin" — that is the silent failure being removed.
+  - Once the indexes have been live a while, delete the regex branch; it exists only to cover the
+    provisioning gap.
 - **Rotate the Bluesky app password.** It was pasted into chat in an earlier session.
 - Founder/Studio plan naming is undecided, which blocks the billing half of the credits system
   (`lib/credits/`, `docs/credits.md`). Metering works and records; nothing is debited.
@@ -200,6 +213,16 @@ All verified against the live APIs with real accounts. Two things to know before
   a missing account age stays absent rather than becoming `0`, which would render as "joined today"
   for a ten-year account. Discourse post counts are deliberately absent — `/u/{name}.json` has no
   such field, and the second request to `/summary.json` is not worth the rate limit.
+
+**`scrape_log` is the answer to "why did this search return nothing".** One row per unit of work —
+each source poll, the pass-1 corpus read, the live-shallow fill, the people-enrichment pass — with a
+`correlationId` (the `searchId` for query-time work, `tick:<iso>` for crawls), duration, items
+found, `budgetHit` and the error. It exists because `sources.health` only records the most recent
+outcome, so a cold corpus, a missing index, a 403 and an expired budget were indistinguishable after
+the fact. `logScrape()` never throws and never blocks its caller: a logging failure must not be able
+to fail a search. Self-prunes after 30 days via a TTL index. Crawl rows record what was **stored**,
+not fetched — a source returning 200 documents that all fail the gate is contributing nothing, and
+"fetched" would hide that behind a healthy number.
 
 **Registry: all niches.** All 166 live non-meta Stack Exchange sites and 31 Discourse forums, up
 from 10 and 5. Both lists were **verified by calling the APIs**, not typed from memory — 7 of 10

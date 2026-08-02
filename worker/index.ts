@@ -1,5 +1,5 @@
 import { ObjectId } from "mongodb";
-import { Sources, ensureIngestIndexes, type SourceDoc } from "../lib/ingest/collections";
+import { Sources, ensureIngestIndexes, logScrape, type SourceDoc } from "../lib/ingest/collections";
 import { crawlHackerNews } from "../lib/ingest/sources/hackernews";
 import { crawlDiscourse } from "../lib/ingest/sources/discourse";
 import { crawlStackExchange } from "../lib/ingest/sources/stackexchange";
@@ -49,9 +49,11 @@ async function dueSources(limit: number): Promise<SourceDoc[]> {
     .slice(0, limit);
 }
 
-async function pollSource(source: SourceDoc & { _id?: ObjectId }): Promise<void> {
+async function pollSource(source: SourceDoc & { _id?: ObjectId }, correlationId: string): Promise<void> {
   const sources = await Sources();
   const id = String(source._id);
+  const startedAt = new Date();
+  const label = `${source.platform}:${source.identifier}`;
 
   try {
     const page =
@@ -65,6 +67,16 @@ async function pollSource(source: SourceDoc & { _id?: ObjectId }): Promise<void>
 
     if (!page) {
       log(`skip ${source.platform}:${source.identifier} — no crawler for this platform`);
+      await logScrape({
+        correlationId,
+        phase: "crawl",
+        source: label,
+        startedAt,
+        ms: Date.now() - startedAt.getTime(),
+        itemsFound: 0,
+        budgetHit: false,
+        error: "no crawler for this platform",
+      });
       return;
     }
     const stats = await ingestDocuments({ sourceId: id, documents: page.documents });
@@ -87,9 +99,32 @@ async function pollSource(source: SourceDoc & { _id?: ObjectId }): Promise<void>
         },
       },
     );
+
+    await logScrape({
+      correlationId,
+      phase: "crawl",
+      source: label,
+      startedAt,
+      ms: Date.now() - startedAt.getTime(),
+      // What was STORED, not what was fetched: a source returning 200 documents that all fail the
+      // gate is contributing nothing, and "fetched" would hide that behind a healthy-looking number.
+      itemsFound: stats.stored,
+      budgetHit: false,
+    });
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
     log(`ERROR polling ${source.platform}:${source.identifier} — ${message}`);
+
+    await logScrape({
+      correlationId,
+      phase: "crawl",
+      source: label,
+      startedAt,
+      ms: Date.now() - startedAt.getTime(),
+      itemsFound: 0,
+      budgetHit: false,
+      error: message,
+    });
 
     // A permanent failure retires the source immediately. Retrying a slug that does not exist is
     // not politeness, it is waste — and it hides the real failures in the log.
@@ -120,6 +155,8 @@ async function pollSource(source: SourceDoc & { _id?: ObjectId }): Promise<void>
 }
 
 async function tick(): Promise<void> {
+  // One id per tick, so every row a single pass wrote can be pulled back together afterwards.
+  const correlationId = `tick:${new Date().toISOString()}`;
   const sources = await dueSources(SOURCES_PER_TICK);
   if (sources.length > 0) {
     log(`polling ${sources.length} source(s)`);
@@ -127,7 +164,7 @@ async function tick(): Promise<void> {
     // than a fast one. Per-platform concurrency caps go in when the registry has real breadth.
     for (const s of sources) {
       if (!running) return;
-      await pollSource(s);
+      await pollSource(s, correlationId);
       await refreshSourceYield(String((s as SourceDoc & { _id?: ObjectId })._id)).catch(() => {});
     }
   }
@@ -147,6 +184,7 @@ async function tick(): Promise<void> {
   // the backlog outlives any single crawl, and a tick with nothing due is exactly when there is
   // spare budget to put faces to the names already collected.
   if (running) {
+    const startedAt = new Date();
     try {
       const enriched = await enrichPeopleBacklog({ limit: ENRICH_PEOPLE_PER_TICK });
       if (enriched.considered > 0) {
@@ -154,9 +192,29 @@ async function tick(): Promise<void> {
           `enriched people considered=${enriched.considered} ok=${enriched.enriched} ` +
             `failed=${enriched.failed} unaddressable=${enriched.unaddressable}`,
         );
+        await logScrape({
+          correlationId,
+          phase: "enrich_people",
+          source: "people",
+          startedAt,
+          ms: Date.now() - startedAt.getTime(),
+          itemsFound: enriched.enriched,
+          budgetHit: enriched.considered >= ENRICH_PEOPLE_PER_TICK,
+        });
       }
     } catch (err) {
-      log(`ERROR enriching people — ${err instanceof Error ? err.message : err}`);
+      const message = err instanceof Error ? err.message : String(err);
+      log(`ERROR enriching people — ${message}`);
+      await logScrape({
+        correlationId,
+        phase: "enrich_people",
+        source: "people",
+        startedAt,
+        ms: Date.now() - startedAt.getTime(),
+        itemsFound: 0,
+        budgetHit: false,
+        error: message,
+      });
     }
   }
 
