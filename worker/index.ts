@@ -507,7 +507,19 @@ async function seedSources(): Promise<void> {
     // Chosen for people describing operational pain in public — the trades, agencies, practices and
     // back-office roles that buy software to stop doing something by hand. Deliberately not the
     // big general technology subreddits, which are mostly discussion rather than need.
-    ...[
+    //
+    // OFF BY DEFAULT, and this is a measured result rather than caution. On the first run from
+    // Railway every one of the 60 subreddits below answered 403 within a second — including
+    // r/smallbusiness, r/Entrepreneur and r/sysadmin, which unambiguously exist. A uniform instant
+    // 403 across 60 unrelated communities is an IP-level refusal of the datacenter range, not
+    // anything about the subreddits or the User-Agent.
+    //
+    // The code stays because it is correct and would work from a network Reddit accepts. What is
+    // NOT here is a way around the block: rotating residential proxies or spoofed origins would be
+    // circumventing an access-control decision Reddit has deliberately made, which is a different
+    // thing from using a public endpoint it leaves open. Set REDDIT_JSON_ENABLED=true if the worker
+    // ever runs somewhere Reddit does not refuse.
+    ...(process.env.REDDIT_JSON_ENABLED === "true" ? [
       "smallbusiness", "Entrepreneur", "startups", "SaaS", "ecommerce", "shopify", "Etsy",
       "dropship", "FulfillmentByAmazon", "consulting", "freelance", "marketing", "SEO", "PPC",
       "digital_marketing", "sales", "accounting", "Bookkeeping", "tax", "humanresources",
@@ -518,7 +530,7 @@ async function seedSources(): Promise<void> {
       "logistics", "supplychain", "manufacturing", "dentistry", "physicaltherapy", "therapists",
       "lawfirm", "paralegal", "veterinary", "gyms", "personaltraining", "eventplanning",
       "catering", "Trucking", "fleetmanagement",
-    ].map((subreddit) => ({
+    ] : []).map((subreddit) => ({
       platform: "reddit" as const,
       identifier: subreddit,
       accessMethod: "json" as const,
@@ -568,6 +580,28 @@ async function seedSources(): Promise<void> {
   // Healthy sources only. A degraded or blocked source has had its interval deliberately doubled by
   // the backoff in pollSource, and resetting that here would undo the one mechanism that stops the
   // crawler hammering a host that is already unhappy with it.
+  // Stop polling Reddit while it is refusing this network.
+  //
+  // Seeding is $setOnInsert, so the 60 rows created before the block was measured are still in the
+  // registry and would keep being polled into a 403 forever, degrading and un-degrading on the
+  // backoff. Disabling is reversible and honest: the rows keep their history, `dueSources` skips
+  // them, and setting REDDIT_JSON_ENABLED=true re-enables them on the next boot.
+  {
+    const enabled = process.env.REDDIT_JSON_ENABLED === "true";
+    const res = await sources.updateMany(
+      { platform: "reddit", enabled: !enabled },
+      { $set: { enabled, health: enabled ? "ok" : "retired", updatedAt: new Date() } },
+    );
+    if (res.modifiedCount > 0) {
+      log(
+        enabled
+          ? `re-enabled ${res.modifiedCount} reddit source(s) — REDDIT_JSON_ENABLED is set`
+          : `disabled ${res.modifiedCount} reddit source(s) — reddit.com answers 403 to this network's ` +
+            `egress. The crawler is correct; the IP is refused. Set REDDIT_JSON_ENABLED=true to retry.`,
+      );
+    }
+  }
+
   // A credential that was wrong is not a source that is dead.
   //
   // While BLUESKY_APP_PASSWORD was rejected, every standing query failed twice and the backoff in

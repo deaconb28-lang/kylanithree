@@ -48,10 +48,24 @@ because it means either "private or quarantined" or "Reddit is refusing this IP"
 the second reading would silently delete the whole Reddit registry the first time the worker's
 egress range got blocked.
 
-**The subreddit list is the one registry in this repo that was NOT verified by calling the API**,
-because reddit.com is blocked by the sandbox's egress policy. The slugs are well-known communities
-rather than guesses, but the honest status is "expected to exist" — the first tick's log is the
-record, since anything wrong retires itself with a 404.
+#### Measured result: Reddit refuses the worker's network
+
+The crawler shipped, ran, and **every one of the 60 subreddits answered 403 within a second** —
+including `r/smallbusiness`, `r/Entrepreneur` and `r/sysadmin`, which unambiguously exist. A uniform
+instant 403 across 60 unrelated communities is an IP-level refusal of the datacenter range, not a
+per-subreddit problem and not a User-Agent problem (a bad UA gets 429, not a blanket 403).
+
+So Reddit is **built and disabled**, behind `REDDIT_JSON_ENABLED`. The code is correct and would
+work from a network Reddit accepts; the block is about where the request comes from.
+
+**What is deliberately not built: a way around it.** Rotating residential proxies or spoofed origins
+would be circumventing an access control Reddit has chosen to apply, which is a different thing from
+using a public endpoint it leaves open. If Reddit matters enough, the legitimate paths are an
+approved Responsible Builder application or the metered commercial tier — not disguising the
+traffic.
+
+The 403-is-transient rule earned its keep on the first run: had 403 been treated as permanent, that
+tick would have retired all 60 rows and the registry would have deleted itself over an IP block.
 
 ---
 
@@ -67,8 +81,10 @@ record, since anything wrong retires itself with a 404.
 | Mastodon `/api/v2/search` | `200` but `statuses: []` | **Not yet.** Status search is disabled for unauthenticated callers — it answers 200 with nothing rather than erroring, which is exactly the silent-zero failure this codebase keeps removing. Would need a token per instance. Worth a second look. |
 | Mastodon `/api/v1/timelines/public` | `422 "requires an authenticated user"` | Same conclusion. |
 | Lemmy | `200`, full post + creator + community | **Built.** |
-| Threads (Meta) | `500 Invalid OAuth 2.0 Access Token` | **No.** Requires an approved Meta app and a user-authorised token; there is no public search over other people's posts at all. |
-| Facebook Graph search | `400 (#27) This app is for use in Workplace` | **No.** Public post search was removed from the Graph API years ago. Nothing here to integrate. |
+| Threads (Meta) | `500 [190] Invalid OAuth 2.0 Access Token` — **inconclusive**, see below | **Not built.** The only Meta surface with a plausible path; needs an app, App Review and the `threads_keyword_search` permission. |
+| Facebook post search | `400 [100/33] Unsupported get request` | **No, and creating an app does not change it.** See below. |
+| Facebook page search | `400 (#27) This app is for use in Workplace` | Endpoint exists but is gated — and it finds *Pages*, not people with problems. |
+| Instagram `ig_hashtag_search` | `400 [100] Param user_id is not a valid Instagram User ID` | **Real endpoint**, but see below — it does not yield an addressable person. |
 | LinkedIn `/v2/me` | `401 EMPTY_ACCESS_TOKEN` | **No.** No public search API exists; the only data available is the signed-in user's own. Scraping profiles is a direct terms violation and the enforcement is account termination. |
 
 ### Developer and maker communities
@@ -79,6 +95,46 @@ record, since anything wrong retires itself with a 404.
 | dev.to `/api/articles` | `200`, free, no key | **Worth building.** Small volume, high signal for developer-tool niches. |
 | Lobsters `/newest.json` | `200`, free, no key | **Worth building.** Very small, very high signal. Cheap enough that the low volume does not matter. |
 | Product Hunt GraphQL | `429` + Cloudflare interstitial | **No** without an OAuth token. |
+
+### Meta: creating an app is not the blocker
+
+Worth writing down because the app-creation process looks like the obstacle and is not. Meta's
+create-an-app flow is straightforward — pick use cases, connect a business portfolio, get an App ID.
+The question is what any of it *unlocks* for finding strangers who are describing a problem, and the
+probes above discriminate real endpoints from removed ones.
+
+**The probe method matters here.** On `graph.facebook.com` an invented path answers
+`[100/33] Unsupported get request ... Object with ID 'x' does not exist`, so a real-but-gated
+endpoint is distinguishable from a removed one:
+
+- `search?type=post` → `[100/33] Unsupported get request`. **Public post search is gone.** It is not
+  a permission you can be granted; the endpoint no longer serves that type.
+- `search?type=page` → `[27] this app does not have permission`. The path exists, so this one is a
+  permissions question — but it returns *Pages*, which are businesses, not people with a complaint.
+- `ig_hashtag_search` → `[100] Param user_id is not a valid Instagram User ID`. **The endpoint is
+  real and it validated the parameter**, unlike the invented control which said the object does not
+  exist. So Instagram hashtag search genuinely exists.
+
+**Instagram still fails the product test, for a reason that has nothing to do with access.** Kylani
+sends from the founder's Gmail, so a lead is only worth anything if the person is identifiable. The
+Hashtag Search API returns media for a hashtag — and for media the app does not own it does not
+return the poster's identity, on top of a 30-hashtags-per-7-days cap and a Business account plus App
+Review. A wall of captions with no addressable author is not a lead. *(The endpoint's existence was
+verified here; the shape of what it returns is from Meta's documentation, not something this probe
+could confirm without a token.)*
+
+**Threads is the only plausible one, and this probe could not settle it.** `graph.threads.net`
+returns `[190] Invalid OAuth 2.0 Access Token` for *every* path including a deliberately invented
+one — auth is checked before routing, so the real-vs-fake trick that works on `graph.facebook.com`
+tells us nothing here. Meta does document a Threads keyword-search capability gated behind a
+`threads_keyword_search` permission and App Review. Whether it returns enough to identify and reach
+a person is **unverified** and would need an approved app to find out.
+
+**Recommendation: not now.** Every Meta path costs an app, a business portfolio, probably business
+verification, and App Review — weeks of process — for at best one source (Threads) whose content
+shape overlaps almost entirely with Bluesky, which is already built, free, and needs no approval.
+GitHub issue search is a far better use of the same effort: verified `200` unauthenticated, 5,700
+hits on a single problem phrase, and every hit carries a public profile.
 
 ### Job boards — hiring as a demand signal
 
