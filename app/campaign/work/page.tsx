@@ -70,6 +70,14 @@ function QueueInner() {
   const [judged, setJudged] = useState<Set<string>>(new Set());
   const [feedback, setFeedback] = useState<"landed" | "missed" | null>(null);
   const activeCardRef = useRef<HTMLButtonElement | null>(null);
+  // Decisions made since this screen loaded. Deliberately session-scoped rather than read off the
+  // leads: "8 decided" counts work done long ago and says nothing about now, while "you've done 6"
+  // is the thing that makes someone finish the deck.
+  const [decidedThisSession, setDecidedThisSession] = useState(0);
+  /** Drafts currently being written, so the card can say so instead of showing a button. */
+  const [drafting, setDrafting] = useState<Set<string>>(new Set());
+  /** Leads already sent for drafting. A ref, not state — it must not re-trigger the effect. */
+  const requestedDrafts = useRef<Set<string>>(new Set());
 
   useEffect(() => {
     let cancelled = false;
@@ -135,6 +143,54 @@ function QueueInner() {
     if (filter === "unread") return leads.filter((l) => l.status === "waiting");
     return leads.filter((l) => l.hypothesisKey === filter);
   }, [leads, filter]);
+
+  // Write the next few replies BEFORE the founder gets to them.
+  //
+  // This is the single biggest thing standing between someone and actually sending. Drafts are
+  // generated on demand, so every card used to arrive with an empty body and a "Write it" button —
+  // meaning the founder reads a post, decides they want to reply, and then waits several seconds
+  // for a model call before there is anything to approve. That pause is where the session ends.
+  //
+  // Three at a time, not the whole deck: each draft is a paid model call, and drafting all 24 would
+  // pay for people the founder is about to reject. Current plus two is enough that moving through
+  // the deck never lands on an empty card, and no more than that.
+  //
+  // `requestedDrafts` is a ref rather than state on purpose — writing to it must not re-run this
+  // effect, or every completed draft would schedule another pass.
+  useEffect(() => {
+    if (!leads || filtered.length === 0) return;
+    const at = Math.min(selected, Math.max(0, filtered.length - 1));
+    const targets = filtered
+      .slice(at, at + 3)
+      .filter((l) => l.status === "waiting" && !l.draft?.trim() && !requestedDrafts.current.has(l._id));
+    if (targets.length === 0) return;
+
+    let cancelled = false;
+    for (const target of targets) {
+      requestedDrafts.current.add(target._id);
+      setDrafting((d) => new Set(d).add(target._id));
+      fetch(`/api/leads/${target._id}/draft`, { method: "POST", headers: { "Content-Type": "application/json" }, body: "{}" })
+        .then((r) => (r.ok ? r.json() : null))
+        .then((updated) => {
+          if (cancelled || !updated?.draft) return;
+          setLeads((ls) => ls?.map((l) => (l._id === target._id ? { ...l, subject: updated.subject, draft: updated.draft } : l)) ?? ls);
+        })
+        // A failed pre-draft is not an error the founder needs to see: the card falls back to the
+        // "Write it" button it had before, which still works.
+        .catch(() => {})
+        .finally(() => {
+          if (cancelled) return;
+          setDrafting((d) => {
+            const next = new Set(d);
+            next.delete(target._id);
+            return next;
+          });
+        });
+    }
+    return () => {
+      cancelled = true;
+    };
+  }, [leads, filtered, selected]);
 
   // Keep the current person visible in the rail when J/K walks past its edge. Instant rather than
   // smooth under reduced motion — a rail that slides on every keypress is exactly the kind of
@@ -248,6 +304,11 @@ function QueueInner() {
   const status = lead.status;
   const draftBody = draftEdits[lead._id] ?? lead.draft;
   const decidedCount = filtered.filter((l) => l.status !== "waiting").length;
+  const remaining = filtered.filter((l) => l.status === "waiting").length;
+  // A deck has an end, and reaching it should feel like reaching it. Without this the last decision
+  // leaves the founder parked on an already-decided card with the primary button greyed out — the
+  // shape of a dead end, at exactly the moment there is most reason to keep going.
+  const deckComplete = filtered.length > 0 && remaining === 0;
 
   const selectIndex = (i: number) => {
     setSelected(i);
@@ -281,6 +342,7 @@ function QueueInner() {
       setCampaign((c) => (c ? { ...c, stats: { ...c.stats, sentToday: c.stats.sentToday + 1 } } : c));
     }
     setEditing(false);
+    setDecidedThisSession((n) => n + 1);
     moveToNextWaiting(filtered, index);
   };
 
@@ -298,6 +360,7 @@ function QueueInner() {
     setLeads((ls) => ls!.map((l) => (l._id === target._id ? { ...l, status: "dropped" } : l)));
     setEditing(false);
     setUndoFor({ id: target._id, name: target.name });
+    setDecidedThisSession((n) => n + 1);
     moveToNextWaiting(filtered, index);
     await fetch(`/api/leads/${target._id}/reject`, {
       method: "POST",
@@ -308,6 +371,8 @@ function QueueInner() {
 
   const undoReject = async (id: string) => {
     setUndoFor(null);
+    // Give the decision back. A counter that only ever goes up would quietly reward a mistake.
+    setDecidedThisSession((n) => Math.max(0, n - 1));
     setLeads((ls) => ls!.map((l) => (l._id === id ? { ...l, status: "waiting" } : l)));
     await fetch(`/api/leads/${id}/reject`, { method: "DELETE" }).catch(() => {});
   };
@@ -422,13 +487,59 @@ function QueueInner() {
                 <span className="ky-tnum" style={{ color: "var(--ink)", fontWeight: 600 }}>{index + 1}</span> of{" "}
                 <span className="ky-tnum">{filtered.length}</span> · sorted strongest first
               </span>
-              <span>{decidedCount} decided</span>
+              {/* What YOU have done, not what the database contains. A total counts work from
+                  weeks ago; a session count is the thing that makes someone finish the deck. */}
+              <span>{decidedThisSession > 0 ? `${decidedThisSession} decided just now` : `${decidedCount} decided`}</span>
             </div>
             <div style={{ height: 3, borderRadius: 999, background: "var(--border)", overflow: "hidden" }}>
               <div style={{ width: `${filtered.length ? ((index + 1) / filtered.length) * 100 : 0}%`, height: "100%", background: "var(--ink)" }} />
             </div>
           </div>
         </header>
+
+        {/* The end of the deck, and an invitation rather than a stop.
+            Every route out of here is real: a filter that still has people in it, or another
+            search. Nothing here promises a screen that does not exist — replies cannot come back
+            until the Gmail scope is verified, so this does not pretend to send anyone anywhere. */}
+        {deckComplete && (
+          <div
+            style={{
+              border: "1px solid var(--border-strong)",
+              borderRadius: 14,
+              padding: "20px 22px",
+              display: "flex",
+              flexDirection: "column",
+              gap: 12,
+              background: "var(--card-alt)",
+            }}
+          >
+            <span style={{ fontFamily: "var(--font-display)", fontWeight: 700, fontSize: 19, letterSpacing: "-.02em" }}>
+              {decidedThisSession > 0
+                ? `That's all ${filtered.length} — ${decidedThisSession} decided just now.`
+                : `All ${filtered.length} decided.`}
+            </span>
+            <span style={{ fontSize: 14.5, color: "var(--muted)", lineHeight: 1.6 }}>
+              Every rejection you gave a reason for re-ranks the next search, so the people who turn up
+              next should look more like the ones you kept.
+            </span>
+            <div style={{ display: "flex", gap: 10, flexWrap: "wrap", alignItems: "center" }}>
+              {filters
+                .filter((f) => f.key !== filter && /\s(?!0$)\d+$/.test(f.label))
+                .slice(0, 3)
+                .map((f) => (
+                  <button
+                    key={f.key}
+                    className="ky-btn-outline"
+                    onClick={() => { setFilter(f.key); setSelected(0); }}
+                    style={{ padding: "10px 16px", fontSize: 14.5, fontWeight: 500 }}
+                  >
+                    {f.label}
+                  </button>
+                ))}
+              <SearchAgainButton onDone={() => { setLoadError(null); setAttempt((a) => a + 1); }} />
+            </div>
+          </div>
+        )}
 
         {feedbackLead && (
           <div style={{ border: "1px solid var(--border)", borderRadius: 12, padding: "12px 16px", display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap", background: "var(--card-alt)" }}>
@@ -603,6 +714,13 @@ function QueueInner() {
                 {draftBody.split("\n\n").map((p, i) => (
                   <span key={i}>{p}</span>
                 ))}
+              </div>
+            ) : drafting.has(lead._id) ? (
+              // Being written right now, ahead of the founder arriving. Saying so beats showing a
+              // button that would start work already in flight.
+              <div style={{ display: "flex", alignItems: "center", gap: 10, fontSize: 15, color: "var(--muted)" }}>
+                <span style={{ width: 7, height: 7, borderRadius: 999, background: "var(--ember)", animation: "kyPulse 1.5s ease-in-out infinite" }} />
+                Writing a reply to what they said&hellip;
               </div>
             ) : (
               // Drafts are written on demand rather than during the search, so no draft yet is the
