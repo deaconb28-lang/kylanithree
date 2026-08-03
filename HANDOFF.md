@@ -570,6 +570,14 @@ STACKEXCHANGE_KEY=
 BLUESKY_IDENTIFIER= / BLUESKY_APP_PASSWORD=
 STRIPE_CLIENT_ID= / STRIPE_SECRET_KEY=   # optional
 NEXT_PUBLIC_ONBOARDING_FLOW=             # set to "legacy" to roll onboarding back
+REDDIT_CLIENT_ID= / REDDIT_CLIENT_SECRET=
+                        # Reddit, and the ONLY thing standing between the built crawler and a
+                        # working source. The unkeyed .json path is refused at the edge for
+                        # datacenter traffic — measured 403 on 60/60 subreddits from Railway and
+                        # 403 in 21ms from Vercel. These need a Responsible Builder application.
+                        # Set them and the worker seeds and re-enables Reddit on the next boot,
+                        # against oauth.reddit.com. No code change.
+REDDIT_JSON_ENABLED=    # "true" forces the unkeyed path on, for a network Reddit accepts.
 EXPLEE_API_KEY=         # https://api.explee.com, sent as the X-API-Key header. Nothing in this
                         # repo reads it yet — see the Explee section above before wiring it in.
 apollo_one=             # Apollo. LOWERCASE — that is the name actually set in Railway and Vercel.

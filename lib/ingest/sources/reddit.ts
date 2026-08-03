@@ -1,4 +1,5 @@
 import { PermanentSourceError } from "../errors";
+import { hasRedditCredentials, redditAccessToken } from "../../search/reddit";
 import type { RawDocument } from "../normalize";
 
 // Reddit, through the public `.json` endpoints — no key, no OAuth, no approval.
@@ -9,12 +10,23 @@ import type { RawDocument } from "../normalize";
 // any public URL and get the same listing the browser renders. It needs nothing, and it is the
 // documented behaviour of a public page rather than a scrape of one.
 //
-// WHAT THAT COSTS, STATED PLAINLY. Unauthenticated access is rate-limited far harder than a token
-// would be, and Reddit is known to block datacenter egress ranges outright. So this source is
-// deliberately the most timid in the registry — one request per poll, one poll at a time, a long
-// interval — and if Reddit refuses the worker's IP it will say so in `scrape_log` rather than
-// quietly returning nothing. That is an empirical question about Railway's egress that only running
-// it can answer.
+// MEASURED: THE UNKEYED PATH DOES NOT WORK FROM A DATACENTER. Shipping this and running it settled
+// the question. Every one of 60 subreddits answered 403 within a second from Railway, and
+// `/api/health?reddit=probe` then got 403 in 21ms from Vercel too — an HTML interstitial rather
+// than JSON, served at the edge without reaching Reddit's app servers. So it is not one provider's
+// range: Reddit declines datacenter traffic generally, and no amount of politeness changes that.
+//
+// What is deliberately absent is a way around it. Residential proxy rotation or spoofed origins
+// would be defeating an access control Reddit has chosen to apply, which is a different thing from
+// using a public endpoint it leaves open — and it would put the product's Reddit access, and its
+// standing, at real risk.
+//
+// SO THE REAL PATH IS CREDENTIALS, AND THIS MODULE IS READY FOR THEM. With REDDIT_CLIENT_ID and
+// REDDIT_CLIENT_SECRET set, every request below goes to oauth.reddit.com with a bearer token, which
+// is both permitted and rate-limited far more generously (per client id rather than per IP). Those
+// credentials now require an approved Responsible Builder application, or the metered commercial
+// tier. Getting approved is a form to fill in, not a code change: set the two variables and the
+// crawler seeds and runs on the next boot.
 //
 // IDENTITY IS SIMPLE HERE, FOR ONCE. Reddit usernames are globally unique across one flat site, so
 // `authorRef` is the bare username and `authorScope` is "all" — no host to qualify with, unlike
@@ -74,19 +86,38 @@ export async function crawlReddit(opts: {
   });
   if (cursor) qs.set("after", cursor);
 
-  const res = await fetch(`https://www.reddit.com/r/${encodeURIComponent(subreddit)}/new.json?${qs}`, {
-    headers: { Accept: "application/json", "User-Agent": UA },
+  // The keyed path when credentials exist, the public one otherwise. `.json` is appended only on
+  // www — oauth.reddit.com always returns JSON and rejects the suffix.
+  const token = hasRedditCredentials() ? await redditAccessToken() : null;
+  const url = token
+    ? `https://oauth.reddit.com/r/${encodeURIComponent(subreddit)}/new?${qs}`
+    : `https://www.reddit.com/r/${encodeURIComponent(subreddit)}/new.json?${qs}`;
+
+  const res = await fetch(url, {
+    headers: {
+      Accept: "application/json",
+      "User-Agent": UA,
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    },
     signal: AbortSignal.timeout(timeoutMs),
   });
 
   // A subreddit that does not exist will never exist on retry, so it retires immediately rather
   // than burning three polls proving it after every worker restart.
   if (res.status === 404) throw new PermanentSourceError(`Reddit r/${subreddit} does not exist (404)`);
-  // 403 is deliberately NOT permanent, and the distinction matters more here than anywhere else in
-  // the registry. It means either "this subreddit is private or quarantined" or "Reddit is refusing
-  // this IP" — and retiring on the second reading would silently delete the entire Reddit registry
-  // the first time the worker's egress range got blocked. Backoff is the safe response to an
-  // ambiguous refusal.
+  // 403 is deliberately NOT permanent, and the distinction earned its keep on the first run. It
+  // means either "this subreddit is private or quarantined" or "Reddit is refusing this IP" — and
+  // retiring on the second reading would have deleted all 60 rows in one tick when the datacenter
+  // block turned out to be the real cause. Backoff is the safe response to an ambiguous refusal.
+  if (res.status === 403) {
+    throw new Error(
+      `Reddit r/${subreddit} refused (403)` +
+        (token
+          ? " despite a valid token — this subreddit is likely private or quarantined."
+          : " — unauthenticated requests from datacenter ranges are blocked outright. Set " +
+            "REDDIT_CLIENT_ID and REDDIT_CLIENT_SECRET (Responsible Builder approval required)."),
+    );
+  }
   if (!res.ok) throw new Error(`Reddit r/${subreddit} failed: ${res.status}`);
 
   const json = (await res.json()) as Listing;

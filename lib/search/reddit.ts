@@ -30,6 +30,17 @@ export function redditAuthMode(): "oauth" | "public" {
   return hasRedditCredentials() ? "oauth" : "public";
 }
 
+/**
+ * The client-credentials token, shared with the ingest crawler.
+ *
+ * Exported so `lib/ingest/sources/reddit.ts` reuses this cache rather than minting its own. One
+ * token per instance is the point — Reddit meters per client id, and two modules independently
+ * requesting tokens against the same app is a way to spend the quota on authentication.
+ */
+export async function redditAccessToken(): Promise<string | null> {
+  return getAccessToken();
+}
+
 async function getAccessToken(): Promise<string | null> {
   if (!hasRedditCredentials()) return null;
   if (tokenCache && tokenCache.expiresAt > Date.now() + 60_000) return tokenCache.token;

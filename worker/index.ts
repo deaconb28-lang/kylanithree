@@ -6,7 +6,19 @@ import { crawlStackExchange } from "../lib/ingest/sources/stackexchange";
 import { crawlLemmy } from "../lib/ingest/sources/lemmy";
 import { crawlBluesky, BLUESKY_STANDING_QUERIES } from "../lib/ingest/sources/bluesky";
 import { crawlReddit } from "../lib/ingest/sources/reddit";
+import { hasRedditCredentials } from "../lib/search/reddit";
 import { blueskyCredentialProblems } from "../lib/search/bluesky";
+
+/**
+ * Should Reddit be crawled at all?
+ *
+ * Credentials are the real answer: the unkeyed path is blocked at the edge for datacenter traffic,
+ * measured from two providers. The env flag stays as an override for a network that does accept
+ * unauthenticated requests, so the finding is not baked in as an assumption forever.
+ */
+function redditCrawlEnabled(): boolean {
+  return hasRedditCredentials() || process.env.REDDIT_JSON_ENABLED === "true";
+}
 import {
   backfillEmbeddings,
   classifyBacklog,
@@ -508,18 +520,14 @@ async function seedSources(): Promise<void> {
     // back-office roles that buy software to stop doing something by hand. Deliberately not the
     // big general technology subreddits, which are mostly discussion rather than need.
     //
-    // OFF BY DEFAULT, and this is a measured result rather than caution. On the first run from
-    // Railway every one of the 60 subreddits below answered 403 within a second — including
-    // r/smallbusiness, r/Entrepreneur and r/sysadmin, which unambiguously exist. A uniform instant
-    // 403 across 60 unrelated communities is an IP-level refusal of the datacenter range, not
-    // anything about the subreddits or the User-Agent.
+    // Seeded when credentials exist. Measured, not assumed: the unkeyed path answered 403 within a
+    // second on all 60 subreddits from Railway, and 403 in 21ms from Vercel — an edge-level refusal
+    // of datacenter traffic that no amount of politeness changes. Approval is the fix, and it is a
+    // form rather than a code change: set REDDIT_CLIENT_ID and REDDIT_CLIENT_SECRET and these seed
+    // and run on the next boot, against oauth.reddit.com.
     //
-    // The code stays because it is correct and would work from a network Reddit accepts. What is
-    // NOT here is a way around the block: rotating residential proxies or spoofed origins would be
-    // circumventing an access-control decision Reddit has deliberately made, which is a different
-    // thing from using a public endpoint it leaves open. Set REDDIT_JSON_ENABLED=true if the worker
-    // ever runs somewhere Reddit does not refuse.
-    ...(process.env.REDDIT_JSON_ENABLED === "true" ? [
+    // REDDIT_JSON_ENABLED=true forces the unkeyed path back on, for a network that does accept it.
+    ...(redditCrawlEnabled() ? [
       "smallbusiness", "Entrepreneur", "startups", "SaaS", "ecommerce", "shopify", "Etsy",
       "dropship", "FulfillmentByAmazon", "consulting", "freelance", "marketing", "SEO", "PPC",
       "digital_marketing", "sales", "accounting", "Bookkeeping", "tax", "humanresources",
@@ -580,14 +588,15 @@ async function seedSources(): Promise<void> {
   // Healthy sources only. A degraded or blocked source has had its interval deliberately doubled by
   // the backoff in pollSource, and resetting that here would undo the one mechanism that stops the
   // crawler hammering a host that is already unhappy with it.
-  // Stop polling Reddit while it is refusing this network.
+  // Turn Reddit on or off to match the credentials actually present.
   //
-  // Seeding is $setOnInsert, so the 60 rows created before the block was measured are still in the
-  // registry and would keep being polled into a 403 forever, degrading and un-degrading on the
-  // backoff. Disabling is reversible and honest: the rows keep their history, `dueSources` skips
-  // them, and setting REDDIT_JSON_ENABLED=true re-enables them on the next boot.
+  // Seeding is $setOnInsert, so the 60 rows created before the datacenter block was measured are
+  // still in the registry and would keep being polled into a 403 forever. Disabling is reversible
+  // and keeps their history: `dueSources` skips them, and the moment credentials appear this same
+  // pass re-enables them — so getting Responsible Builder approval is genuinely a variable change
+  // rather than a redeploy of new code.
   {
-    const enabled = process.env.REDDIT_JSON_ENABLED === "true";
+    const enabled = redditCrawlEnabled();
     const res = await sources.updateMany(
       { platform: "reddit", enabled: !enabled },
       { $set: { enabled, health: enabled ? "ok" : "retired", updatedAt: new Date() } },
@@ -595,9 +604,10 @@ async function seedSources(): Promise<void> {
     if (res.modifiedCount > 0) {
       log(
         enabled
-          ? `re-enabled ${res.modifiedCount} reddit source(s) — REDDIT_JSON_ENABLED is set`
-          : `disabled ${res.modifiedCount} reddit source(s) — reddit.com answers 403 to this network's ` +
-            `egress. The crawler is correct; the IP is refused. Set REDDIT_JSON_ENABLED=true to retry.`,
+          ? `re-enabled ${res.modifiedCount} reddit source(s) — ${hasRedditCredentials() ? "OAuth credentials are set" : "REDDIT_JSON_ENABLED is set"}`
+          : `disabled ${res.modifiedCount} reddit source(s) — reddit.com answers 403 to datacenter ` +
+            `egress and there are no OAuth credentials. Set REDDIT_CLIENT_ID and REDDIT_CLIENT_SECRET ` +
+            `(Responsible Builder approval required) and they re-enable themselves on the next boot.`,
       );
     }
   }

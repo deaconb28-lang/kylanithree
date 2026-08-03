@@ -48,21 +48,29 @@ because it means either "private or quarantined" or "Reddit is refusing this IP"
 the second reading would silently delete the whole Reddit registry the first time the worker's
 egress range got blocked.
 
-#### Measured result: Reddit refuses the worker's network
+#### Measured result: Reddit refuses datacenter traffic, from every provider tried
 
 The crawler shipped, ran, and **every one of the 60 subreddits answered 403 within a second** —
 including `r/smallbusiness`, `r/Entrepreneur` and `r/sysadmin`, which unambiguously exist. A uniform
 instant 403 across 60 unrelated communities is an IP-level refusal of the datacenter range, not a
 per-subreddit problem and not a User-Agent problem (a bad UA gets 429, not a blanket 403).
 
-So Reddit is **built and disabled**, behind `REDDIT_JSON_ENABLED`. The code is correct and would
-work from a network Reddit accepts; the block is about where the request comes from.
+Then `/api/health?reddit=probe` asked the follow-up question from **Vercel**: `403 in 21ms`, serving
+an HTML interstitial rather than JSON. Twenty-one milliseconds is an edge-level refusal that never
+reaches Reddit's application servers. So this is not one provider's range — Reddit declines
+datacenter traffic generally, and there is no hosting answer.
 
 **What is deliberately not built: a way around it.** Rotating residential proxies or spoofed origins
-would be circumventing an access control Reddit has chosen to apply, which is a different thing from
-using a public endpoint it leaves open. If Reddit matters enough, the legitimate paths are an
-approved Responsible Builder application or the metered commercial tier — not disguising the
-traffic.
+would be defeating an access control Reddit has chosen to apply, which is a different thing from
+using a public endpoint it leaves open — and it would put the product's access and standing at real
+risk for a source that is already substituted by Lemmy.
+
+**What IS built: everything downstream of approval.** `crawlReddit` sends to `oauth.reddit.com` with
+a bearer token whenever `REDDIT_CLIENT_ID` and `REDDIT_CLIENT_SECRET` are set, falling back to the
+public path otherwise, and the worker seeds and re-enables the 60 subreddits on the next boot once
+they appear. Getting Responsible Builder approval is a form; turning it on afterwards is two
+variables and no code change. The keyed path is also metered per client id rather than per IP, so
+the timid 60-minute interval could be raised considerably if yield justifies it.
 
 The 403-is-transient rule earned its keep on the first run: had 403 been treated as permanent, that
 tick would have retired all 60 rows and the registry would have deleted itself over an IP block.
