@@ -5,6 +5,7 @@ import { useEffect, useMemo, useState } from "react";
 import DashboardShell from "../../components/dashboard/DashboardShell";
 import SearchAgainButton from "../../components/dashboard/SearchAgainButton";
 import SegmentCard, { type Segment } from "../../components/dashboard/SegmentCard";
+import { buyerConfidence } from "../../lib/buyers/confidence";
 import Funnel from "../../components/campaign/Funnel";
 import Stage from "../../components/campaign/Stage";
 import { relativeTime } from "../../lib/relativeTime";
@@ -97,7 +98,20 @@ export default function HomePage() {
         key: h.key,
         name: h.name,
         meta: h.meta,
-        status: h.status,
+        // Derived from the leads themselves rather than read off the hypothesis. `dropped` is the
+        // status a rejection writes, so it is the rejection count for this buyer; `sent` and
+        // `replied` are structurally zero until the Gmail scope is verified, and the formula is
+        // built to say "nothing is proven" rather than to divide by them.
+        confidence: buyerConfidence(
+          {
+            leadsShown: mine.length,
+            rejections: mine.filter((l) => l.status === "dropped").length,
+            contacted: mine.filter((l) => l.status === "sent" || l.status === "replied").length,
+            replied: mine.filter((l) => l.status === "replied").length,
+            booked: mine.filter((l) => l.feedback === "landed").length,
+          },
+          { retired: h.status === "paused" },
+        ),
         leadCount: mine.length,
         share: mine.length / total,
         waiting: mine.filter((l) => l.status === "waiting").length,

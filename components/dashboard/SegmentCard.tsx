@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import type { BuyerConfidence } from "../../lib/buyers/confidence";
 
 // One buyer hypothesis, presented the way Explee presents a campaign: a single self-contained card
 // you can read top to bottom without cross-referencing anything else on the page.
@@ -14,7 +15,8 @@ export type Segment = {
   key: string;
   name: string;
   meta: string;
-  status: "primary" | "learning" | "paused";
+  /** Derived from evidence by `buyerConfidence`, never a stored label someone assigned. */
+  confidence: BuyerConfidence;
   leadCount: number;
   /** Share of all leads, 0-1 — drives the ring. */
   share: number;
@@ -66,20 +68,27 @@ function Ring({ share, label }: { share: number; label: string }) {
   );
 }
 
-// A verb derived from what actually happened, not a badge someone assigned.
+// The status is now COMPUTED from evidence, and the difference is not cosmetic.
 //
-// "Most likely" and "Testing" were static labels: a buyer with zero leads and a buyer with forty
-// both read "Most likely" if the hypothesis had been written that way. These describe evidence —
-// `gaining` needs replies, `unproven` says outright that nothing has come back yet — so the card
-// can never claim more confidence than the rows behind it support.
-const STATUS_COPY: Record<Segment["status"], { label: string; color: string; bg: string }> = {
-  primary: { label: "gaining", color: "var(--green)", bg: "var(--green-tint)" },
-  learning: { label: "unproven", color: "var(--muted)", bg: "var(--active-bg)" },
-  paused: { label: "retired", color: "var(--muted)", bg: "var(--active-bg)" },
+// It used to be a stored field: `primary` rendered as "gaining", a word that claims replies are
+// coming back. Nothing in this product can send yet — the Gmail scope is pending Google's
+// verification — so no hypothesis has ever received a reply, and "gaining" was a claim with
+// literally nothing behind it. A buyer with zero leads and one with forty read identically, because
+// the label was written when the hypothesis was.
+//
+// `buyerConfidence` derives all of this from counts, and each label is only reachable when the
+// counts support it. `gaining` cannot appear until sending works. That is the point.
+const STATUS_STYLE: Record<BuyerConfidence["status"], { color: string; bg: string }> = {
+  gaining: { color: "var(--green)", bg: "var(--green-tint)" },
+  disconfirmed: { color: "var(--attention)", bg: "var(--active-bg)" },
+  finding: { color: "var(--muted-strong)", bg: "var(--active-bg)" },
+  unproven: { color: "var(--muted)", bg: "var(--active-bg)" },
+  retired: { color: "var(--muted)", bg: "var(--active-bg)" },
 };
 
 export default function SegmentCard({ segment }: { segment: Segment }) {
-  const status = STATUS_COPY[segment.status];
+  const { status: statusLabel, reason, score } = segment.confidence;
+  const status = STATUS_STYLE[statusLabel];
   return (
     <div
       style={{
@@ -98,10 +107,19 @@ export default function SegmentCard({ segment }: { segment: Segment }) {
           <div style={{ display: "flex", alignItems: "center", gap: 9, flexWrap: "wrap" }}>
             <span style={{ fontFamily: "var(--font-display)", fontWeight: 700, fontSize: 18, letterSpacing: "-.02em" }}>{segment.name}</span>
             <span style={{ fontSize: 11.5, fontWeight: 700, color: status.color, background: status.bg, padding: "3px 9px", borderRadius: 999, whiteSpace: "nowrap" }}>
-              {status.label}
+              {statusLabel}
             </span>
+            {/* The number only renders when there is one. A hypothesis nobody has written to has no
+                score at all — null, not zero — because a confident-looking 0 beside an untested
+                buyer is the same fabrication the reply-rate tile was deleted for. */}
+            {score !== null && (
+              <span className="ky-tnum" style={{ fontSize: 11.5, fontWeight: 700, color: "var(--muted)" }}>{score}/100</span>
+            )}
           </div>
           <span style={{ fontSize: 14, color: "var(--muted)", lineHeight: 1.5 }}>{segment.meta}</span>
+          {/* The evidence behind the badge, in the same breath as the badge. A status on its own is
+              an assertion; "you rejected 5 of 8" is checkable against the queue. */}
+          <span style={{ fontSize: 12.5, color: "var(--muted)", lineHeight: 1.5 }}>{reason}</span>
         </div>
         <Ring share={segment.share} label={String(segment.leadCount)} />
       </div>

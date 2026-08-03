@@ -45,6 +45,7 @@
     "lib/discover/passOne.ts",
     "lib/discover/collections.ts",
     "lib/discover/rerank.ts",
-    "lib/enrich/apollo.ts"
+    "lib/enrich/apollo.ts",
+    "lib/buyers/confidence.ts"
   ]
 }
