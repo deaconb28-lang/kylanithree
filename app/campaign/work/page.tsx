@@ -1,6 +1,6 @@
 "use client";
 
-import { Suspense, useEffect, useMemo, useState } from "react";
+import { Suspense, useEffect, useMemo, useRef, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import DashboardShell from "../../../components/dashboard/DashboardShell";
 import SearchAgainButton from "../../../components/dashboard/SearchAgainButton";
@@ -11,9 +11,33 @@ import { tierFromTotal } from "../../../lib/search/leadScore";
 import { REJECTION_REASONS, REJECTION_REASON_LABELS, type RejectionReason } from "../../../lib/leads/rejectionReasons";
 import { relativeTime } from "../../../lib/relativeTime";
 
+// Work is a deck of people, not a mailbox.
+//
+// This screen used to be a two-pane mail client: a bordered list column on the left, a reading pane
+// on the right, unread dots, a "Subject:" header row. Every one of those is a borrowed convention
+// from a tool whose job is to show you everything that arrived and let you decide what to open —
+// and that is the wrong job. Nothing "arrives" here. Kylani went looking, ranked what it found, and
+// the founder's task is to work down that ranking making one decision at a time. A mail list
+// invites scanning; a deck invites deciding.
+//
+// So: one person, full width, with the rest of the run as a horizontal rail above them. The rail
+// keeps what the list column was actually good for — position, scanning ahead, jumping — without
+// implying a pile of unread mail. Progress is stated as "3 of 24", which a mailbox can never say
+// because a mailbox has no end.
+//
+// Coral is spent once per screen, on the primary action. Selection in the rail is ink, not coral,
+// for that reason: two accents and neither is an accent.
+
 type Lead = LeadDoc & { _id: string };
 type Hypothesis = HypothesisDoc & { _id: string };
 type Campaign = { dailyCap: number; revenueBase: number; stats: { sentToday: number } };
+
+const STATUS_WORD: Record<string, string> = {
+  sent: "Sent",
+  approved: "Approved",
+  dropped: "Dropped",
+  replied: "Replied",
+};
 
 function QueueInner() {
   // Home's segment cards deep-link straight into one buyer's leads ("Review 5 waiting"), so the
@@ -45,6 +69,7 @@ function QueueInner() {
   // expensive kind of quiet deletion.
   const [judged, setJudged] = useState<Set<string>>(new Set());
   const [feedback, setFeedback] = useState<"landed" | "missed" | null>(null);
+  const activeCardRef = useRef<HTMLButtonElement | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -56,7 +81,7 @@ function QueueInner() {
         if (cancelled) return;
         const failed = [leadsRes, campaignRes, hypothesesRes].find((r) => !r.ok);
         if (failed) {
-          setLoadError(failed.data?.error ?? "Couldn't load Queue.");
+          setLoadError(failed.data?.error ?? "Couldn't load your leads.");
           return;
         }
         setLeads(leadsRes.data);
@@ -111,6 +136,16 @@ function QueueInner() {
     return leads.filter((l) => l.hypothesisKey === filter);
   }, [leads, filter]);
 
+  // Keep the current person visible in the rail when J/K walks past its edge. Instant rather than
+  // smooth under reduced motion — a rail that slides on every keypress is exactly the kind of
+  // incidental animation that preference exists to turn off.
+  useEffect(() => {
+    const el = activeCardRef.current;
+    if (!el) return;
+    const reduced = window.matchMedia?.("(prefers-reduced-motion: reduce)").matches ?? false;
+    el.scrollIntoView({ behavior: reduced ? "auto" : "smooth", block: "nearest", inline: "center" });
+  }, [selected, filter]);
+
   const primaryHypothesis = hypotheses?.find((h) => h.status === "primary") ?? null;
   const primaryWaitingCount = leads?.filter((l) => l.hypothesisKey === primaryHypothesis?.key && l.status === "waiting").length ?? 0;
 
@@ -124,12 +159,13 @@ function QueueInner() {
     </div>
   );
 
-  // Keyboard operation of the whole queue.
+  // Keyboard operation of the whole deck.
   //
-  // Registered after the handlers it calls so it closes over the current lead rather than a stale
-  // one. Every shortcut is a no-op while typing — a founder editing a draft must be able to write
-  // the letter "e" without the app interpreting it — and while the reason row is open, because a
-  // stray key there would drop someone with a reason they did not choose.
+  // Registered above the early returns so the hook order is stable, and closing over `filtered` so
+  // it moves through what is actually on screen. Every shortcut is a no-op while typing — a founder
+  // editing a draft must be able to write the letter "e" without the app interpreting it — and
+  // while the reason row is open, because a stray key there would drop someone with a reason they
+  // did not choose.
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       const el = e.target as HTMLElement | null;
@@ -141,12 +177,14 @@ function QueueInner() {
       }
 
       const k = e.key.toLowerCase();
-      if (k === "j" || e.key === "ArrowDown") {
+      if (k === "j" || e.key === "ArrowRight" || e.key === "ArrowDown") {
         e.preventDefault();
         setSelected((i) => Math.min(i + 1, Math.max(0, filtered.length - 1)));
-      } else if (k === "k" || e.key === "ArrowUp") {
+        setEditing(false);
+      } else if (k === "k" || e.key === "ArrowLeft" || e.key === "ArrowUp") {
         e.preventDefault();
         setSelected((i) => Math.max(0, i - 1));
+        setEditing(false);
       } else if (k === "e") {
         e.preventDefault();
         setEditing((v) => !v);
@@ -170,7 +208,7 @@ function QueueInner() {
     return (
       <DashboardShell active="work" bottom={sidebarBottom}>
         <div style={{ padding: "36px 5vw", display: "flex", flexDirection: "column", alignItems: "flex-start", gap: 14 }}>
-          <span style={{ fontFamily: "var(--font-display)", fontWeight: 700, fontSize: 18 }}>Couldn&apos;t load Queue.</span>
+          <span style={{ fontFamily: "var(--font-display)", fontWeight: 700, fontSize: 18 }}>Couldn&apos;t load your leads.</span>
           <span style={{ fontSize: 14.5, color: "var(--muted)" }}>{loadError}</span>
           <button className="ky-btn-ember" onClick={() => { setLoadError(null); setAttempt((a) => a + 1); }} style={{ padding: "11px 20px", fontSize: 14.5, border: "none" }}>
             Try again
@@ -193,10 +231,10 @@ function QueueInner() {
       <DashboardShell active="work" bottom={sidebarBottom}>
         <div style={{ padding: "36px 5vw", display: "flex", flexDirection: "column", alignItems: "flex-start", gap: 16, maxWidth: 560 }}>
           <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-            <span style={{ fontFamily: "var(--font-display)", fontWeight: 700, fontSize: 20 }}>Nothing in Queue yet.</span>
+            <span style={{ fontFamily: "var(--font-display)", fontWeight: 700, fontSize: 20 }}>No one to work through yet.</span>
             <p style={{ margin: 0, fontSize: 15, color: "var(--muted)", lineHeight: 1.6 }}>
-              Every lead here came from a real search — if it hasn&apos;t found anyone yet, there&apos;s nothing to pad the
-              list with. Check Today for anything time-sensitive, or run the search again.
+              Everyone here came from a real search — if it hasn&apos;t found anyone yet, there&apos;s nothing to pad the
+              list with. Run the search again, or widen who you&apos;re looking for on the campaign page.
             </p>
           </div>
           <SearchAgainButton onDone={() => { setLoadError(null); setAttempt((a) => a + 1); }} />
@@ -205,9 +243,11 @@ function QueueInner() {
     );
   }
 
-  const lead = filtered[Math.min(selected, Math.max(0, filtered.length - 1))] ?? leads[0];
+  const index = Math.min(selected, Math.max(0, filtered.length - 1));
+  const lead = filtered[index] ?? leads[0];
   const status = lead.status;
   const draftBody = draftEdits[lead._id] ?? lead.draft;
+  const decidedCount = filtered.filter((l) => l.status !== "waiting").length;
 
   const selectIndex = (i: number) => {
     setSelected(i);
@@ -241,7 +281,7 @@ function QueueInner() {
       setCampaign((c) => (c ? { ...c, stats: { ...c.stats, sentToday: c.stats.sentToday + 1 } } : c));
     }
     setEditing(false);
-    moveToNextWaiting(filtered, selected);
+    moveToNextWaiting(filtered, index);
   };
 
   /**
@@ -258,7 +298,7 @@ function QueueInner() {
     setLeads((ls) => ls!.map((l) => (l._id === target._id ? { ...l, status: "dropped" } : l)));
     setEditing(false);
     setUndoFor({ id: target._id, name: target.name });
-    moveToNextWaiting(filtered, selected);
+    moveToNextWaiting(filtered, index);
     await fetch(`/api/leads/${target._id}/reject`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -282,7 +322,7 @@ function QueueInner() {
     if (res.ok) {
       setLeads((ls) => ls!.map((l) => (l._id === lead._id ? { ...l, status: "dropped" } : l)));
       setEditing(false);
-      moveToNextWaiting(filtered, selected);
+      moveToNextWaiting(filtered, index);
     }
   };
 
@@ -316,146 +356,171 @@ function QueueInner() {
     setBulkApproved(true);
   };
 
+  const filters = [
+    { key: "all", label: `Everyone ${leads.length}` },
+    // Named to match the tiers on the cards. "★ 3+" filtered on a scale the UI no longer shows
+    // anywhere, so it asked the founder to think in a unit that had been deleted.
+    { key: "strong", label: `Strong ${leads.filter((l) => tierFromTotal(l.scoreTotal ?? 0) === "strong").length}` },
+    { key: "unread", label: `Undecided ${leads.filter((l) => l.status === "waiting").length}` },
+    ...(hypotheses ?? [])
+      .map((h) => ({ key: h.key, count: leads.filter((l) => l.hypothesisKey === h.key).length, name: h.name }))
+      .filter((h) => h.count > 0)
+      .map((h) => ({ key: h.key, label: `${h.name} ${h.count}` })),
+  ].filter((f) => !/ 0$/.test(f.label));
+
   return (
     <DashboardShell active="work" bottom={sidebarBottom}>
-      <div style={{ display: "grid", gridTemplateColumns: "minmax(280px, 420px) 1fr", minHeight: "100vh" }} className="queue-grid">
-        <style>{`@media (max-width: 900px) { .queue-grid { grid-template-columns: 1fr !important; } .queue-list { max-height: 340px; } }`}</style>
+      <style>{`
+        .ky-rail { scrollbar-width: thin; scroll-snap-type: x proximity; }
+        .ky-rail::-webkit-scrollbar { height: 6px; }
+        .ky-rail::-webkit-scrollbar-thumb { background: var(--border-strong); border-radius: 999px; }
+        .ky-deck { padding: 30px 5vw 40px; }
+        @media (max-width: 700px) { .ky-deck { padding: 22px 20px 32px; } }
+      `}</style>
 
-        <div className="queue-list" style={{ borderRight: "1px solid var(--border)", display: "flex", flexDirection: "column", overflow: "hidden" }}>
-          <div style={{ padding: "26px 26px 18px", display: "flex", flexDirection: "column", gap: 14, borderBottom: "1px solid var(--border)" }}>
-            <h1 style={{ fontFamily: "var(--font-display)", fontWeight: 800, fontSize: 26, letterSpacing: "-.03em", margin: 0 }}>
+      <div className="ky-deck" style={{ display: "flex", flexDirection: "column", gap: 24, maxWidth: 940, boxSizing: "border-box" }}>
+        {/* ---- Where you are, and in what ---- */}
+        <header style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+          <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", gap: 20, flexWrap: "wrap" }}>
+            <h1 style={{ fontFamily: "var(--font-display)", fontWeight: 800, fontSize: 27, letterSpacing: "-.03em", margin: 0 }}>
               {leads.length} {leads.length === 1 ? "person" : "people"} worth talking to
             </h1>
-            <span style={{ fontSize: 14.5, color: "var(--muted)", lineHeight: 1.5 }}>
-              Sorted strongest first. Each one is a real post you can open and read — start at the top.
-            </span>
+            <button
+              onClick={() => setShortcutsOpen((v) => !v)}
+              style={{ background: "none", border: "none", cursor: "pointer", fontSize: 13, color: "var(--muted)", padding: 0 }}
+            >
+              Keyboard shortcuts
+            </button>
+          </div>
 
-            {feedbackLead && (
-              <div style={{ border: "1px solid var(--border)", borderRadius: 12, padding: "10px 14px", display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap", background: "var(--card-alt)" }}>
-                <span style={{ fontSize: 13, color: "var(--muted)", flex: 1, minWidth: 140 }}>
-                  Your reply to {feedbackLead.name} — how did it land?
-                </span>
-                <div style={{ display: "flex", gap: 8 }}>
-                  <button
-                    className="ky-btn-outline"
-                    onClick={() => submitFeedback("landed")}
-                    style={{
-                      padding: "6px 12px",
-                      fontSize: 13,
-                      fontWeight: 600,
-                      minHeight: 0,
-                      color: feedback === "landed" ? "var(--on-ember)" : "var(--green)",
-                      background: feedback === "landed" ? "var(--green)" : "transparent",
-                      borderColor: feedback === "landed" ? "var(--green)" : "var(--border-strong)",
-                    }}
-                  >
-                    Landed
-                  </button>
-                  <button
-                    className="ky-btn-outline"
-                    onClick={() => submitFeedback("missed")}
-                    style={{
-                      padding: "6px 12px",
-                      fontSize: 13,
-                      fontWeight: 600,
-                      minHeight: 0,
-                      color: feedback === "missed" ? "var(--on-ember)" : "var(--muted)",
-                      background: feedback === "missed" ? "var(--muted)" : "transparent",
-                    }}
-                  >
-                    Missed
-                  </button>
-                </div>
-              </div>
-            )}
-            <div style={{ display: "flex", gap: 8, fontSize: 13.5, flexWrap: "wrap" }}>
-              {[
-                { key: "all", label: `All ${leads.length}` },
-                // Named to match the tiers on the cards. "★ 3+" filtered on a scale the UI no
-                // longer shows anywhere, so it asked the founder to think in a unit that had been
-                // deleted.
-                { key: "strong", label: `Strong ${leads.filter((l) => tierFromTotal(l.scoreTotal ?? 0) === "strong").length}` },
-                { key: "unread", label: `Not actioned ${leads.filter((l) => l.status === "waiting").length}` },
-                ...(hypotheses ?? [])
-                .map((h) => ({ key: h.key, count: leads.filter((l) => l.hypothesisKey === h.key).length, name: h.name }))
-                .filter((h) => h.count > 0)
-                  .map((h) => ({ key: h.key, label: `${h.name} ${h.count}` })),
-              ]
-                .filter((f) => !/ 0$/.test(f.label))
-                .map((f) => (
-                <span
-                  key={f.key}
-                  onClick={() => { setFilter(f.key); setSelected(0); }}
-                  style={{
-                    cursor: "pointer",
-                    background: filter === f.key ? "var(--ink)" : "transparent",
-                    color: filter === f.key ? "var(--card)" : "var(--muted-strong)",
-                    border: filter === f.key ? "none" : "1px solid var(--border)",
-                    padding: "6px 12px",
-                    borderRadius: 999,
-                  }}
-                >
-                  {f.label}
-                </span>
-                ))}
+          <div style={{ display: "flex", gap: 8, fontSize: 13.5, flexWrap: "wrap" }}>
+            {filters.map((f) => (
+              <button
+                key={f.key}
+                onClick={() => { setFilter(f.key); setSelected(0); }}
+                style={{
+                  cursor: "pointer",
+                  fontFamily: "inherit",
+                  fontSize: 13.5,
+                  background: filter === f.key ? "var(--ink)" : "transparent",
+                  color: filter === f.key ? "var(--card)" : "var(--muted-strong)",
+                  border: filter === f.key ? "1px solid var(--ink)" : "1px solid var(--border)",
+                  padding: "6px 13px",
+                  borderRadius: 999,
+                }}
+              >
+                {f.label}
+              </button>
+            ))}
+          </div>
+
+          {/* A deck has an end; a mailbox does not. Saying so is the single clearest difference
+              between "work through these" and "here is your mail". */}
+          <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+            <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", gap: 12, fontSize: 13.5, color: "var(--muted)" }}>
+              <span>
+                <span className="ky-tnum" style={{ color: "var(--ink)", fontWeight: 600 }}>{index + 1}</span> of{" "}
+                <span className="ky-tnum">{filtered.length}</span> · sorted strongest first
+              </span>
+              <span>{decidedCount} decided</span>
+            </div>
+            <div style={{ height: 3, borderRadius: 999, background: "var(--border)", overflow: "hidden" }}>
+              <div style={{ width: `${filtered.length ? ((index + 1) / filtered.length) * 100 : 0}%`, height: "100%", background: "var(--ink)" }} />
             </div>
           </div>
-          <div style={{ flex: 1, overflow: "auto", display: "flex", flexDirection: "column" }}>
-            {filtered.map((l, i) => {
-              const st = l.status;
-              const actioned = st !== "waiting";
-              return (
-                <div
-                  key={l._id}
-                  onClick={() => selectIndex(i)}
-                  style={{
-                    padding: "14px 22px",
-                    borderBottom: "1px solid var(--border)",
-                    display: "flex",
-                    flexDirection: "column",
-                    gap: 6,
-                    cursor: "pointer",
-                    opacity: st === "dropped" ? 0.5 : 1,
-                    background: i === selected ? "var(--wash-active)" : "transparent",
-                    borderLeft: i === selected ? "2px solid var(--ember)" : "2px solid transparent",
-                  }}
-                >
-                  <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                    {/* An unactioned lead gets a dot, the way an unread message does — the fastest
-                        possible read of "have I dealt with this". */}
-                    {!actioned && <span style={{ width: 6, height: 6, borderRadius: 999, background: "var(--ember)", flexShrink: 0 }} />}
-                    <span style={{ fontSize: 15, fontWeight: actioned ? 500 : 700, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
-                      {l.name}
-                    </span>
-                    <span style={{ marginLeft: "auto", fontSize: 12, color: "var(--muted)", whiteSpace: "nowrap", flexShrink: 0 }}>
-                      {relativeTime(l.postedAt)}
-                    </span>
-                  </div>
-                  {typeof l.scoreTotal === "number" && (
-                    <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                      <LeadTier total={l.scoreTotal} showReasons={false} size="sm" />
-                      <span style={{ fontSize: 12, color: "var(--muted)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
-                        {l.company}
-                      </span>
-                      {st === "sent" && <span style={{ marginLeft: "auto", fontSize: 11.5, color: "var(--green)", fontWeight: 600 }}>Sent</span>}
-                      {st === "approved" && <span style={{ marginLeft: "auto", fontSize: 11.5, color: "var(--green)", fontWeight: 600 }}>Approved</span>}
-                      {st === "dropped" && <span style={{ marginLeft: "auto", fontSize: 11.5, color: "var(--muted)", fontWeight: 600 }}>Dropped</span>}
-                    </div>
-                  )}
-                  <span style={{ fontSize: 13.5, color: "var(--muted)", lineHeight: 1.45, display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden" }}>
-                    {l.excerpt || l.detail}
-                  </span>
-                </div>
-              );
-            })}
+        </header>
+
+        {feedbackLead && (
+          <div style={{ border: "1px solid var(--border)", borderRadius: 12, padding: "12px 16px", display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap", background: "var(--card-alt)" }}>
+            <span style={{ fontSize: 13.5, color: "var(--muted)", flex: 1, minWidth: 160 }}>
+              Your reply to {feedbackLead.name} — how did it land?
+            </span>
+            <div style={{ display: "flex", gap: 8 }}>
+              <button
+                className="ky-btn-outline"
+                onClick={() => submitFeedback("landed")}
+                style={{
+                  padding: "6px 13px",
+                  fontSize: 13,
+                  fontWeight: 600,
+                  minHeight: 0,
+                  color: feedback === "landed" ? "var(--on-ember)" : "var(--green)",
+                  background: feedback === "landed" ? "var(--green)" : "transparent",
+                  borderColor: feedback === "landed" ? "var(--green)" : "var(--border-strong)",
+                }}
+              >
+                Landed
+              </button>
+              <button
+                className="ky-btn-outline"
+                onClick={() => submitFeedback("missed")}
+                style={{
+                  padding: "6px 13px",
+                  fontSize: 13,
+                  fontWeight: 600,
+                  minHeight: 0,
+                  color: feedback === "missed" ? "var(--on-ember)" : "var(--muted)",
+                  background: feedback === "missed" ? "var(--muted)" : "transparent",
+                }}
+              >
+                Missed
+              </button>
+            </div>
           </div>
+        )}
+
+        {/* ---- The rest of the run, as a rail rather than a mail list ---- */}
+        {/* The rail's inset padding is not spacing: `overflow-x: auto` computes `overflow-y` to
+            auto as well, so a focus ring drawn at 2px offset outside a card would be clipped on the
+            top and bottom edges. Four pixels of room keeps keyboard focus visible. */}
+        <div
+          className="ky-rail"
+          style={{ display: "flex", gap: 10, overflowX: "auto", padding: "4px 4px 10px", margin: "-4px -4px 0" }}
+        >
+          {filtered.map((l, i) => {
+            const decided = l.status !== "waiting";
+            const current = i === index;
+            return (
+              <button
+                key={l._id}
+                ref={current ? activeCardRef : undefined}
+                onClick={() => selectIndex(i)}
+                aria-current={current ? "true" : undefined}
+                style={{
+                  flex: "0 0 auto",
+                  width: 158,
+                  scrollSnapAlign: "center",
+                  textAlign: "left",
+                  cursor: "pointer",
+                  fontFamily: "inherit",
+                  display: "flex",
+                  flexDirection: "column",
+                  gap: 5,
+                  padding: "11px 13px",
+                  borderRadius: 12,
+                  border: current ? "1px solid var(--ink)" : "1px solid var(--border)",
+                  background: current ? "var(--active-bg)" : "var(--card)",
+                  opacity: decided && !current ? 0.5 : 1,
+                }}
+              >
+                <span className="ky-tnum" style={{ fontSize: 11.5, color: "var(--faint)" }}>{i + 1}</span>
+                <span style={{ fontSize: 14.5, fontWeight: 600, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+                  {l.name}
+                </span>
+                <span style={{ fontSize: 12, color: "var(--muted)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+                  {decided ? STATUS_WORD[l.status] ?? l.status : l.company}
+                </span>
+              </button>
+            );
+          })}
         </div>
 
-        <div style={{ padding: "32px 5vw", display: "flex", flexDirection: "column", gap: 20, boxSizing: "border-box", maxWidth: 900 }}>
+        {/* ---- The one person in front of you ---- */}
+        <section style={{ display: "flex", flexDirection: "column", gap: 20 }}>
           <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 20, flexWrap: "wrap" }}>
-            <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+            <div style={{ display: "flex", flexDirection: "column", gap: 7, minWidth: 0 }}>
               <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
-                <span style={{ fontFamily: "var(--font-display)", fontWeight: 700, fontSize: 24, letterSpacing: "-.02em" }}>{lead.name}</span>
+                <span style={{ fontFamily: "var(--font-display)", fontWeight: 700, fontSize: 25, letterSpacing: "-.02em" }}>{lead.name}</span>
                 <LeadTier total={lead.scoreTotal} breakdown={lead.scoreBreakdown} />
               </div>
               <span style={{ fontSize: 14.5, color: "var(--muted)" }}>
@@ -464,11 +529,10 @@ function QueueInner() {
               </span>
             </div>
             <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
-              {status === "approved" && (
-                <span style={{ fontSize: 12.5, color: "var(--green)", fontWeight: 600, background: "var(--green-tint)", padding: "5px 10px", borderRadius: 999 }}>Approved</span>
-              )}
-              {status === "sent" && (
-                <span style={{ fontSize: 12.5, color: "var(--green)", fontWeight: 600, background: "var(--green-tint)", padding: "5px 10px", borderRadius: 999 }}>Sent via Gmail</span>
+              {(status === "approved" || status === "sent") && (
+                <span style={{ fontSize: 12.5, color: "var(--green)", fontWeight: 600, background: "var(--green-tint)", padding: "5px 10px", borderRadius: 999 }}>
+                  {status === "sent" ? "Sent via Gmail" : "Approved"}
+                </span>
               )}
               {status === "dropped" && (
                 <span style={{ fontSize: 12.5, color: "var(--muted)", fontWeight: 600, background: "var(--active-bg)", padding: "5px 10px", borderRadius: 999 }}>Dropped</span>
@@ -481,7 +545,7 @@ function QueueInner() {
               of the real post, plus the link so any claim here can be checked in one click. */}
           <div style={{ border: "1px solid var(--border)", borderRadius: 14, background: "var(--card-alt)", padding: "18px 20px", display: "flex", flexDirection: "column", gap: 12 }}>
             <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
-              <span style={{ fontSize: 13, color: "var(--muted)", textTransform: "uppercase", letterSpacing: ".07em" }}>What they said</span>
+              <span style={{ fontSize: 12.5, color: "var(--muted)", textTransform: "uppercase", letterSpacing: ".07em" }}>What they said</span>
               {lead.intentTier && (
                 <span
                   style={{
@@ -499,7 +563,7 @@ function QueueInner() {
                 </span>
               )}
             </div>
-            <blockquote style={{ margin: 0, fontSize: 16.5, lineHeight: 1.65, color: "var(--ink)", borderLeft: "3px solid var(--ember)", paddingLeft: 14 }}>
+            <blockquote style={{ margin: 0, fontSize: 16.5, lineHeight: 1.65, color: "var(--ink)", borderLeft: "3px solid var(--border-strong)", paddingLeft: 14 }}>
               {lead.excerpt || lead.detail}
             </blockquote>
             <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap", fontSize: 13.5, color: "var(--muted)" }}>
@@ -514,13 +578,18 @@ function QueueInner() {
             </div>
           </div>
 
-          <div style={{ border: "1px solid var(--border)", borderRadius: 14, padding: "22px 24px", display: "flex", flexDirection: "column", gap: 16, boxShadow: "var(--lift-1)" }}>
-            {lead.subject ? (
-              <div style={{ display: "flex", gap: 10, fontSize: 14.5, color: "var(--muted)", borderBottom: "1px solid var(--border)", paddingBottom: 12, flexWrap: "wrap" }}>
-                <span style={{ color: "var(--ink)", fontWeight: 600 }}>Subject:</span>
-                <span style={{ color: "var(--ink)" }}>{lead.subject}</span>
-              </div>
-            ) : null}
+          {/* Hairline, no lift. The reading pane needed elevation to separate itself from the list
+              beside it; a single column does not, and a shadow here is the last piece of chrome
+              that made this look like a message open in a client. */}
+          <div style={{ border: "1px solid var(--border)", borderRadius: 14, padding: "20px 22px", display: "flex", flexDirection: "column", gap: 16 }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
+              <span style={{ fontSize: 12.5, color: "var(--muted)", textTransform: "uppercase", letterSpacing: ".07em" }}>What you&apos;d send back</span>
+              {lead.subject && (
+                <span style={{ fontSize: 13, color: "var(--muted)", minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                  Subject · {lead.subject}
+                </span>
+              )}
+            </div>
             {editing ? (
               <textarea
                 autoFocus
@@ -540,7 +609,7 @@ function QueueInner() {
               // normal state for a fresh lead — not an error, and not something to leave blank.
               <div style={{ display: "flex", flexDirection: "column", gap: 12, alignItems: "flex-start" }}>
                 <span style={{ fontSize: 15, color: "var(--muted)", lineHeight: 1.6 }}>
-                  No reply written yet. I&apos;ll draft one anchored to what they actually said above.
+                  Nothing written yet. I&apos;ll draft something anchored to what they actually said above.
                 </span>
                 <button
                   className="ky-btn-ember"
@@ -548,37 +617,40 @@ function QueueInner() {
                   disabled={rewriting}
                   style={{ padding: "12px 20px", fontSize: 15, border: "none", opacity: rewriting ? 0.6 : 1 }}
                 >
-                  {rewriting ? "Writing…" : "✦ Write the reply"}
+                  {rewriting ? "Writing…" : "✦ Write it"}
                 </button>
               </div>
             )}
             {sendError && <span style={{ fontSize: 13, color: "var(--ember)" }}>{sendError}</span>}
             {sendNote && <span style={{ fontSize: 13, color: "var(--muted)" }}>{sendNote}</span>}
-            {/* The reason row REPLACES the action bar for the length of one decision. An inline row
-                rather than a modal, because this is the same decision the founder already started —
-                a dialog would make it two. */}
-            {rejectingId === lead._id ? (
-              <div style={{ display: "flex", alignItems: "center", gap: 8, paddingTop: 12, borderTop: "1px solid var(--border)", flexWrap: "wrap" }}>
-                <span style={{ fontSize: 13.5, color: "var(--muted)", marginRight: 2 }}>Why?</span>
-                {REJECTION_REASONS.map((r) => (
-                  <button
-                    key={r}
-                    className="ky-btn-outline"
-                    onClick={() => reject(r)}
-                    style={{ padding: "8px 13px", fontSize: 13.5, fontWeight: 500, minHeight: 0 }}
-                  >
-                    {REJECTION_REASON_LABELS[r]}
-                  </button>
-                ))}
+          </div>
+
+          {/* ---- Decide ---- */}
+          {rejectingId === lead._id ? (
+            // The reason row REPLACES the action bar for the length of one decision. An inline row
+            // rather than a modal, because this is the same decision the founder already started —
+            // a dialog would make it two.
+            <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+              <span style={{ fontSize: 13.5, color: "var(--muted)", marginRight: 2 }}>Why?</span>
+              {REJECTION_REASONS.map((r) => (
                 <button
-                  onClick={() => setRejectingId(null)}
-                  style={{ marginLeft: "auto", background: "none", border: "none", cursor: "pointer", fontSize: 13, color: "var(--muted)" }}
+                  key={r}
+                  className="ky-btn-outline"
+                  onClick={() => reject(r)}
+                  style={{ padding: "9px 14px", fontSize: 13.5, fontWeight: 500, minHeight: 0 }}
                 >
-                  Cancel
+                  {REJECTION_REASON_LABELS[r]}
                 </button>
-              </div>
-            ) : (
-            <div style={{ display: "flex", alignItems: "center", gap: 10, paddingTop: 4, borderTop: "1px solid var(--border)", flexWrap: "wrap" }}>
+              ))}
+              <button
+                onClick={() => setRejectingId(null)}
+                style={{ marginLeft: "auto", background: "none", border: "none", cursor: "pointer", fontSize: 13, color: "var(--muted)" }}
+              >
+                Cancel
+              </button>
+            </div>
+          ) : (
+            <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
               {editing ? (
                 <button
                   className="ky-btn-ember"
@@ -601,7 +673,7 @@ function QueueInner() {
                 </button>
               ) : (
                 <button className="ky-btn-outline" disabled style={{ padding: "13px 22px", fontSize: 15.5, opacity: 0.6 }}>
-                  {status === "dropped" ? "Dropped" : status === "sent" ? "Sent" : "Approved"}
+                  {STATUS_WORD[status] ?? status}
                 </button>
               )}
               <button className="ky-btn-outline" onClick={() => setEditing((e) => !e)} style={{ padding: "12px 18px", fontSize: 15.5, fontWeight: 500 }}>
@@ -668,103 +740,124 @@ function QueueInner() {
               )}
               <span style={{ marginLeft: "auto", fontSize: 13.5, color: "var(--muted)" }}>Follow-up in 5 days if no reply</span>
             </div>
-            )}
+          )}
 
-            {/* Undo. The rejection is already written, so this is a real reversal rather than a
-                delayed commit — a founder who taps the wrong reason should not have to wait out a
-                timer to fix it, and the row can sit here until they move on. */}
-            {shortcutsOpen && (
-              <div
-                style={{
-                  display: "flex",
-                  gap: "6px 18px",
-                  flexWrap: "wrap",
-                  background: "var(--card-alt)",
-                  border: "1px solid var(--border)",
-                  borderRadius: 12,
-                  padding: "12px 14px",
-                  fontSize: 13,
-                  color: "var(--muted)",
-                }}
-              >
-                {[
-                  ["J / K", "move"],
-                  ["E", "edit"],
-                  ["X", "not a fit"],
-                  ["Esc", "close"],
-                  ["?", "this"],
-                ].map(([key, what]) => (
-                  <span key={key} style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
-                    <kbd
-                      style={{
-                        fontFamily: "inherit",
-                        fontSize: 12,
-                        fontWeight: 700,
-                        color: "var(--ink)",
-                        background: "var(--card)",
-                        border: "1px solid var(--border-strong)",
-                        borderRadius: 5,
-                        padding: "1px 6px",
-                      }}
-                    >
-                      {key}
-                    </kbd>
-                    {what}
-                  </span>
-                ))}
-              </div>
-            )}
-
-            {undoFor && (
-              <div
-                role="status"
-                style={{
-                  display: "flex",
-                  alignItems: "center",
-                  gap: 12,
-                  background: "var(--card-alt)",
-                  border: "1px solid var(--border)",
-                  borderRadius: 12,
-                  padding: "10px 14px",
-                  flexWrap: "wrap",
-                }}
-              >
-                <span style={{ fontSize: 13.5, color: "var(--muted)" }}>
-                  Dropped {undoFor.name}. The next search will use that.
-                </span>
-                <button
-                  onClick={() => undoReject(undoFor.id)}
-                  style={{ marginLeft: "auto", background: "none", border: "none", cursor: "pointer", fontSize: 13.5, fontWeight: 700, color: "var(--ember)" }}
-                >
-                  Undo
-                </button>
-              </div>
-            )}
-          </div>
-
-          {primaryHypothesis && (
-            <div style={{ marginTop: "auto", display: "flex", alignItems: "center", justifyContent: "space-between", borderTop: "1px solid var(--border)", paddingTop: 16, gap: 12, flexWrap: "wrap" }}>
-              <span style={{ fontSize: 14, color: "var(--muted)" }}>
-                {bulkApproved
-                  ? `${primaryHypothesis.name} batch approved — spacing them under your daily cap.`
-                  : `Approve all ${primaryWaitingCount} to the ${primaryHypothesis.name.toLowerCase()} hypothesis?`}
+          {/* Undo. The rejection is already written, so this is a real reversal rather than a
+              delayed commit — a founder who taps the wrong reason should not have to wait out a
+              timer to fix it, and the row can sit here until they move on. */}
+          {undoFor && (
+            <div
+              role="status"
+              style={{
+                display: "flex",
+                alignItems: "center",
+                gap: 12,
+                background: "var(--card-alt)",
+                border: "1px solid var(--border)",
+                borderRadius: 12,
+                padding: "10px 14px",
+                flexWrap: "wrap",
+              }}
+            >
+              <span style={{ fontSize: 13.5, color: "var(--muted)" }}>
+                Dropped {undoFor.name}. The next search will use that.
               </span>
-              <div style={{ display: "flex", gap: 10 }}>
-                <button
-                  className="ky-btn-outline"
-                  onClick={approveAllPrimary}
-                  disabled={bulkApproved || primaryWaitingCount === 0}
-                  style={{ padding: "10px 16px", fontSize: 14.5, fontWeight: 500, opacity: bulkApproved || primaryWaitingCount === 0 ? 0.6 : 1 }}
-                >
-                  {bulkApproved ? "Approved" : `Approve all ${primaryWaitingCount}`}
-                </button>
-                <button className="ky-btn-outline" onClick={() => setFilter(primaryHypothesis.key)} style={{ padding: "10px 16px", fontSize: 14.5, fontWeight: 500, color: "var(--muted)" }}>
-                  Read them first
-                </button>
-              </div>
+              <button
+                onClick={() => undoReject(undoFor.id)}
+                style={{ marginLeft: "auto", background: "none", border: "none", cursor: "pointer", fontSize: 13.5, fontWeight: 700, color: "var(--ember)" }}
+              >
+                Undo
+              </button>
             </div>
           )}
-        </div>
+
+          {shortcutsOpen && (
+            <div
+              style={{
+                display: "flex",
+                gap: "6px 18px",
+                flexWrap: "wrap",
+                background: "var(--card-alt)",
+                border: "1px solid var(--border)",
+                borderRadius: 12,
+                padding: "12px 14px",
+                fontSize: 13,
+                color: "var(--muted)",
+              }}
+            >
+              {[
+                ["J / K", "next · previous"],
+                ["E", "edit"],
+                ["X", "not a fit"],
+                ["Esc", "close"],
+                ["?", "this"],
+              ].map(([key, what]) => (
+                <span key={key} style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
+                  <kbd
+                    style={{
+                      fontFamily: "inherit",
+                      fontSize: 12,
+                      fontWeight: 700,
+                      color: "var(--ink)",
+                      background: "var(--card)",
+                      border: "1px solid var(--border-strong)",
+                      borderRadius: 5,
+                      padding: "1px 6px",
+                    }}
+                  >
+                    {key}
+                  </kbd>
+                  {what}
+                </span>
+              ))}
+            </div>
+          )}
+
+          {/* Walking the deck. The rail above is for jumping; these are for the ordinary case of
+              working straight through, and they are the reason the screen needs no list column. */}
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, borderTop: "1px solid var(--border)", paddingTop: 16 }}>
+            <button
+              className="ky-btn-outline"
+              onClick={() => selectIndex(Math.max(0, index - 1))}
+              disabled={index === 0}
+              style={{ padding: "10px 16px", fontSize: 14.5, fontWeight: 500, opacity: index === 0 ? 0.45 : 1 }}
+            >
+              ← Previous
+            </button>
+            <span className="ky-tnum" style={{ fontSize: 13, color: "var(--muted)" }}>{index + 1} / {filtered.length}</span>
+            <button
+              className="ky-btn-outline"
+              onClick={() => selectIndex(Math.min(filtered.length - 1, index + 1))}
+              disabled={index >= filtered.length - 1}
+              style={{ padding: "10px 16px", fontSize: 14.5, fontWeight: 500, opacity: index >= filtered.length - 1 ? 0.45 : 1 }}
+            >
+              Next person →
+            </button>
+          </div>
+        </section>
+
+        {primaryHypothesis && primaryWaitingCount > 0 && (
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", borderTop: "1px solid var(--border)", paddingTop: 16, gap: 12, flexWrap: "wrap" }}>
+            <span style={{ fontSize: 14, color: "var(--muted)" }}>
+              {bulkApproved
+                ? `${primaryHypothesis.name} batch approved — spacing them under your daily cap.`
+                : `Approve all ${primaryWaitingCount} to the ${primaryHypothesis.name.toLowerCase()} hypothesis?`}
+            </span>
+            <div style={{ display: "flex", gap: 10 }}>
+              <button
+                className="ky-btn-outline"
+                onClick={approveAllPrimary}
+                disabled={bulkApproved}
+                style={{ padding: "10px 16px", fontSize: 14.5, fontWeight: 500, opacity: bulkApproved ? 0.6 : 1 }}
+              >
+                {bulkApproved ? "Approved" : `Approve all ${primaryWaitingCount}`}
+              </button>
+              <button className="ky-btn-outline" onClick={() => { setFilter(primaryHypothesis.key); setSelected(0); }} style={{ padding: "10px 16px", fontSize: 14.5, fontWeight: 500, color: "var(--muted)" }}>
+                Read them first
+              </button>
+            </div>
+          </div>
+        )}
       </div>
     </DashboardShell>
   );
