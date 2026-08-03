@@ -184,9 +184,16 @@ export function matchedTerms(text: string, keywords: string[]): string[] {
     );
     if (significant.length === 0) continue;
     const hits = significant.filter((w) => present.has(w)).length;
-    // Half the phrase's significant words, so "scattered feature requests everywhere" needs a real
-    // overlap rather than the single word "requests" appearing anywhere in a long post.
-    if (hits / significant.length >= 0.5) out.push(phrase);
+    // How much of the phrase has to be present, and it depends on how long the phrase is.
+    //
+    // A flat 50% is wrong for short phrases: "linear alternative" is two significant words, so one
+    // of them sufficed — and "alternative" alone matched posts about git hosting, Cisco Packet
+    // Tracer and OctoPrint, all of them labelled as wanting a Linear alternative. A two-word phrase
+    // carries no redundancy, so both words must appear. Longer phrases keep the looser rule,
+    // because "scattered feature requests everywhere" should still match someone who wrote three of
+    // those four words, but never on one.
+    const needed = significant.length <= 2 ? significant.length : Math.max(2, Math.ceil(significant.length * 0.5));
+    if (hits >= needed) out.push(phrase);
   }
   return out;
 }
