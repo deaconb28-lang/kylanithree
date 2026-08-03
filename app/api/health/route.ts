@@ -224,18 +224,30 @@ export async function GET(req: NextRequest) {
   try {
     const db = await getDb();
     const corpus = db.collection("corpus");
-    const [documents, classified, people] = await Promise.all([
+    const [documents, classified, people, peopleEnriched] = await Promise.all([
       corpus.estimatedDocumentCount(),
       corpus.countDocuments({ intentType: { $exists: true, $ne: "none" } }),
       db.collection("people").estimatedDocumentCount(),
+      // Enrichment coverage became load-bearing the moment lead cards started rendering bios and
+      // profile links: an unenriched person renders as a bare handle, which is indistinguishable
+      // from a person who has no profile. This is the number that tells the two apart.
+      db.collection("people").countDocuments({ enrichedAt: { $exists: true } }),
     ]);
     const backlog = await corpus.countDocuments({ intentType: { $exists: false } });
+    // Platform mix, because "the crawler is running" and "the crawler is running on more than two
+    // sources" are different questions, and only the second one is about corpus breadth.
+    const byPlatform = await corpus
+      .aggregate<{ _id: string; n: number }>([{ $group: { _id: "$platform", n: { $sum: 1 } } }, { $sort: { n: -1 } }])
+      .toArray()
+      .catch(() => [] as { _id: string; n: number }[]);
     checks.corpus = {
       ms: Date.now() - corpusT0,
       documents,
       classified,
       unclassifiedBacklog: backlog,
       people,
+      peopleEnriched,
+      documentsByPlatform: Object.fromEntries(byPlatform.map((p) => [p._id ?? "unknown", p.n])),
       searchableShare: documents > 0 ? `${Math.round((classified / documents) * 100)}%` : "—",
       note:
         backlog > classified

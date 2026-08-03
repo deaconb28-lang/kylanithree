@@ -120,6 +120,53 @@ Apollo renaming a field would present as "this company has no data" rather than 
 Running the equivalent `curl` locally proves nothing: there is no key in the sandbox, so it just
 returns `{"error":"Api key required"}`.
 
+### Sources: five platforms now, and where the rest were ruled out
+
+`docs/source-evaluation.md` is the record, and it is built from actual probe responses rather than
+recollection — read it before proposing a new source, because most of the obvious ones are already
+answered there with a status code.
+
+Crawling now: **Hacker News, Stack Exchange (166 sites), Discourse (31 forums), Lemmy (17
+instances), Bluesky (20 standing queries)**.
+
+- **Lemmy is the Reddit substitute.** `/api/v3/post/list` is open on 17 of 20 instances probed —
+  no key, no registration, no datacenter-IP block. Reddit itself is paid, blocks server traffic and
+  enforces its terms by revoking access; do not keep re-litigating it.
+- **Bluesky's crawl unit is a phrase, not a place.** A flat network has no communities to
+  enumerate, so the 20 standing queries in `lib/ingest/sources/bluesky.ts` *are* the registry. They
+  are drawn from `NEED_MARKERS`, so the crawl is pre-filtered by the same gate that would otherwise
+  discard most of it. **Seeded only when credentials exist** — two failed polls is all the backoff
+  needs to mark a source blocked, and it would never recover once the password was finally set.
+- **Ruled out, by policy rather than effort: X, Reddit, LinkedIn, Facebook, Threads.** None is a
+  matter of finding the right endpoint. Strongest unbuilt candidate is **GitHub issue search** —
+  open, free, full-text, and every hit has an addressable public profile.
+
+### Identity: two traps, both now covered by tests
+
+`lib/search/__tests__/federation.test.mjs`. Both bugs are the same shape — an identity key built out
+of something that is not identity — and both are silent.
+
+- **Lemmy is federated.** A post fetched from programming.dev is frequently written by someone whose
+  home instance is a different server; `creator.actor_id` is the only global identity. `authorRef` is
+  `homeHost/name`. Keying on the polled host would split one human across every instance that
+  federated their post. This is the Discourse namespacing bug, one layer deeper.
+- **`Candidate.platform` is a display label and was being hashed as identity.** "Forum" means Stack
+  Exchange, Discourse, Lemmy *and* Quora; "X" meant X and Bluesky. So four networks shared one
+  identity space, and — worse — a person found live ("Hacker News") could never dedupe against the
+  same person in the corpus ("hn"), which is exactly what pass 1 merges on. `Candidate.networkId`
+  is now the identity key; `platform` is for display only. **Never fingerprint on `platform`.**
+
+### The people collection is read now (it was write-only for months)
+
+`lib/ingest/people.ts` had been filling `people` every tick — 8,615 rows in production — and nothing
+read any of it. `lib/people/profiles.ts` is the join. Leads carry `person` (display name, their own
+bio, profile URL, tenure), the discover sidebar has a "who turned up" panel beside the communities
+map, and `/api/health` → `checks.corpus.peopleEnriched` is the coverage number to watch: an
+unenriched person renders as a bare handle, which looks identical to a person with no profile.
+
+Absent stays absent — a lead with no enriched person has no `person` key at all rather than an empty
+one, so a card never renders a blank profile block.
+
 ### The classifier is stopped — this is why the corpus looks small
 
 Railway worker logs, every tick:
@@ -127,6 +174,18 @@ Railway worker logs, every tick:
 ```
 ERROR classifying — 400 "Your credit balance is too low to access the Anthropic API."
 ```
+
+**Still true, and now the single biggest lever in the project.** Production as of the last check:
+
+```
+documents 10,052 · classified 1,087 · unclassifiedBacklog 6,500 · searchableShare 11%
+```
+
+Nine of every ten documents crawled are stored and invisible. Adding sources (Lemmy, Bluesky) grows
+the numerator of that fraction and not the denominator until the balance is topped up — the corpus
+gets broader, the *searchable* corpus does not. Note the same key backs `lib/search/websearch.ts`,
+so open-web community discovery is down for the same reason and presents as "no communities found"
+rather than as an error.
 
 **Crawling is fine.** Sources are polling and storing (`stored=26`, `stored=25`, …), people
 enrichment is running at ~22 profiles a tick. What has stopped is classification, and that is the
