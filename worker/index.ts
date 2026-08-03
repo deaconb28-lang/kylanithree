@@ -5,7 +5,15 @@ import { crawlDiscourse } from "../lib/ingest/sources/discourse";
 import { crawlStackExchange } from "../lib/ingest/sources/stackexchange";
 import { crawlLemmy } from "../lib/ingest/sources/lemmy";
 import { crawlBluesky, BLUESKY_STANDING_QUERIES } from "../lib/ingest/sources/bluesky";
-import { backfillEmbeddings, classifyBacklog, ingestDocuments, refreshSourceYield } from "../lib/ingest/pipeline";
+import {
+  backfillEmbeddings,
+  classifyBacklog,
+  ingestDocuments,
+  isInfrastructureFailure,
+  refreshSourceYield,
+  repairClassifyBacklog,
+  unclassifiedCount,
+} from "../lib/ingest/pipeline";
 import { hasEmbeddingProvider } from "../lib/ingest/embed";
 import { isPermanentSourceError } from "../lib/ingest/errors";
 import { enrichPeopleBacklog } from "../lib/ingest/people";
@@ -59,6 +67,22 @@ const DEFAULT_CONCURRENCY = 2;
 // classifying faster would grow the collection and not the corpus — storage with nothing to show
 // for it. 6 batches x 20 documents is 120/tick, which stays ahead of the new poll rate.
 const CLASSIFY_BATCHES_PER_TICK = 6;
+/**
+ * Batches run at once while there is a real backlog to drain.
+ *
+ * Classification was strictly sequential, so a tick could fit about six model calls into its own 60
+ * seconds and no more — fine for keeping up with the crawl, useless for clearing a backlog of
+ * thousands. Three at a time with a deeper batch count turns roughly 120 documents a tick into
+ * roughly 480, which is the difference between draining 6,700 documents in an hour and in five.
+ *
+ * Capped at 3 rather than opened up: this is the only paid step in the worker, and the point is to
+ * drain a backlog in an evening, not to spend a month's classification budget in ten minutes.
+ */
+const CLASSIFY_CONCURRENCY = 3;
+/** Batches per tick while catching up. Ignored once the backlog is small. */
+const CLASSIFY_CATCHUP_BATCHES = 12;
+/** Above this many unclassified documents, the classifier runs in catch-up mode. */
+const CLASSIFY_CATCHUP_THRESHOLD = 500;
 // People looked up per tick. Free, but rate-limited by the platforms rather than by cost, and
 // every one is a separate request — 25/tick is ~36k/day, which drains any realistic backlog while
 // staying far under Stack Exchange's quota and well inside Discourse's tolerance.
@@ -283,19 +307,63 @@ async function tick(): Promise<void> {
     }
   }
 
-  for (let i = 0; i < CLASSIFY_BATCHES_PER_TICK && running; i++) {
-    try {
-      const stats = await classifyBacklog({});
-      if (stats.considered === 0) break;
-      log(
-        `classified considered=${stats.considered} leads=${stats.leads} none=${stats.none} ` +
-          `review=${stats.forReview} embedded=${stats.embedded}`,
-      );
-    } catch (err) {
-      log(`ERROR classifying — ${err instanceof Error ? err.message : err}`);
-      break;
-    }
+  await classifyPass();
+}
+
+/**
+ * Drain the classify backlog for one tick.
+ *
+ * Retrieval only reads documents that have an `intentType`, so this is the step that decides
+ * whether a crawled document is reachable at all. Everything else in the tick grows the collection;
+ * this is what grows the corpus.
+ *
+ * Two modes. Keeping up with the crawl needs a handful of sequential batches. Clearing a backlog of
+ * thousands needs concurrency, because each batch is a model call of ten to twenty seconds and six
+ * of them in series is the whole tick.
+ */
+async function classifyPass(): Promise<void> {
+  let backlog = 0;
+  try {
+    backlog = await unclassifiedCount();
+  } catch {
+    // The count is an optimisation, not a precondition — fall through to the steady-state mode.
   }
+  const catchUp = backlog > CLASSIFY_CATCHUP_THRESHOLD;
+  const budget = catchUp ? CLASSIFY_CATCHUP_BATCHES : CLASSIFY_BATCHES_PER_TICK;
+  const width = catchUp ? CLASSIFY_CONCURRENCY : 1;
+  if (catchUp) log(`classify catch-up: ${backlog} unclassified, ${budget} batches ${width} at a time`);
+
+  // Set by any worker in the group to stop the whole pass: an empty backlog (nothing left to do) or
+  // an infrastructure failure (nothing will work this tick, so retrying it 11 more times is just
+  // noise in the log and load on an API that is already unhappy).
+  let stop = false;
+  let done = 0;
+
+  await Promise.all(
+    Array.from({ length: Math.min(width, budget) }, async () => {
+      for (;;) {
+        if (stop || !running || done >= budget) return;
+        done += 1;
+        try {
+          const stats = await classifyBacklog({});
+          if (stats.considered === 0) {
+            stop = true;
+            return;
+          }
+          log(
+            `classified considered=${stats.considered} leads=${stats.leads} none=${stats.none} ` +
+              `review=${stats.forReview} embedded=${stats.embedded}`,
+          );
+        } catch (err) {
+          log(`ERROR classifying — ${err instanceof Error ? err.message : err}`);
+          // An infrastructure failure ends the pass; a content failure has already charged its
+          // batch an attempt, and the next batch is a different set of documents worth trying.
+          if (isInfrastructureFailure(err)) stop = true;
+          return;
+        }
+      }
+    }),
+  );
 }
 
 async function seedSources(): Promise<void> {
@@ -563,6 +631,28 @@ async function main(): Promise<void> {
     throw err;
   }
   log("indexes ensured, sources seeded");
+
+  // Undo the credit outage before the first tick.
+  //
+  // While the Anthropic balance was empty every batch threw, and the old catch charged all 20 of
+  // its documents a failed attempt — so thousands of good documents burned through all three and
+  // dropped out of the backlog query permanently. They were never judged; they were billed for the
+  // API being down. This puts them back, once, and stamps them so a genuinely unclassifiable
+  // document cannot loop forever on it.
+  try {
+    const repaired = await repairClassifyBacklog();
+    if (repaired.unblocked > 0 || repaired.staged > 0) {
+      log(
+        `classify backlog repaired: ${repaired.unblocked} document(s) unblocked after an outage ` +
+          `burned their retries, ${repaired.staged} staged that had never entered the queue`,
+      );
+    }
+    log(`${await unclassifiedCount()} document(s) waiting on a verdict`);
+  } catch (err) {
+    // Never fatal. A worker that will not start because a repair failed is strictly worse than one
+    // that crawls and classifies at the old rate.
+    log(`WARNING: classify backlog repair failed — ${err instanceof Error ? err.message : err}`);
+  }
 
   // SIGTERM is how Railway asks a service to stop. Finishing the current tick rather than dying
   // mid-batch keeps the cursor consistent — a half-written poll would re-read or skip documents.

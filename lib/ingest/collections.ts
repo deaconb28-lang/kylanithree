@@ -72,6 +72,12 @@ export interface CorpusDoc {
   classifierStage?: 1 | 2 | 3;
   /** Failed classification attempts. Stops one poison document blocking the queue forever. */
   classifyAttempts?: number;
+  /**
+   * Which repair pass has already restored this document's attempts. Stops `repairClassifyBacklog`
+   * giving a genuinely unclassifiable document infinite retries — it gets its three back once per
+   * repair version, never in a loop.
+   */
+  classifyRepair?: number;
   lexiconVersion?: number;
   modelVersion?: string;
   classifiedAt?: Date;

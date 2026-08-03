@@ -160,7 +160,104 @@ async function resolvePeople(docs: CorpusDoc[], scopeByFingerprint?: Map<string,
 
 // Three tries, then the document is left unclassified rather than retried indefinitely. It stays
 // in the corpus as a raw record — useful for author history — it just never enters retrieval.
-const MAX_CLASSIFY_ATTEMPTS = 3;
+export const MAX_CLASSIFY_ATTEMPTS = 3;
+
+/**
+ * Is this failure about the ACCOUNT or the SERVICE rather than about the documents in the batch?
+ *
+ * This distinction was missing and it cost most of the corpus.
+ *
+ * `classifyBacklog` charges every document in a failed batch an attempt, on the reasoning that a
+ * structured-output rejection is caused by one document's content and we cannot tell which. That
+ * reasoning is sound for a content failure and completely wrong for anything else. When the
+ * Anthropic balance ran out, every batch threw `400 "Your credit balance is too low"`, the catch
+ * charged 20 documents an attempt, and the tick did it up to six times — so thousands of perfectly
+ * good documents burned through all three attempts within minutes and were permanently excluded
+ * from the backlog query. The corpus did not stall because classification was slow; it stalled
+ * because an outage was recorded as a verdict about the text.
+ *
+ * So the default is NOT to charge. A document is only penalised when the failure is plausibly its
+ * own fault, which keeps the poison-document protection this counter exists for while making it
+ * impossible for a billing lapse, a rate limit, a network blip or a Anthropic outage to condemn
+ * anything.
+ */
+export function isInfrastructureFailure(err: unknown): boolean {
+  const status = (err as { status?: number })?.status;
+  // 401/403 auth, 404 wrong model, 408 timeout, 429 rate limit, 5xx upstream — none of these ever
+  // say anything about a post's content.
+  if (typeof status === "number" && (status === 401 || status === 403 || status === 404 || status === 408 || status === 429 || status >= 500)) {
+    return true;
+  }
+  const message = (err instanceof Error ? err.message : String(err ?? "")).toLowerCase();
+  // A 400 is the ambiguous one: it covers both "your balance is too low" and a genuine malformed
+  // request. Matched on the message rather than assumed either way.
+  if (/credit balance|billing|quota|insufficient|payment|rate.?limit|overloaded|capacity/.test(message)) return true;
+  if (/timeout|timed out|aborted|socket|econn|enotfound|network|fetch failed/.test(message)) return true;
+  return false;
+}
+
+/**
+ * Bump to run the repair again over documents it has already touched.
+ *
+ * v1 undoes the credit outage: every document that never got a verdict but had burned all three
+ * attempts, plus anything stored before `classifierStage` existed, which the backlog query filters
+ * on and would therefore never see.
+ */
+const CLASSIFY_REPAIR_VERSION = 1;
+
+export type ClassifyRepairStats = { unblocked: number; staged: number };
+
+/**
+ * How many documents are still waiting on a verdict.
+ *
+ * Counted the same way `/api/health` counts it — on the absence of `intentType`, which is the field
+ * retrieval actually filters on. Deliberately NOT counted on the backlog query's own filter: that
+ * would report zero whenever documents are stuck outside the queue, which is precisely the failure
+ * this number is here to notice.
+ */
+export async function unclassifiedCount(): Promise<number> {
+  return (await Corpus()).countDocuments({ intentType: { $exists: false } });
+}
+
+/**
+ * Make every unclassified document eligible for the classifier again.
+ *
+ * Two populations are stuck, for two different reasons, and both are invisible — the collection
+ * simply stops growing its searchable half while the crawler keeps reporting healthy numbers:
+ *
+ *   1. Documents whose `classifyAttempts` hit the maximum during an outage. They were never judged;
+ *      they were charged for the API being unavailable. Resetting the counter is not "retrying a
+ *      failure", it is undoing an accounting error.
+ *   2. Documents with no `classifierStage` at all — anything stored before that field was
+ *      introduced. The backlog query filters on `classifierStage: 1`, so these were never in the
+ *      queue in the first place and no amount of waiting would have classified them.
+ *
+ * Idempotent and bounded. Each document is stamped with the repair version, so a genuinely
+ * unclassifiable document gets its three attempts back exactly once rather than looping forever —
+ * which is the failure the attempt counter exists to prevent, and this must not reintroduce it.
+ */
+export async function repairClassifyBacklog(): Promise<ClassifyRepairStats> {
+  const corpus = await Corpus();
+  const stats: ClassifyRepairStats = { unblocked: 0, staged: 0 };
+
+  const unblocked = await corpus.updateMany(
+    {
+      intentType: { $exists: false },
+      classifyAttempts: { $gte: MAX_CLASSIFY_ATTEMPTS },
+      classifyRepair: { $ne: CLASSIFY_REPAIR_VERSION },
+    },
+    { $set: { classifyAttempts: 0, classifierStage: 1, classifyRepair: CLASSIFY_REPAIR_VERSION } },
+  );
+  stats.unblocked = unblocked.modifiedCount;
+
+  const staged = await corpus.updateMany(
+    { intentType: { $exists: false }, classifierStage: { $exists: false } },
+    { $set: { classifierStage: 1 } },
+  );
+  stats.staged = staged.modifiedCount;
+
+  return stats;
+}
 
 export type ClassifyStats = {
   considered: number;
@@ -210,10 +307,15 @@ export async function classifyBacklog(opts: { limit?: number; timeoutMs?: number
   try {
     verdicts = await classifyBatch({ documents: inputs, timeoutMs });
   } catch (err) {
-    // Charge the whole batch an attempt. A structured-output rejection is a property of one
-    // document's content, but we cannot tell which, so the batch shares the cost — and after a few
-    // tries the offenders drop out and the rest classify normally on their own.
-    await corpus.updateMany({ _id: { $in: pending.map((d) => d._id) } }, { $inc: { classifyAttempts: 1 } });
+    // Charge the batch an attempt ONLY when the failure could be about its content. A
+    // structured-output rejection is a property of one document, and we cannot tell which, so the
+    // batch shares the cost and the offenders drop out after a few tries.
+    //
+    // An infrastructure failure charges nothing. See isInfrastructureFailure — treating an
+    // exhausted balance as a verdict about the text is what condemned most of this corpus.
+    if (!isInfrastructureFailure(err)) {
+      await corpus.updateMany({ _id: { $in: pending.map((d) => d._id) } }, { $inc: { classifyAttempts: 1 } });
+    }
     throw err;
   }
   const byId = new Map(pending.map((d) => [String(d._id), d]));
