@@ -72,6 +72,7 @@ export async function searchHackerNews(opts: {
         venueId: "hn:all",
         venueName: "Hacker News",
         platform: "Hacker News" as const,
+        networkId: "hn",
         author: h.author as string,
         permalink: `https://news.ycombinator.com/item?id=${h.objectID}`,
         postedAt: new Date((h.created_at_i ?? 0) * 1000),

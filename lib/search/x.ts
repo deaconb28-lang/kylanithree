@@ -62,6 +62,7 @@ export async function searchX(opts: {
         venueId: "x:all",
         venueName: "X",
         platform: "X" as const,
+        networkId: "x",
         author: `@${username}`,
         permalink: `https://x.com/${username}/status/${t.id}`,
         postedAt: new Date(t.created_at as string),

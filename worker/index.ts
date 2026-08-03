@@ -3,6 +3,8 @@ import { Sources, ensureIngestIndexes, logScrape, type SourceDoc } from "../lib/
 import { crawlHackerNews } from "../lib/ingest/sources/hackernews";
 import { crawlDiscourse } from "../lib/ingest/sources/discourse";
 import { crawlStackExchange } from "../lib/ingest/sources/stackexchange";
+import { crawlLemmy } from "../lib/ingest/sources/lemmy";
+import { crawlBluesky, BLUESKY_STANDING_QUERIES } from "../lib/ingest/sources/bluesky";
 import { backfillEmbeddings, classifyBacklog, ingestDocuments, refreshSourceYield } from "../lib/ingest/pipeline";
 import { hasEmbeddingProvider } from "../lib/ingest/embed";
 import { isPermanentSourceError } from "../lib/ingest/errors";
@@ -41,6 +43,12 @@ const CONCURRENCY: Record<string, number> = {
   hn: 1,
   stackexchange: 4,
   discourse: 5,
+  // Same reasoning as Discourse: unrelated servers, most of them volunteer-run and small, so the
+  // limit is per-host politeness rather than a shared quota.
+  lemmy: 5,
+  // One account's app password against one API. Bluesky rate-limits per session, and the standing
+  // queries are worth nothing individually, so there is no reason to run them side by side.
+  bluesky: 1,
 };
 const DEFAULT_CONCURRENCY = 2;
 // Classification is the only paid step here. Draining a few batches per tick keeps the backlog
@@ -90,7 +98,12 @@ async function pollSource(source: SourceDoc & { _id?: ObjectId }, correlationId:
           ? await crawlDiscourse({ baseUrl: source.baseUrl ?? `https://${source.identifier}`, cursor: source.lastCursor })
           : source.platform === "stackexchange"
             ? await crawlStackExchange({ site: source.identifier, cursor: source.lastCursor })
-            : null;
+            : source.platform === "lemmy"
+              ? await crawlLemmy({ host: source.identifier, cursor: source.lastCursor })
+              : source.platform === "bluesky"
+                ? // The identifier IS the standing query — Bluesky has no communities to enumerate.
+                  await crawlBluesky({ query: source.identifier, cursor: source.lastCursor })
+                : null;
 
     if (!page) {
       log(`skip ${source.platform}:${source.identifier} — no crawler for this platform`);
@@ -373,6 +386,53 @@ async function seedSources(): Promise<void> {
       docYield30d: 0,
       enabled: true,
     })),
+    // Lemmy — the open-door substitute for the source this product most obviously wants and least
+    // plausibly gets. Reddit is paid, its terms are enforced by revoking access, and it answers 403
+    // to datacenter traffic; Lemmy is the same shape of conversation with none of that.
+    //
+    // Every host below answered `/api/v3/post/list` unauthenticated when this list was written —
+    // 17 of 20 candidates did, and the three that did not failed in three different ways (HTML at
+    // the API path, `instance_is_private`, a Cloudflare interstitial). Verified by calling them,
+    // the same discipline the Stack Exchange and Discourse lists were rebuilt under, and for the
+    // same reason: a hand-written list seeds dead sources that fail silently.
+    ...[
+      "lemmy.world", "lemmy.ml", "sh.itjust.works", "programming.dev", "beehaw.org", "sopuli.xyz",
+      "feddit.org", "lemmy.dbzer0.com", "hexbear.net", "lemmy.zip", "discuss.tchncs.de",
+      "midwest.social", "slrpnk.net", "reddthat.com", "lemmy.sdf.org", "startrek.website",
+      "lemmy.blahaj.zone",
+    ].map((host) => ({
+      platform: "lemmy" as const,
+      identifier: host,
+      accessMethod: "api" as const,
+      baseUrl: `https://${host}`,
+      // 20 minutes. A poll is ONE request returning up to 50 posts — no per-item fetch, unlike
+      // Discourse — so it is much cheaper per document than anything else in the registry, which is
+      // what buys the shorter interval.
+      pollIntervalMinutes: 20,
+      health: "ok" as const,
+      docYield30d: 0,
+      enabled: true,
+    })),
+    // Bluesky, where the crawl unit is a phrase rather than a place. See sources/bluesky.ts —
+    // there are no communities to enumerate on a flat network, so the standing queries ARE the
+    // registry, and a phrase that yields nothing sinks in the scheduler's own ordering.
+    //
+    // Seeded ONLY when credentials exist. Without them every poll throws, and two throws is all it
+    // takes for `pollSource`'s backoff to mark a source `blocked` — so seeding these on a worker
+    // with no app password would bury twenty rows that never recover on their own once the
+    // password is finally set. Nothing is seeded and a warning is logged instead.
+    ...(process.env.BLUESKY_IDENTIFIER && process.env.BLUESKY_APP_PASSWORD ? BLUESKY_STANDING_QUERIES : []).map((query) => ({
+      platform: "bluesky" as const,
+      identifier: query,
+      accessMethod: "api" as const,
+      baseUrl: "https://bsky.social",
+      // 15 minutes across 20 phrases is ~1,900 requests/day on one session, which is well inside
+      // Bluesky's limits and keeps each phrase tracking the live feed rather than backfilling.
+      pollIntervalMinutes: 15,
+      health: "ok" as const,
+      docYield30d: 0,
+      enabled: true,
+    })),
   ];
 
   await sources.bulkWrite(
@@ -392,7 +452,7 @@ async function seedSources(): Promise<void> {
   // Healthy sources only. A degraded or blocked source has had its interval deliberately doubled by
   // the backoff in pollSource, and resetting that here would undo the one mechanism that stops the
   // crawler hammering a host that is already unhappy with it.
-  const intervals: Record<string, number> = { hn: 5, stackexchange: 45, discourse: 30 };
+  const intervals: Record<string, number> = { hn: 5, stackexchange: 45, discourse: 30, lemmy: 20, bluesky: 15 };
   for (const [platform, minutes] of Object.entries(intervals)) {
     const res = await sources.updateMany(
       { platform, health: "ok", pollIntervalMinutes: { $gt: minutes } },
@@ -452,6 +512,13 @@ async function main(): Promise<void> {
     throw new Error(`MONGODB_URI looks wrong — ${uriProblem}`);
   }
   if (!process.env.ANTHROPIC_API_KEY) log("WARNING: ANTHROPIC_API_KEY is not set — crawling will run, classification will not.");
+  if (!process.env.BLUESKY_IDENTIFIER || !process.env.BLUESKY_APP_PASSWORD) {
+    log(
+      "WARNING: BLUESKY_IDENTIFIER / BLUESKY_APP_PASSWORD are not set — the Bluesky standing " +
+        "queries will not be seeded. searchPosts answers 403 to unauthenticated datacenter traffic, " +
+        "so there is no unkeyed mode to fall back to. Set both and restart to add the source.",
+    );
+  }
   if (!process.env.VOYAGE_API_KEY) log("WARNING: VOYAGE_API_KEY is not set — documents will be stored without embeddings, so retrieval stays lexical-only. They are backfilled automatically once the key is added.");
 
   log("worker starting");

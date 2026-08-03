@@ -1,7 +1,8 @@
 import { NextRequest } from "next/server";
 import { Searches, type DiscoverLead } from "@/lib/discover/collections";
 import { analysisFromUrlAlone, fastAnalyze, fetchPageText } from "@/lib/discover/fastAnalyze";
-import { runPassOne } from "@/lib/discover/passOne";
+import { runPassOne, withPeople } from "@/lib/discover/passOne";
+import { leadSummary, matchedTerms } from "@/lib/search/excerpt";
 import { recordNicheCommunities } from "@/lib/discover/nicheMap";
 import { mergeLeads, shallowSurvival } from "@/lib/discover/merge";
 import { track } from "@/lib/discover/analytics";
@@ -189,26 +190,38 @@ export async function GET(req: NextRequest, ctx: { params: Promise<{ id: string 
 
             const mapped: DiscoverLead[] = [];
             for (const l of found) {
-              const fp = personFingerprint({ platform: l.platform, authorHandle: l.author });
+              // The canonical network id, not the display label — same reason as pass 1: a person
+              // found here must dedupe against the same person found in the corpus, and the corpus
+              // stores "hn"/"lemmy"/"stackexchange" where `platform` says "Hacker News"/"Forum".
+              const fp = personFingerprint({ platform: l.networkId ?? l.platform, authorHandle: l.author });
               // No stable identity means no way to dedupe this person against pass 1, so they are
               // dropped rather than shown twice under two spellings.
               if (!fp) continue;
+              // Pass-2 leads used to ship with no `summary` at all, so a card's headline line
+              // appeared on corpus leads and vanished on the deeper ones — the same run producing
+              // two different card shapes depending on which pass found the person.
+              const summary = leadSummary({ body: l.excerpt, keywords: fast.keywords });
               mapped.push({
                 personFingerprint: fp,
                 author: l.author,
                 platform: l.platform,
                 venueName: l.venueName,
                 permalink: l.permalink,
+                summary,
                 excerpt: l.excerpt,
                 postedAt: l.postedAt,
-                matchedFor: fast.keywords.filter((k) => l.excerpt.toLowerCase().includes(k.toLowerCase())),
+                // `matchedTerms`, not a raw substring test. The bare `includes` here is the exact
+                // bug that routed "linear alternative" to anything containing "alternative": it has
+                // no word boundaries and no notion of a phrase being mostly present.
+                matchedFor: matchedTerms(`${summary ?? ""} ${l.excerpt}`, fast.keywords),
                 score: l.confidence,
                 intentType: l.intentTier === "seeking" ? "seeking_tool" : l.intentTier === "complaining" ? "describing_pain" : undefined,
                 engagement: { score: l.score, numComments: l.numComments },
                 foundInPass: 2,
               });
             }
-            await emitLeads(mapped);
+            // Same join pass 1 does, so a person found in either pass arrives with a profile.
+            await emitLeads(await withPeople(mapped));
           } catch (err) {
             // One dead shard degrades the result set; it never fails the run.
             degraded = true;

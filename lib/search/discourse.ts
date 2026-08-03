@@ -76,6 +76,7 @@ export async function searchDiscourse(opts: {
         venueId: `discourse:${host}`,
         venueName: host,
         platform: "Forum" as const,
+        networkId: "discourse",
         author: p.username as string,
         permalink,
         postedAt: new Date(p.created_at as string),

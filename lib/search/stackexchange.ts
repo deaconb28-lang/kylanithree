@@ -63,6 +63,7 @@ export async function searchStackExchange(opts: {
       venueId: `stackexchange:${site}`,
       venueName: `${site}.stackexchange.com`,
       platform: "Forum" as const,
+      networkId: "stackexchange",
       author: i.owner?.display_name as string,
       permalink: i.link ?? `https://${site}.stackexchange.com/q/${i.question_id}`,
       postedAt: new Date((i.creation_date as number) * 1000),

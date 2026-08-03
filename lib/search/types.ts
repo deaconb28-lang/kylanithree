@@ -59,7 +59,23 @@ export type Candidate = {
   id: string;
   venueId: string;
   venueName: string;
+  /** How to LABEL this on screen. A display string — never an identity key. */
   platform: Platform;
+  /**
+   * The network this actually came from, as the crawler names it: "hn", "stackexchange",
+   * "discourse", "lemmy", "bluesky", "reddit", "quora", "x".
+   *
+   * Separate from `platform` because `platform` is a display union in which "Forum" means Stack
+   * Exchange, Discourse, Lemmy AND Quora, and "X" meant both X and Bluesky. `personFingerprint`
+   * hashes platform + handle, so fingerprinting on the display label did two wrong things at once:
+   * it merged four unrelated networks under "Forum", and it guaranteed that a person found live
+   * ("Hacker News") could never dedupe against the same person found in the corpus ("hn") — pass 1
+   * merges those two routes by fingerprint, so every overlap was showing up twice.
+   *
+   * Optional so a source that has not been updated still compiles; the fingerprint call sites fall
+   * back to `platform`, which is the behaviour that existed before this field.
+   */
+  networkId?: string;
   author: string;
   permalink: string;
   postedAt: Date;

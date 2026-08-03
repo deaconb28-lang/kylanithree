@@ -9,9 +9,25 @@ import type { Candidate } from "./types";
 // others, so a single instance already reaches well beyond its own users.
 const INSTANCES = ["https://lemmy.world", "https://lemmy.ml"];
 
+/**
+ * The instance a person actually lives on, from their federated `actor_id`.
+ *
+ * Mirrors `homeHostOf` in lib/ingest/sources/lemmy.ts. Falls back to the first instance only when
+ * `actor_id` is missing — rare, and a stable wrong-but-consistent scope beats an unstable one,
+ * since the fingerprint's whole job is to be the same value every time.
+ */
+function homeHostOf(actorId: string | undefined): string {
+  if (!actorId) return "lemmy.world";
+  try {
+    return new URL(actorId).host;
+  } catch {
+    return "lemmy.world";
+  }
+}
+
 type LemmyPost = {
   post?: { id?: number; name?: string; body?: string | null; published?: string; ap_id?: string };
-  creator?: { name?: string };
+  creator?: { name?: string; actor_id?: string };
   counts?: { score?: number; comments?: number };
   community?: { name?: string };
 };
@@ -43,8 +59,16 @@ export async function searchLemmy(opts: {
     if (settled.status !== "fulfilled") continue;
     for (const p of settled.value) {
       const post = p.post;
-      const author = p.creator?.name;
-      if (!post?.id || !author || !post.published) continue;
+      const name = p.creator?.name;
+      if (!post?.id || !name || !post.published) continue;
+      // Qualified by the person's HOME instance, matching lib/ingest/sources/lemmy.ts exactly.
+      //
+      // This used to be the bare `creator.name`, which is wrong twice over. Lemmy usernames are
+      // unique within an instance and meaningless across them, so every federated "tofu" collapsed
+      // into one person — the same bug the Discourse crawler already had to fix. And because the
+      // fingerprint is platform + handle, a bare name here also failed to match the SAME human
+      // found through the corpus, so the two routes produced two people and neither deduped.
+      const author = `${homeHostOf(p.creator?.actor_id)}/${name}`;
       const permalink = post.ap_id || `${INSTANCES[0]}/post/${post.id}`;
       // Federation means the same post surfaces from several instances — key on its canonical
       // ActivityPub id so it counts once.
@@ -56,6 +80,9 @@ export async function searchLemmy(opts: {
         venueId: "lemmy:all",
         venueName: p.community?.name ? `!${p.community.name} · Lemmy` : "Lemmy",
         platform: "Forum",
+        // The identity key, matching what lib/ingest/sources/lemmy.ts writes into the corpus. The
+        // display label above cannot serve: "Forum" also means Stack Exchange, Discourse and Quora.
+        networkId: "lemmy",
         author,
         permalink,
         postedAt: new Date(post.published),

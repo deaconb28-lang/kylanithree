@@ -21,6 +21,17 @@ export function hasBlueskyCredentials() {
   return Boolean(process.env.BLUESKY_IDENTIFIER && process.env.BLUESKY_APP_PASSWORD);
 }
 
+/**
+ * The session token, shared with the ingest crawler.
+ *
+ * Exported so `lib/ingest/sources/bluesky.ts` reuses this cache rather than keeping its own. Two
+ * modules calling `createSession` against one app password is how an account gets rate-limited on
+ * login — and the crawler runs every few minutes forever, so it would be the one to trip it.
+ */
+export async function blueskySessionJwt(): Promise<string | null> {
+  return getSessionJwt();
+}
+
 async function getSessionJwt(): Promise<string | null> {
   if (!hasBlueskyCredentials()) return null;
   if (tokenCache && tokenCache.expiresAt > Date.now() + 60_000) return tokenCache.jwt;
@@ -94,6 +105,9 @@ export async function searchBluesky(opts: {
         venueId: "bsky:all",
         venueName: "Bluesky",
         platform: "X" as const,
+        // Displayed as "X" because that union has no Bluesky member and short-form is the closest
+        // shape — but it is NOT X, and fingerprinting it as one would merge two networks' handles.
+        networkId: "bluesky",
         author: `@${handle}`,
         permalink: `https://bsky.app/profile/${handle}/post/${rkey}`,
         postedAt: new Date(p.record?.createdAt ?? Date.now()),

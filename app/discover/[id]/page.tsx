@@ -215,6 +215,13 @@ export default function DiscoverPage({ params }: { params: Promise<{ id: string 
                 }}
               />
               <WorkPanel working={working} narration={narration} progress={progress} leadCount={leads.length} field={fieldFor(true)} />
+              <PeoplePanel
+                leads={leads}
+                onJump={(fp) => {
+                  markInteraction(fp);
+                  document.getElementById(`lead-${fp}`)?.scrollIntoView({ behavior: "smooth", block: "center" });
+                }}
+              />
             </div>
 
             <div style={{ display: "flex", flexDirection: "column", gap: 12, minWidth: 0 }}>
@@ -226,7 +233,9 @@ export default function DiscoverPage({ params }: { params: Promise<{ id: string 
               </div>
 
               {leads.map((l) => (
-                <LeadCard key={l.personFingerprint} lead={l} isNew={added.has(l.personFingerprint)} pinned={pinned.has(l.personFingerprint)} onInteract={() => markInteraction(l.personFingerprint)} />
+                <div key={l.personFingerprint} id={`lead-${l.personFingerprint}`}>
+                  <LeadCard lead={l} isNew={added.has(l.personFingerprint)} pinned={pinned.has(l.personFingerprint)} onInteract={() => markInteraction(l.personFingerprint)} />
+                </div>
               ))}
             </div>
           </div>
@@ -372,7 +381,22 @@ function WorkPanel({
   );
 }
 
+/**
+ * One found person.
+ *
+ * The summary leads. It used to sit third — under the author line, above the quote, at the same
+ * weight as everything else — which meant the first thing read on every card was a username, and
+ * "what is this about" had to be reconstructed from a quote fragment. A founder scanning twelve of
+ * these is asking one question, and the card should answer it in its first line.
+ *
+ * The summary is plain text and never in quote marks. When the classifier has run it is that
+ * classifier's neutral third-person restatement — no human wrote that sentence, and putting it in
+ * quotes attributed it to one. The blockquote underneath is the part that is a real quote, always a
+ * literal span of the real post.
+ */
 function LeadCard({ lead, isNew, pinned, onInteract }: { lead: DiscoverLead; isNew: boolean; pinned: boolean; onInteract: () => void }) {
+  const person = lead.person;
+  const name = person?.displayName?.trim();
   return (
     <div
       onMouseEnter={onInteract}
@@ -384,35 +408,116 @@ function LeadCard({ lead, isNew, pinned, onInteract }: { lead: DiscoverLead; isN
         padding: "16px 18px",
         display: "flex",
         flexDirection: "column",
-        gap: 9,
+        gap: 10,
         minWidth: 0,
       }}
     >
-      <div style={{ display: "flex", alignItems: "baseline", gap: 9, flexWrap: "wrap" }}>
-        <span style={{ fontSize: 15, fontWeight: 700 }}>{lead.author}</span>
-        <span style={{ fontSize: 12.5, color: "var(--muted)" }}>{lead.venueName}</span>
-        <span style={{ fontSize: 12.5, color: "var(--muted)", marginLeft: "auto" }}>{relativeTime(lead.postedAt as unknown as string)}</span>
-      </div>
-      {/* What this is about, in one line, read before anything else. Plain text and NOT in quote
-          marks: when the classifier has run this is its own third-person restatement, and wrapping
-          it in quotes attributed a sentence to a person who never wrote it. */}
-      {lead.summary && (
-        <span style={{ fontSize: 14.5, fontWeight: 600, lineHeight: 1.45, color: "var(--ink)" }}>{lead.summary}</span>
+      {lead.summary ? (
+        <div style={{ display: "flex", flexDirection: "column", gap: 5 }}>
+          <span style={{ fontSize: 10.5, fontWeight: 700, letterSpacing: ".1em", color: "var(--muted)" }}>WHAT THEY NEED</span>
+          <span style={{ fontFamily: "var(--font-display)", fontSize: 17.5, fontWeight: 700, lineHeight: 1.32, letterSpacing: "-.01em", color: "var(--ink)" }}>
+            {lead.summary}
+          </span>
+        </div>
+      ) : (
+        // No summary is a real state — a lead can reach the screen before anything has restated it.
+        // The quote steps up to carry the card rather than a placeholder sentence being written for
+        // it, and the label says which kind of text this is so the two cards do not read as one.
+        <span style={{ fontSize: 10.5, fontWeight: 700, letterSpacing: ".1em", color: "var(--muted)" }}>WHAT THEY SAID</span>
       )}
-      {/* The evidence, always a literal span of the real post — this is the part that is a quote. */}
-      <blockquote style={{ margin: 0, borderLeft: "2px solid var(--ember)", padding: "1px 0 1px 13px", fontSize: 13.5, lineHeight: 1.55, color: "var(--muted-strong)" }}>
+
+      <blockquote
+        style={{
+          margin: 0,
+          borderLeft: "2px solid var(--ember)",
+          padding: "1px 0 1px 13px",
+          fontSize: lead.summary ? 13.5 : 15,
+          lineHeight: 1.55,
+          color: lead.summary ? "var(--muted-strong)" : "var(--ink)",
+        }}
+      >
         &ldquo;{lead.excerpt}&rdquo;
       </blockquote>
+
+      {/* Who this is. `person` is present only when the crawler's enrichment pass has actually met
+          them, so a card with nothing known says the handle and the venue and stops — it never
+          renders an empty profile block implying they have no bio. */}
+      <div style={{ display: "flex", flexDirection: "column", gap: 3, minWidth: 0 }}>
+        <div style={{ display: "flex", alignItems: "baseline", gap: 8, flexWrap: "wrap", minWidth: 0 }}>
+          <span style={{ fontSize: 14, fontWeight: 700 }}>{name || lead.author}</span>
+          {name && <span style={{ fontSize: 12.5, color: "var(--muted)" }}>{lead.author}</span>}
+          <span style={{ fontSize: 12.5, color: "var(--muted)" }}>· {lead.venueName}</span>
+          {person?.tenure && <span style={{ fontSize: 12.5, color: "var(--muted)" }}>· {person.tenure}</span>}
+          <span style={{ fontSize: 12.5, color: "var(--muted)", marginLeft: "auto" }}>{relativeTime(lead.postedAt as unknown as string)}</span>
+        </div>
+        {person?.bio && (
+          // Their own words from their own profile, so it is safe to show as a description of them.
+          <span style={{ fontSize: 12.5, color: "var(--muted)", lineHeight: 1.5, display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden" }}>
+            {person.bio}
+          </span>
+        )}
+      </div>
+
       <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
         {lead.matchedFor.slice(0, 3).map((m) => (
           <span key={m} style={{ fontSize: 11.5, fontWeight: 600, color: "var(--muted)", background: "var(--card-alt)", padding: "3px 8px", borderRadius: 999 }}>
             matched &ldquo;{m}&rdquo;
           </span>
         ))}
-        <a href={lead.permalink} target="_blank" rel="noopener noreferrer" onClick={onInteract} style={{ marginLeft: "auto", fontSize: 12.5, fontWeight: 700, color: "var(--ember)" }}>
-          Read the post →
-        </a>
+        <span style={{ marginLeft: "auto", display: "inline-flex", gap: 12 }}>
+          {person?.profileUrl && (
+            <a href={person.profileUrl} target="_blank" rel="noopener noreferrer" onClick={onInteract} style={{ fontSize: 12.5, fontWeight: 600, color: "var(--muted-strong)" }}>
+              Profile
+            </a>
+          )}
+          <a href={lead.permalink} target="_blank" rel="noopener noreferrer" onClick={onInteract} style={{ fontSize: 12.5, fontWeight: 700, color: "var(--ember)" }}>
+            Read the post →
+          </a>
+        </span>
       </div>
+    </div>
+  );
+}
+
+/**
+ * The people found, beside the communities searched.
+ *
+ * The sidebar has always answered "where did we look" and never "who turned up" — which is odd for
+ * a product whose whole promise is individuals rather than lists. Communities are the map; this is
+ * the result. It only ever renders people already on screen in the list below, so it is a second
+ * view of the same truth rather than a second claim.
+ */
+function PeoplePanel({ leads, onJump }: { leads: DiscoverLead[]; onJump: (fingerprint: string) => void }) {
+  if (leads.length === 0) return null;
+  const enriched = leads.filter((l) => l.person?.bio || l.person?.displayName).length;
+
+  return (
+    <div style={{ background: "var(--card)", border: "1px solid var(--border)", borderRadius: 14, padding: "16px 18px", display: "flex", flexDirection: "column", gap: 10 }}>
+      <span style={{ fontSize: 10.5, fontWeight: 700, letterSpacing: ".1em", color: "var(--muted)" }}>WHO TURNED UP</span>
+      <div style={{ display: "flex", flexDirection: "column", gap: 9, maxHeight: 300, overflowY: "auto" }}>
+        {leads.slice(0, 12).map((l) => (
+          <button
+            key={l.personFingerprint}
+            onClick={() => onJump(l.personFingerprint)}
+            style={{ background: "none", border: "none", padding: 0, textAlign: "left", cursor: "pointer", fontFamily: "inherit", display: "flex", flexDirection: "column", gap: 1, minWidth: 0 }}
+          >
+            <span style={{ fontSize: 13.5, fontWeight: 600, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+              {l.person?.displayName?.trim() || l.author}
+            </span>
+            <span style={{ fontSize: 12, color: "var(--muted)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+              {l.person?.bio || l.venueName}
+            </span>
+          </button>
+        ))}
+      </div>
+      {/* Said plainly rather than hidden. Enrichment runs on its own schedule on the worker, so
+          "we have not looked these people up yet" is a normal state — and stating it is better than
+          a sidebar that silently shows handles and lets the reader assume that is all there is. */}
+      {enriched < leads.length && (
+        <span style={{ fontSize: 11.5, color: "var(--faint)", lineHeight: 1.45 }}>
+          {enriched} of {leads.length} looked up so far — the rest are still queued.
+        </span>
+      )}
     </div>
   );
 }

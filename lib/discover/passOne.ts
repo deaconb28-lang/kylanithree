@@ -5,6 +5,7 @@ import { personFingerprint } from "../credits/fingerprint";
 import { lexicalGate, normalizeForIntent, INTENT_WEIGHT, INTENT_TYPES, type IntentType } from "../search/intent";
 import { relevantExcerpt, matchedTerms, leadSummary } from "../search/excerpt";
 import { communitiesForNiche } from "./nicheMap";
+import { peopleByFingerprint, describeTenure } from "../people/profiles";
 import type { DiscoverLead } from "./collections";
 
 // Pass 1. Hard budget 8s, non-negotiable.
@@ -62,6 +63,26 @@ type CorpusRow = {
   postedAt: Date;
 };
 
+/**
+ * How to name a network on screen.
+ *
+ * The corpus stores canonical ids, and the card used to render whatever was stored for anything
+ * that was not Hacker News — so a Stack Exchange lead said "stackexchange" and a Bluesky one said
+ * "bluesky". Fine while the corpus had one non-HN platform; visibly wrong with five.
+ *
+ * Discourse and Lemmy are absent on purpose: their venue is the specific forum or instance, which
+ * is carried in the fingerprint's scope rather than here, so they fall through to the raw id only
+ * when nothing better is known.
+ */
+const VENUE_LABEL: Record<string, string> = {
+  hn: "Hacker News",
+  stackexchange: "Stack Exchange",
+  lemmy: "Lemmy",
+  bluesky: "Bluesky",
+  reddit: "Reddit",
+  quora: "Quora",
+};
+
 /** Shared by both routes so a swap between them cannot change what a lead looks like. */
 function toLeadFromCorpus(r: CorpusRow, keywords: string[]): DiscoverLead {
   // Two different claims, kept apart.
@@ -76,7 +97,7 @@ function toLeadFromCorpus(r: CorpusRow, keywords: string[]): DiscoverLead {
     personFingerprint: r.personFingerprint,
     author: r.authorRef,
     platform: r.platform,
-    venueName: r.platform === "hn" ? "Hacker News" : r.platform,
+    venueName: VENUE_LABEL[r.platform] ?? r.platform,
     permalink: r.url,
     summary,
     excerpt,
@@ -225,6 +246,7 @@ async function fromLiveSources(opts: { keywords: string[]; venueIds: string[]; b
   const toLead = (c: {
     author: string;
     platform: string;
+    networkId?: string;
     venueName: string;
     permalink: string;
     title: string;
@@ -235,7 +257,10 @@ async function fromLiveSources(opts: { keywords: string[]; venueIds: string[]; b
     // The same Stage 1 gate the crawler uses. A live-shallow lead has not been classified yet, so
     // this is the only thing standing between the first screen and noise.
     if (!lexicalGate(normalizeForIntent(text)).passed) return null;
-    const fp = personFingerprint({ platform: c.platform, authorHandle: c.author });
+    // `networkId`, not `platform` — the display label. Pass 1 merges this route's leads with the
+    // corpus route's by fingerprint, and the corpus stores "hn" where this used to say
+    // "Hacker News", so the same person arriving down both routes never matched and shipped twice.
+    const fp = personFingerprint({ platform: c.networkId ?? c.platform, authorHandle: c.author });
     if (!fp) return null;
     const liveBody = c.body || c.title;
     const liveExcerpt = relevantExcerpt(liveBody, queries);
@@ -284,6 +309,39 @@ async function fromLiveSources(opts: { keywords: string[]; venueIds: string[]; b
   const guard = new Promise<DiscoverLead[][]>((resolve) => setTimeout(() => resolve([]), budgetMs));
   const settled = await Promise.race([Promise.all(jobs.map((j) => j.catch(() => []))), guard]);
   return settled.flat().filter((l) => l.matchedFor.length > 0);
+}
+
+/**
+ * Attach the person behind each lead, if the crawler has met them.
+ *
+ * One query for the whole page, and only after the shortlist is cut to TARGET — hydrating every
+ * candidate would be a hundred-odd lookups to decorate twelve rows. Runs last on purpose: a lead is
+ * complete without this, so it is the right shape of work to be able to lose.
+ *
+ * Never throws. `peopleByFingerprint` already swallows its own failure and returns an empty map,
+ * which lands here as "nobody was enriched" — the same state as a cold `people` collection, and the
+ * cards render correctly in both.
+ */
+export async function withPeople(leads: DiscoverLead[]): Promise<DiscoverLead[]> {
+  if (leads.length === 0) return leads;
+  const profiles = await peopleByFingerprint(leads.map((l) => l.personFingerprint));
+  if (profiles.size === 0) return leads;
+
+  return leads.map((l) => {
+    const p = profiles.get(l.personFingerprint);
+    if (!p) return l;
+    const person = {
+      displayName: p.displayName,
+      bio: p.bio,
+      profileUrl: p.profileUrl,
+      tenure: describeTenure(p),
+      reputation: p.reputation,
+    };
+    // A row that exists but carries nothing usable is not worth a `person` key — an empty object
+    // would make `lead.person &&` true in the UI and render a blank block under the quote.
+    const hasAnything = Object.values(person).some((v) => v !== undefined && v !== "");
+    return hasAnything ? { ...l, person } : l;
+  });
 }
 
 export type PassOneResult = {
@@ -383,8 +441,10 @@ export async function runPassOne(opts: {
     if (!existing || l.score > existing.score) byPerson.set(l.personFingerprint, l);
   }
 
+  const shortlist = [...byPerson.values()].sort((a, b) => b.score - a.score).slice(0, TARGET);
+
   return {
-    leads: [...byPerson.values()].sort((a, b) => b.score - a.score).slice(0, TARGET),
+    leads: await withPeople(shortlist),
     usedCorpus,
     usedLive,
     corpusRoute,

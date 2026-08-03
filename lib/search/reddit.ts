@@ -163,6 +163,7 @@ export async function searchPostsInSubreddit(opts: {
       venueId: `reddit:${slug}`,
       venueName: `r/${slug}`,
       platform: "Reddit" as const,
+      networkId: "reddit",
       author: d.author as string,
       permalink: `https://www.reddit.com${d.permalink}`,
       postedAt: new Date((d.created_utc ?? 0) * 1000),

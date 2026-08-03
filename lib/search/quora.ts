@@ -118,6 +118,7 @@ export async function searchQuora(opts: {
       venueId: "quora:all",
       venueName: "Quora",
       platform: "Forum",
+      networkId: "quora",
       author: parsed.author,
       permalink: url,
       postedAt: parsed.postedAt,

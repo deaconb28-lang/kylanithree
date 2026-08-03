@@ -169,9 +169,9 @@ export async function People() {
 }
 
 /**
- * Ordinary btree indexes. The Atlas Search and Vector Search indexes are NOT created here —
- * they are cluster-level resources defined in `docs/atlas-indexes.json` and applied through the
- * Atlas UI or CLI, because the driver cannot create them.
+ * Ordinary btree indexes. The Atlas Search and Vector Search indexes are created separately, by
+ * `lib/ingest/searchIndexes.ts` — the note that used to be here saying the driver cannot create
+ * them was true of the free tier and is not true on M10 with driver v6.
  */
 export async function ensureIngestIndexes(): Promise<void> {
   const [sources, corpus, people, scrapeLog] = await Promise.all([Sources(), Corpus(), People(), ScrapeLog()]);

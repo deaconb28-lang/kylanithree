@@ -166,6 +166,80 @@ async function fetchDiscourse(host: string, username: string): Promise<PersonPro
   };
 }
 
+/**
+ * Lemmy, by federated identity. `scope` is the person's HOME instance, which is frequently not the
+ * instance whose feed surfaced them — see the note at the top of `sources/lemmy.ts`.
+ *
+ * The lookup is made against the home instance directly, so the name is always the local bare form
+ * and the qualified `name@host` shape is never needed. Asking a remote instance would work too, but
+ * only with the qualified name and only while that instance is still federated with this one.
+ */
+async function fetchLemmy(homeHost: string, username: string): Promise<PersonProfile | null> {
+  const data = (await getJson(
+    `https://${homeHost}/api/v3/user?username=${encodeURIComponent(username)}&limit=1`,
+  )) as {
+    person_view?: {
+      person?: {
+        name?: string;
+        display_name?: string;
+        bio?: string;
+        actor_id?: string;
+        published?: string;
+        deleted?: boolean;
+      };
+      counts?: { post_count?: number; comment_count?: number };
+    };
+  } | null;
+  const person = data?.person_view?.person;
+  if (!person?.name || person.deleted) return null;
+  const created = person.published ? Date.parse(person.published) : NaN;
+  const counts = data?.person_view?.counts;
+  const posts =
+    typeof counts?.post_count === "number" || typeof counts?.comment_count === "number"
+      ? (counts?.post_count ?? 0) + (counts?.comment_count ?? 0)
+      : undefined;
+  return {
+    displayName: person.display_name?.trim() || person.name,
+    // Lemmy bios are markdown rather than HTML, but the stripper is harmless on plain text and
+    // catches the inline HTML that markdown permits.
+    bio: textFromHtml(person.bio),
+    profileUrl: person.actor_id ?? `https://${homeHost}/u/${encodeURIComponent(person.name)}`,
+    accountAgeDays: Number.isFinite(created) ? daysSince(created / 1000) : undefined,
+    // No reputation: Lemmy removed public per-user karma totals, and summing the scores of the
+    // posts we happen to have crawled would be a number about our sample, not about the person.
+    platformPostCount: posts,
+  };
+}
+
+/**
+ * Bluesky, by handle. `getProfile` is public and needs no session — unlike `searchPosts`, which is
+ * why the crawler needs credentials and this does not.
+ */
+async function fetchBluesky(handle: string): Promise<PersonProfile | null> {
+  const data = (await getJson(
+    `https://public.api.bsky.app/xrpc/app.bsky.actor.getProfile?actor=${encodeURIComponent(handle)}`,
+  )) as {
+    handle?: string;
+    displayName?: string;
+    description?: string;
+    createdAt?: string;
+    postsCount?: number;
+    followersCount?: number;
+  } | null;
+  if (!data?.handle) return null;
+  const created = data.createdAt ? Date.parse(data.createdAt) : NaN;
+  return {
+    displayName: data.displayName?.trim() || data.handle,
+    bio: data.description?.trim() || undefined,
+    profileUrl: `https://bsky.app/profile/${encodeURIComponent(data.handle)}`,
+    accountAgeDays: Number.isFinite(created) ? daysSince(created / 1000) : undefined,
+    // Followers, not karma. Not comparable across platforms — which the field already warns about —
+    // but it is the only public standing signal Bluesky publishes.
+    reputation: typeof data.followersCount === "number" ? data.followersCount : undefined,
+    platformPostCount: typeof data.postsCount === "number" ? data.postsCount : undefined,
+  };
+}
+
 /** Dispatch. Returns null when the platform is unknown or the person cannot be addressed. */
 export async function fetchPersonProfile(person: PersonDoc): Promise<PersonProfile | null> {
   const scope = person.scope;
@@ -185,6 +259,12 @@ export async function fetchPersonProfile(person: PersonDoc): Promise<PersonProfi
     case "discourse":
       if (!scope) return null;
       return fetchDiscourse(scope, bare);
+    case "lemmy":
+      if (!scope) return null;
+      return fetchLemmy(scope, bare);
+    case "bluesky":
+      // Flat network: the handle is the whole identity and there is no scope to qualify it with.
+      return fetchBluesky(bare);
     default:
       return null;
   }
@@ -228,7 +308,7 @@ export async function enrichPeopleBacklog(opts: { limit?: number } = {}): Promis
     if (!profile) {
       // Count the attempt either way. A person nobody can address is not retried forever just
       // because the reason was "no id" rather than "request failed".
-      const addressable = person.platform === "hn" || Boolean(person.scope);
+      const addressable = person.platform === "hn" || person.platform === "bluesky" || Boolean(person.scope);
       if (!addressable) stats.unaddressable += 1;
       else stats.failed += 1;
       await people.updateOne({ fingerprint: person.fingerprint }, { $inc: { enrichAttempts: 1 } });

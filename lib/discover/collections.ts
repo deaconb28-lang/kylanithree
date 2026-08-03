@@ -40,6 +40,22 @@ export interface DiscoverLead {
    * answer there, rather than a zero that would read as "nobody replied".
    */
   engagement?: { score: number; numComments: number };
+  /**
+   * Who this actually is, from the `people` collection the crawler fills every tick.
+   *
+   * Absent means the enrichment backlog has not reached them, NOT that they have no profile — so a
+   * card renders the venue and the quote and says nothing about the person, rather than implying a
+   * blank profile. Every field inside is independently optional for the same reason.
+   */
+  person?: {
+    displayName?: string;
+    /** Their own words, from their profile. Never generated. */
+    bio?: string;
+    profileUrl?: string;
+    /** Already phrased ("6 years on Hacker News"); absent when the account age is unknown. */
+    tenure?: string;
+    reputation?: number;
+  };
   /** Which pass first surfaced them. Never shown to the user; used for shallow-survival only. */
   foundInPass: Pass;
   /** Filled by pass 2 enrichment; absent on a pass-1 lead and that is fine. */
