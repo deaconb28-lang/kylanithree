@@ -113,9 +113,17 @@ export default function Hero() {
             hundred buyers.
           </h1>
 
+          {/* Three sentences, escalating: how it works, what you control, how long it takes.
+              The line this replaced was three feature-clauses folded into one sentence, and it
+              leaned on "finds them" — a pronoun whose antecedent is up in the headline, across a
+              visual gap wide enough that it read as dangling.
+              "Reads your site" rather than "reads your product", because that is literally what
+              happens: fetchPageText pulls the page. And the approval sentence is new — nothing
+              sends without the founder, which is the most reassuring true thing about this product
+              and was missing from the hero entirely. */}
           <p style={{ margin: "20px auto 0", maxWidth: "30rem", fontSize: 17, lineHeight: 1.6, color: "var(--muted)" }}>
-            Kylani reads your product, then goes and finds them — by name, with a message already written. First hundred in
-            about ten minutes.
+            Kylani reads your site, finds the people already describing the problem you solve, and drafts a reply to what
+            each one said. Nothing sends without your say-so. First hundred, about ten minutes.
           </p>
         </div>
 
