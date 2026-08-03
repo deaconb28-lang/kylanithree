@@ -240,6 +240,41 @@ async function fetchBluesky(handle: string): Promise<PersonProfile | null> {
   };
 }
 
+/**
+ * Reddit, by username, through the same public `.json` path the crawler uses — no OAuth, which
+ * Reddit's Responsible Builder Policy has effectively closed to self-service anyway.
+ *
+ * The bio lives at `subreddit.public_description`, not on the account: a Reddit profile IS a
+ * subreddit (`u/name` is `r/u_name`), and the blurb people write about themselves is that
+ * subreddit's description. Reading `data.description` instead would return an empty string for
+ * almost everyone, which is exactly the kind of quiet nothing this file exists to avoid.
+ */
+async function fetchReddit(username: string): Promise<PersonProfile | null> {
+  const data = (await getJson(`https://www.reddit.com/user/${encodeURIComponent(username)}/about.json?raw_json=1`)) as {
+    data?: {
+      name?: string;
+      created_utc?: number;
+      total_karma?: number;
+      is_suspended?: boolean;
+      subreddit?: { public_description?: string; title?: string };
+    };
+  } | null;
+  const user = data?.data;
+  // A suspended account is not someone to write to, and `getJson` cannot distinguish 404 from a
+  // suspension because both come back as a body rather than a status we keep.
+  if (!user?.name || user.is_suspended) return null;
+  return {
+    displayName: user.name,
+    bio: user.subreddit?.public_description?.trim() || undefined,
+    profileUrl: `https://www.reddit.com/user/${encodeURIComponent(user.name)}`,
+    accountAgeDays: user.created_utc ? daysSince(user.created_utc) : undefined,
+    reputation: typeof user.total_karma === "number" ? user.total_karma : undefined,
+    // No post count: /about.json carries karma totals but not a submission count, and walking
+    // /submitted.json to derive one would be a second request per person against the tightest rate
+    // limit in the registry. Left absent rather than guessed from karma.
+  };
+}
+
 /** Dispatch. Returns null when the platform is unknown or the person cannot be addressed. */
 export async function fetchPersonProfile(person: PersonDoc): Promise<PersonProfile | null> {
   const scope = person.scope;
@@ -265,6 +300,9 @@ export async function fetchPersonProfile(person: PersonDoc): Promise<PersonProfi
     case "bluesky":
       // Flat network: the handle is the whole identity and there is no scope to qualify it with.
       return fetchBluesky(bare);
+    case "reddit":
+      // Flat site, globally unique usernames — same as Bluesky, nothing to qualify.
+      return fetchReddit(bare);
     default:
       return null;
   }
@@ -308,7 +346,11 @@ export async function enrichPeopleBacklog(opts: { limit?: number } = {}): Promis
     if (!profile) {
       // Count the attempt either way. A person nobody can address is not retried forever just
       // because the reason was "no id" rather than "request failed".
-      const addressable = person.platform === "hn" || person.platform === "bluesky" || Boolean(person.scope);
+      const addressable =
+        person.platform === "hn" ||
+        person.platform === "bluesky" ||
+        person.platform === "reddit" ||
+        Boolean(person.scope);
       if (!addressable) stats.unaddressable += 1;
       else stats.failed += 1;
       await people.updateOne({ fingerprint: person.fingerprint }, { $inc: { enrichAttempts: 1 } });

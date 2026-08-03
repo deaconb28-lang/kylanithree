@@ -80,6 +80,7 @@ const PLATFORM_LABEL: Record<string, string> = {
   discourse: "the forum",
   lemmy: "Lemmy",
   bluesky: "Bluesky",
+  reddit: "Reddit",
 };
 
 /**

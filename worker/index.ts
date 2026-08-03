@@ -5,6 +5,7 @@ import { crawlDiscourse } from "../lib/ingest/sources/discourse";
 import { crawlStackExchange } from "../lib/ingest/sources/stackexchange";
 import { crawlLemmy } from "../lib/ingest/sources/lemmy";
 import { crawlBluesky, BLUESKY_STANDING_QUERIES } from "../lib/ingest/sources/bluesky";
+import { crawlReddit } from "../lib/ingest/sources/reddit";
 import { blueskyCredentialProblems } from "../lib/search/bluesky";
 import {
   backfillEmbeddings,
@@ -58,6 +59,11 @@ const CONCURRENCY: Record<string, number> = {
   // One account's app password against one API. Bluesky rate-limits per session, and the standing
   // queries are worth nothing individually, so there is no reason to run them side by side.
   bluesky: 1,
+  // The most timid entry in the registry, on purpose. Unauthenticated Reddit is rate-limited far
+  // harder than a token would be — and Reddit's Responsible Builder Policy means there is no token
+  // to get without an approval process, so this access is the only access. Two concurrent requests
+  // to save a few seconds is not worth being the reason it stops working.
+  reddit: 1,
 };
 const DEFAULT_CONCURRENCY = 2;
 // Classification is the only paid step here. Draining a few batches per tick keeps the backlog
@@ -128,7 +134,9 @@ async function pollSource(source: SourceDoc & { _id?: ObjectId }, correlationId:
               : source.platform === "bluesky"
                 ? // The identifier IS the standing query — Bluesky has no communities to enumerate.
                   await crawlBluesky({ query: source.identifier, cursor: source.lastCursor })
-                : null;
+                : source.platform === "reddit"
+                  ? await crawlReddit({ subreddit: source.identifier, cursor: source.lastCursor })
+                  : null;
 
     if (!page) {
       log(`skip ${source.platform}:${source.identifier} — no crawler for this platform`);
@@ -485,6 +493,45 @@ async function seedSources(): Promise<void> {
     // Bluesky, where the crawl unit is a phrase rather than a place. See sources/bluesky.ts —
     // there are no communities to enumerate on a flat network, so the standing queries ARE the
     // registry, and a phrase that yields nothing sinks in the scheduler's own ordering.
+    // Reddit, through the public `.json` endpoints — see lib/ingest/sources/reddit.ts for why that
+    // path rather than OAuth (the Responsible Builder Policy closed self-service credentials).
+    //
+    // UNVERIFIED, unlike every other list in this file. The Stack Exchange, Discourse and Lemmy
+    // registries were each built by calling the API and keeping what answered; reddit.com is
+    // blocked by the sandbox's egress policy, so these slugs could not be probed the same way.
+    // They are well-known communities rather than guesses, but the honest status is "expected to
+    // exist", and the registry is built to survive being wrong about that: a subreddit that does
+    // not exist answers 404, which `crawlReddit` raises as a PermanentSourceError, and the source
+    // retires itself on its first poll. Read the first tick's log rather than trusting this list.
+    //
+    // Chosen for people describing operational pain in public — the trades, agencies, practices and
+    // back-office roles that buy software to stop doing something by hand. Deliberately not the
+    // big general technology subreddits, which are mostly discussion rather than need.
+    ...[
+      "smallbusiness", "Entrepreneur", "startups", "SaaS", "ecommerce", "shopify", "Etsy",
+      "dropship", "FulfillmentByAmazon", "consulting", "freelance", "marketing", "SEO", "PPC",
+      "digital_marketing", "sales", "accounting", "Bookkeeping", "tax", "humanresources",
+      "recruiting", "projectmanagement", "ProductManagement", "agency", "msp", "sysadmin",
+      "devops", "webdev", "web_design", "graphic_design", "photography", "videography",
+      "copywriting", "nonprofit", "realtors", "RealEstate", "PropertyManagement", "restaurateur",
+      "Construction", "Contractor", "HVAC", "electricians", "Plumbing", "landscaping",
+      "logistics", "supplychain", "manufacturing", "dentistry", "physicaltherapy", "therapists",
+      "lawfirm", "paralegal", "veterinary", "gyms", "personaltraining", "eventplanning",
+      "catering", "Trucking", "fleetmanagement",
+    ].map((subreddit) => ({
+      platform: "reddit" as const,
+      identifier: subreddit,
+      accessMethod: "json" as const,
+      baseUrl: "https://www.reddit.com",
+      // 60 minutes, and this is the arithmetic that keeps the source alive. 60 subreddits at one
+      // request each per hour is one request a minute against an unauthenticated limit that is
+      // measured in tens per minute — an order of magnitude of headroom, deliberately, because
+      // there is no keyed tier to fall back to if Reddit decides this is too much.
+      pollIntervalMinutes: 60,
+      health: "ok" as const,
+      docYield30d: 0,
+      enabled: true,
+    })),
     //
     // Seeded ONLY when credentials exist. Without them every poll throws, and two throws is all it
     // takes for `pollSource`'s backoff to mark a source `blocked` — so seeding these on a worker
@@ -541,7 +588,7 @@ async function seedSources(): Promise<void> {
     }
   }
 
-  const intervals: Record<string, number> = { hn: 5, stackexchange: 45, discourse: 30, lemmy: 20, bluesky: 15 };
+  const intervals: Record<string, number> = { hn: 5, stackexchange: 45, discourse: 30, lemmy: 20, bluesky: 15, reddit: 60 };
   for (const [platform, minutes] of Object.entries(intervals)) {
     const res = await sources.updateMany(
       { platform, health: "ok", pollIntervalMinutes: { $gt: minutes } },

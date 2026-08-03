@@ -20,9 +20,38 @@ terms. Nothing else in the table is affected: every other host answered.
 | **Lemmy** (17 instances) | `/api/v3/post/list` answers unauthenticated on 17 of 20 instances probed. Reddit-shaped conversation — a person posting a problem into a topical community — with no key, no registration and no datacenter-IP block. This is the closest thing to the source the product most wants and least plausibly gets. |
 | **Bluesky** (20 standing queries) | Already a query-time source; now crawled continuously. The crawl unit is a *phrase* rather than a place, because a flat network has no communities to enumerate. |
 
-Both are seeded in `worker/index.ts`. Bluesky is seeded **only when credentials exist** — see the
-note there; two failed polls is all it takes for the backoff to mark a source blocked, so seeding
-it on a worker with no app password would bury twenty rows that never recover.
+| **Reddit** (60 subreddits) | The public `.json` endpoints, which need no key at all. See below. |
+
+Bluesky is seeded **only when credentials exist** — see the note in `worker/index.ts`; two failed
+polls is all it takes for the backoff to mark a source blocked, so seeding it on a worker with no
+app password would bury twenty rows that never recover.
+
+### Reddit: the API is closed, the JSON is not
+
+These are two different things and conflating them is what produced the earlier blanket "no".
+
+- **The API** now sits behind the Responsible Builder Policy: self-service OAuth credentials are
+  effectively closed, individual approval is required, and the commercial tier is metered at roughly
+  $0.24 per 1,000 requests. That remains ruled out.
+- **The public JSON** is the oldest thing Reddit has — append `.json` to any public URL and get the
+  listing the browser renders. No key, no registration, no approval. That is what
+  `lib/ingest/sources/reddit.ts` uses.
+
+The trade is real and is written into the crawler's settings rather than hidden: unauthenticated
+access is rate-limited far harder than a token would be, and Reddit is known to block datacenter
+egress ranges. So Reddit is the most timid source in the registry — one request per poll, one poll
+at a time, a 60-minute interval, which is about one request a minute across all 60 subreddits.
+
+Two failure modes are handled differently on purpose. A **404** means the subreddit does not exist
+and raises `PermanentSourceError`, retiring that row on its first poll. A **403** is left transient,
+because it means either "private or quarantined" or "Reddit is refusing this IP" — and retiring on
+the second reading would silently delete the whole Reddit registry the first time the worker's
+egress range got blocked.
+
+**The subreddit list is the one registry in this repo that was NOT verified by calling the API**,
+because reddit.com is blocked by the sandbox's egress policy. The slugs are well-known communities
+rather than guesses, but the honest status is "expected to exist" — the first tick's log is the
+record, since anything wrong retires itself with a 404.
 
 ---
 
@@ -32,7 +61,7 @@ it on a worker with no app password would bury twenty rows that never recover.
 
 | Source | Result | Verdict |
 |---|---|---|
-| Reddit `search.json` | `403` — **sandbox egress, inconclusive** | **No.** Not on this evidence, but the answer is still no: the API is paid, its terms are enforced by revoking access outright, and it blocks datacenter traffic. Lemmy is the substitute, and that is why it was built. |
+| Reddit `search.json` | `403` — **sandbox egress, inconclusive** | **Built, via the public `.json` path.** See below — the earlier "no" was about the *API*, and the JSON endpoints are a different door. |
 | X `api/v2/tweets/search/recent` | `401 Unauthorized` | **No.** Needs a paid bearer token; recent-search is not on any free tier. Revisit only if someone is paying for it. |
 | Bluesky `searchPosts` | `200` on `describeServer`; search needs a session | **Built.** 403s unauthenticated from a datacenter IP — a free account and app password fix it. |
 | Mastodon `/api/v2/search` | `200` but `statuses: []` | **Not yet.** Status search is disabled for unauthenticated callers — it answers 200 with nothing rather than erroring, which is exactly the silent-zero failure this codebase keeps removing. Would need a token per instance. Worth a second look. |
@@ -101,7 +130,10 @@ None of these find a person describing a problem. They answer "who is this compa
 
 ## What not to revisit
 
-X, Reddit, LinkedIn, Facebook and Threads are all blocked by policy rather than by effort. None of
-them is a matter of finding the right endpoint: X and Reddit are paid, LinkedIn and Meta have no
-public search over other people's posts at any price, and all four enforce their terms by removing
-access. The engineering answer to "we want Reddit" is Lemmy, which is why it is now built.
+X, LinkedIn, Facebook and Threads are blocked by policy rather than by effort. None is a matter of
+finding the right endpoint: X is paid, LinkedIn and Meta have no public search over other people's
+posts at any price, and all of them enforce their terms by removing access.
+
+Reddit came off this list — but only its **API** was ever the problem, and only the **JSON path** is
+now built. Do not re-open the OAuth question without an approved Responsible Builder application;
+the answer there has not changed.
