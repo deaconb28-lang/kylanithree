@@ -167,7 +167,53 @@ unenriched person renders as a bare handle, which looks identical to a person wi
 Absent stays absent — a lead with no enriched person has no `person` key at all rather than an empty
 one, so a card never renders a blank profile block.
 
-### The classifier is stopped — this is why the corpus looks small
+### The classifier: the outage condemned 6,500 documents, and that is now repaired
+
+**Resolved, and the cause is worth knowing because it was not what it looked like.** The Anthropic
+balance has been topped up and classification is draining normally. But topping it up alone would
+have fixed almost nothing, because the outage had already done permanent damage:
+
+```
+classify backlog repaired: 6500 document(s) unblocked after an outage burned their retries,
+0 staged that had never entered the queue
+```
+
+`classifyBacklog` charges every document in a failed batch a retry attempt — correct for a
+structured-output rejection, which is caused by one document's content with no way to tell which.
+But while the balance was empty *every* batch threw `400 "Your credit balance is too low"`, and the
+catch charged all 20 documents an attempt, six times a minute. **6,500 of 6,745 unclassified
+documents — 96% — burned through all three attempts and dropped out of the backlog query
+permanently.** They were never judged; they were billed for the API being down.
+
+The tell, visible in the logs before the fix, was batches reporting `considered=3` and
+`considered=5` against a batch size of 20 while 6,691 documents sat unclassified. The queue was not
+slow, it was nearly empty. Every batch now reports `considered=20`.
+
+- `isInfrastructureFailure()` in `lib/ingest/pipeline.ts` gates the charge. Billing, auth, rate
+  limits, capacity, 5xx and network faults charge nothing; an **unrecognised** error still charges,
+  deliberately — wrongly charging costs three retries, wrongly exempting reintroduces the
+  infinite-retry bug the counter exists to prevent. `classifyAttempts.test.mjs` pins the rule.
+- `repairClassifyBacklog()` runs at worker startup and stamps each document with
+  `CLASSIFY_REPAIR_VERSION`, so an unclassifiable document gets its retries back once rather than
+  looping. Bump the constant to run it again.
+- Draining is concurrent while the backlog is over 500: 12 batches, 3 at a time, ~180 docs/min
+  gross. **Measured** net drain ~57/min, because the crawler adds ~120/min at the same time.
+
+**"Classified" will never approach 100%, and that is the filter working.** Retrieval reads only
+documents with an `intentType` other than `none`, and observed batches run roughly 25-30% leads —
+some come back `leads=18 none=2`, others `leads=0 none=20`. Draining the backlog should take
+`searchableShare` from 11% to somewhere near 30%, not to 100%. A document classified `none` is a
+post where nobody expressed a need; keeping it out of retrieval is the point.
+
+### Bluesky is built but NOT running — the credentials do not exist on Railway
+
+`list-variables` on `kylani-ingest-worker` returns: `ANTHROPIC_API_KEY`, `EXPLEE_API_KEY`,
+`MONGODB_URI`, `STACKEXCHANGE_KEY`, `VOYAGE_API_KEY`, `apollo_one` and the Railway built-ins.
+**There is no `BLUESKY_IDENTIFIER` or `BLUESKY_APP_PASSWORD`**, so the worker logs the warning and
+seeds 215 sources instead of 235. The earlier note in this file implying those were set was wrong.
+Set both on the worker and restart to add the source; `searchPosts` has no unauthenticated mode.
+
+### (Historical) The classifier was stopped — this is why the corpus looked small
 
 Railway worker logs, every tick:
 
@@ -175,17 +221,12 @@ Railway worker logs, every tick:
 ERROR classifying — 400 "Your credit balance is too low to access the Anthropic API."
 ```
 
-**Still true, and now the single biggest lever in the project.** Production as of the last check:
+**No longer true — see the section above.** Kept because the diagnosis is a useful worked example:
+the visible symptom ("the corpus is small") had two causes stacked on top of each other, and fixing
+only the obvious one would have left 96% of the backlog condemned with no error anywhere to show it.
 
-```
-documents 10,052 · classified 1,087 · unclassifiedBacklog 6,500 · searchableShare 11%
-```
-
-Nine of every ten documents crawled are stored and invisible. Adding sources (Lemmy, Bluesky) grows
-the numerator of that fraction and not the denominator until the balance is topped up — the corpus
-gets broader, the *searchable* corpus does not. Note the same key backs `lib/search/websearch.ts`,
-so open-web community discovery is down for the same reason and presents as "no communities found"
-rather than as an error.
+Note the same key backs `lib/search/websearch.ts`, so while the balance was empty open-web community
+discovery was down too, and it presented as "no communities found" rather than as an error.
 
 **Crawling is fine.** Sources are polling and storing (`stored=26`, `stored=25`, …), people
 enrichment is running at ~22 profiles a tick. What has stopped is classification, and that is the
