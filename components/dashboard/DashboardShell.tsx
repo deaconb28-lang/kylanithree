@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { signOut, useSession } from "next-auth/react";
 import { useEffect, useState, type ReactNode } from "react";
-import { HomeIcon, QueueIcon } from "../icons/NavIcons";
+import { HomeIcon, QueueIcon, SettingsIcon } from "../icons/NavIcons";
 import KylaniLogo from "../icons/KylaniLogo";
 import { clearOnboardingResult, readOnboardingResult } from "../../lib/onboardingStorage";
 import { PLAN_COPY } from "../../lib/billing";
@@ -19,6 +19,20 @@ type Surface = "campaign" | "work" | "map" | "findings" | "channels" | "suppress
 // screen as sections; Channels and Suppressed live behind the campaign settings gear.
 const OUTREACH_NAV: { key: Surface; href: string; label: string; Icon: typeof QueueIcon }[] = [
   { key: "work", href: "/campaign/work", label: "Work", Icon: QueueIcon },
+];
+
+/**
+ * The phone tab bar, which is NOT the sidebar minus the chrome.
+ *
+ * The sidebar carries Campaign as a separate link above the nav list, and the tab bar renders
+ * OUTREACH_NAV — so when that list collapsed to a single entry, the phone was left with one tab and
+ * no route back to the campaign at all, because the only Campaign link was inside an aside that is
+ * display:none under 900px. Both surfaces belong here explicitly.
+ */
+const MOBILE_NAV: { key: Surface; href: string; label: string; Icon: typeof QueueIcon }[] = [
+  { key: "campaign", href: "/campaign", label: "Campaign", Icon: HomeIcon },
+  { key: "work", href: "/campaign/work", label: "Work", Icon: QueueIcon },
+  { key: "settings", href: "/app/settings", label: "Settings", Icon: SettingsIcon },
 ];
 
 /**
@@ -381,14 +395,14 @@ export default function DashboardShell({
           left: 0,
           right: 0,
           zIndex: 40,
-          justifyContent: "space-between",
-          padding: "10px 20px calc(10px + env(safe-area-inset-bottom))",
+          justifyContent: "space-around",
+          padding: "10px 12px calc(10px + env(safe-area-inset-bottom))",
           background: "var(--card-veil)",
           borderTop: "1px solid var(--border)",
           backdropFilter: "blur(8px)",
         }}
       >
-        {OUTREACH_NAV.map(({ key, href, label, Icon }) => {
+        {MOBILE_NAV.map(({ key, href, label, Icon }) => {
           const isActive = key === active;
           return (
             <Link

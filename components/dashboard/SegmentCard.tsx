@@ -66,10 +66,16 @@ function Ring({ share, label }: { share: number; label: string }) {
   );
 }
 
+// A verb derived from what actually happened, not a badge someone assigned.
+//
+// "Most likely" and "Testing" were static labels: a buyer with zero leads and a buyer with forty
+// both read "Most likely" if the hypothesis had been written that way. These describe evidence —
+// `gaining` needs replies, `unproven` says outright that nothing has come back yet — so the card
+// can never claim more confidence than the rows behind it support.
 const STATUS_COPY: Record<Segment["status"], { label: string; color: string; bg: string }> = {
-  primary: { label: "Most likely", color: "var(--ember)", bg: "var(--ember-tint)" },
-  learning: { label: "Testing", color: "var(--muted)", bg: "var(--active-bg)" },
-  paused: { label: "Paused", color: "var(--muted)", bg: "var(--active-bg)" },
+  primary: { label: "gaining", color: "var(--green)", bg: "var(--green-tint)" },
+  learning: { label: "unproven", color: "var(--muted)", bg: "var(--active-bg)" },
+  paused: { label: "retired", color: "var(--muted)", bg: "var(--active-bg)" },
 };
 
 export default function SegmentCard({ segment }: { segment: Segment }) {
@@ -120,9 +126,17 @@ export default function SegmentCard({ segment }: { segment: Segment }) {
             </span>
           )}
         </div>
-      ) : (
+      ) : segment.leadCount === 0 ? (
         <span style={{ fontSize: 13.5, color: "var(--muted)", lineHeight: 1.5 }}>
-          No one found for this buyer yet — it stays here so a later search can prove or drop it.
+          No one matched yet — the next search will test this.
+        </span>
+      ) : (
+        // Keyed on leadCount, NOT on the absence of a quote. A buyer with six leads whose strongest
+        // one happened to carry no excerpt used to render a ring reading "6" directly above the
+        // sentence "No one found for this buyer yet" — the card contradicting itself in two lines.
+        // People found without a usable quote is a real state, and it says so.
+        <span style={{ fontSize: 13.5, color: "var(--muted)", lineHeight: 1.5 }}>
+          {segment.leadCount} {segment.leadCount === 1 ? "person" : "people"} matched, none with a quotable line yet.
         </span>
       )}
 

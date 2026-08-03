@@ -4,21 +4,28 @@ import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import DashboardShell from "../../components/dashboard/DashboardShell";
 import SearchAgainButton from "../../components/dashboard/SearchAgainButton";
-import StepRail, { type Step } from "../../components/dashboard/StepRail";
 import SegmentCard, { type Segment } from "../../components/dashboard/SegmentCard";
+import Funnel from "../../components/campaign/Funnel";
+import Stage from "../../components/campaign/Stage";
 import { relativeTime } from "../../lib/relativeTime";
 import type { CommunityDoc, FindingDoc, HypothesisDoc, LeadDoc } from "../../lib/collections";
 
-// Home, rebuilt around the pipeline instead of around an inbox.
+// The campaign command center.
 //
-// The old version opened with "today's move" and stacked six unrelated cards — a next action, a
-// queue preview, community stats, findings, revenue — which meant the first question it answered
-// was "what should I do in the next 30 seconds" and it never answered "what has Kylani actually
-// found for me". That is backwards for a page you visit once a day.
+// It answers three questions, in this order: is the machine running, what does it believe about my
+// buyer, what does it need from me. Everything else is a destination you enter from here.
 //
-// Now it reads in the same order the product works: where the run got to (the rail), who Kylani
-// thinks buys this and what those people actually said (the segment cards), then what is waiting.
-// One idea per block, no cross-referencing.
+// Structurally it is a pipeline narrative rather than a dashboard — the same shape the product
+// actually performs, with a real artifact at each step instead of a count of one. "4 buyers" tells
+// a founder nothing; "operations manager at a 20-100 person 3PL, 41 contacted, both replies came
+// from here" tells them everything. What it replaced was a six-step setup checklist that stayed on
+// screen after it was finished, a grid of six metric tiles, and three unrelated panels.
+//
+// Two rules hold the visual together. Exactly ONE element carries the coral accent — the funnel
+// stage that needs the person, or the primary button when nothing does; coral previously appeared
+// on the sidebar, a tile, a badge and a CTA simultaneously, which meant it signalled nothing. And
+// the serif is for the campaign name, funnel counts and section headings only; everything
+// functional is sans.
 
 type Lead = LeadDoc & { _id: string };
 type Community = CommunityDoc & { _id: string };
@@ -125,236 +132,240 @@ export default function HomePage() {
   }
 
   const waiting = leads.filter((l) => l.status === "waiting");
-  const drafted = leads.filter((l) => l.draft);
-  const latestFinding = findings[0] ?? null;
-  // Null rather than 0% until something has actually been sent — a 0% reply rate on zero sends is
-  // a fabricated stat, not a bad result.
-  const replyRate =
-    campaign.stats.contactedTotal > 0 ? Math.round((campaign.stats.repliedTotal / campaign.stats.contactedTotal) * 100) : null;
+  const approved = leads.filter((l) => l.status === "approved" || l.status === "sent");
+  const replied = leads.filter((l) => l.status === "replied");
 
-  // Each stage is done only if it actually produced something. The first stage that hasn't is the
-  // one you're on — which is also the honest answer when a search came back thin.
-  const doneFlags = [
-    Boolean(campaign.whatYouSell),
-    hypotheses.length > 0,
-    communities.length > 0,
-    leads.length > 0,
-    drafted.length > 0,
-    findings.length > 0,
-  ];
-  const activeIndex = doneFlags.findIndex((d) => !d);
-  const STEP_META: { label: string; href?: string; detail: string }[] = [
-    { label: "Read your product", href: "/app/settings", detail: campaign.productUrl },
-    { label: "Name your buyers", href: "/app/map", detail: `${hypotheses.length} ${hypotheses.length === 1 ? "buyer" : "buyers"}` },
-    { label: "Find their communities", href: "/app/map", detail: `${communities.length} found` },
-    { label: "Find real people", href: "/campaign/work", detail: `${leads.length} found` },
-    { label: "Write the first draft", href: "/campaign/work", detail: `${drafted.length} drafted` },
-    { label: "Learn what works", href: "/app/findings", detail: `${findings.length} ${findings.length === 1 ? "finding" : "findings"}` },
-  ];
-  const steps: Step[] = STEP_META.map((m, i) => ({
-    n: i + 1,
-    label: m.label,
-    href: m.href,
-    detail: doneFlags[i] ? m.detail : undefined,
-    state: doneFlags[i] ? "done" : i === activeIndex ? "active" : "pending",
-  }));
-
-  const topWaiting = [...waiting].sort((a, b) => scoreOf(b) - scoreOf(a)).slice(0, 3);
   // Ranked by people actually found there, not by member count — a huge community that yielded
   // nobody is not a good place to spend time, whatever its size says.
   const topCommunities = communities
     .map((c) => ({ ...c, leadCount: leads.filter((l) => l.source === c.name).length }))
     .sort((a, b) => b.leadCount - a.leadCount)
-    .slice(0, 5);
+    .slice(0, 6);
+
+  const topWaiting = [...waiting].sort((a, b) => scoreOf(b) - scoreOf(a)).slice(0, 3);
+
+  // The five stages of one pipeline. Sent and Replied point at Work filtered by status rather than
+  // at a Threads screen, because sending is blocked on Google's OAuth verification and a link to an
+  // empty room is worse than a link to a real filter.
+  const stages = [
+    { key: "communities", label: "Communities", value: communities.length, href: "#communities" },
+    { key: "found", label: "People found", value: leads.length, href: "/campaign/work" },
+    { key: "approve", label: "To approve", value: waiting.length, href: "/campaign/work?filter=unread" },
+    { key: "sent", label: "Sent", value: approved.length, href: "/campaign/work?filter=all" },
+    { key: "replied", label: "Replied", value: replied.length, href: "/campaign/work?filter=all" },
+  ];
+
+  // One accent, and it goes to whatever needs a human. A reply outranks a new lead; if neither is
+  // waiting the accent leaves the funnel entirely and the primary button carries it alone.
+  const accentKey = replied.length > 0 ? "replied" : waiting.length > 0 ? "approve" : null;
+
+  // The status line is the only place that says what Kylani is doing right now.
+  const status =
+    waiting.length > 0
+      ? { dot: "var(--ember)", text: `${waiting.length} waiting for you` }
+      : leads.length > 0
+        ? { dot: "var(--green)", text: "up to date — nothing waiting" }
+        : { dot: "var(--muted)", text: "no people found yet" };
 
   return (
     <DashboardShell active="campaign">
-      <div style={{ padding: "32px 5vw 60px", boxSizing: "border-box", display: "flex", flexDirection: "column", gap: 26, maxWidth: 1220, margin: "0 auto" }}>
-        <div style={{ display: "flex", alignItems: "flex-end", justifyContent: "space-between", gap: 16, flexWrap: "wrap" }}>
-          <div style={{ display: "flex", flexDirection: "column", gap: 5, minWidth: 0 }}>
-            <span style={{ fontSize: 13, color: "var(--muted)" }}>{campaign.productUrl}</span>
-            <h1 style={{ fontFamily: "var(--font-display)", fontWeight: 800, fontSize: "clamp(24px,3vw,32px)", lineHeight: 1.08, letterSpacing: "-.03em", margin: 0 }}>
-              {campaign.productName}
-            </h1>
-            {campaign.whatYouSell && (
-              <span style={{ fontSize: 14.5, color: "var(--muted)", lineHeight: 1.5, maxWidth: "62ch" }}>{campaign.whatYouSell}</span>
-            )}
-          </div>
-          <SearchAgainButton />
-        </div>
-
-        <div style={{ background: "var(--card)", border: "1px solid var(--border)", borderRadius: 16, padding: "14px 18px" }}>
-          <StepRail steps={steps} />
-        </div>
-
-        {/* The numbers that answer "how is this actually going" without opening another page.
-            Every one is counted from real rows — a zero shows as a zero. */}
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(150px, 1fr))", gap: 12 }}>
-          {(
-            [
-              { label: "People found", value: leads.length, href: "/campaign/work" },
-              { label: "Waiting on you", value: waiting.length, href: "/campaign/work", accent: waiting.length > 0 },
-              { label: "Communities", value: communities.length, href: "/app/map" },
-              { label: "Approved", value: leads.filter((l) => l.status === "approved" || l.status === "sent").length, href: "/campaign/work" },
-              { label: "Replied", value: leads.filter((l) => l.status === "replied").length, href: "/campaign/work" },
-              { label: "Reply rate", value: replyRate === null ? "—" : `${replyRate}%`, href: "/app/findings" },
-            ] as { label: string; value: number | string; href: string; accent?: boolean }[]
-          ).map((s) => (
-            <Link
-              key={s.label}
-              href={s.href}
-              style={{
-                background: "var(--card)",
-                border: `1px solid ${s.accent ? "var(--ember)" : "var(--border)"}`,
-                borderRadius: 14,
-                padding: "14px 16px",
-                display: "flex",
-                flexDirection: "column",
-                gap: 2,
-                textDecoration: "none",
-                color: "inherit",
-                minWidth: 0,
-              }}
-            >
-              <span
-                style={{
-                  fontFamily: "var(--font-display)",
-                  fontWeight: 800,
-                  fontSize: 26,
-                  letterSpacing: "-.03em",
-                  fontVariantNumeric: "tabular-nums",
-                  color: s.accent ? "var(--ember)" : "var(--ink)",
-                }}
-              >
-                {s.value}
-              </span>
-              <span style={{ fontSize: 12.5, color: "var(--muted)" }}>{s.label}</span>
-            </Link>
-          ))}
-        </div>
-
-        <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
-          <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", gap: 16, flexWrap: "wrap" }}>
-            <h2 style={{ fontFamily: "var(--font-display)", fontWeight: 700, fontSize: 19, letterSpacing: "-.02em", margin: 0 }}>
-              Who Kylani thinks buys this
-            </h2>
-            <span style={{ fontSize: 13, color: "var(--muted)" }}>
-              {leads.length} {leads.length === 1 ? "person" : "people"} across {communities.length}{" "}
-              {communities.length === 1 ? "community" : "communities"}
+      <div
+        style={{
+          padding: "clamp(20px, 4vw, 34px) clamp(16px, 5vw, 40px) 72px",
+          boxSizing: "border-box",
+          display: "flex",
+          flexDirection: "column",
+          gap: 22,
+          maxWidth: 1080,
+          margin: "0 auto",
+        }}
+      >
+        <header style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
+            <span style={{ display: "inline-flex", alignItems: "center", gap: 7, fontSize: 13, color: "var(--muted)" }}>
+              <span style={{ width: 7, height: 7, borderRadius: 999, background: status.dot, flexShrink: 0 }} />
+              {status.text}
             </span>
+            <Link
+              href="/app/settings"
+              aria-label="Campaign settings"
+              style={{ marginLeft: "auto", fontSize: 13, color: "var(--muted)", display: "inline-flex", alignItems: "center", gap: 6 }}
+            >
+              Settings
+            </Link>
           </div>
 
-          {segments.length > 0 ? (
-            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(320px, 1fr))", gap: 16 }}>
-              {segments.map((s) => (
-                <SegmentCard key={s.key} segment={s} />
-              ))}
-            </div>
-          ) : (
-            <div style={{ background: "var(--card)", border: "1px solid var(--border)", borderRadius: 16, padding: "26px 24px", display: "flex", flexDirection: "column", gap: 8 }}>
-              <span style={{ fontFamily: "var(--font-display)", fontWeight: 700, fontSize: 16 }}>No buyers named yet.</span>
-              <span style={{ fontSize: 14, color: "var(--muted)", lineHeight: 1.55 }}>
-                Run a search and Kylani will propose two to four buyer hypotheses, then go looking for real people
-                matching each one.
-              </span>
-            </div>
-          )}
-        </div>
+          <h1
+            style={{
+              fontFamily: "var(--font-display)",
+              fontWeight: 700,
+              fontSize: "clamp(26px, 5vw, 38px)",
+              lineHeight: 1.05,
+              letterSpacing: "-.03em",
+              margin: 0,
+            }}
+          >
+            {campaign.productName}
+          </h1>
+          <span style={{ fontSize: 13.5, color: "var(--muted)", wordBreak: "break-word" }}>{campaign.productUrl}</span>
+        </header>
 
-        <div style={{ display: "grid", gridTemplateColumns: "1.5fr 1fr 1fr", gap: 16 }} className="home-lower">
-          <style>{`
-            @media (max-width: 1100px) { .home-lower { grid-template-columns: 1fr 1fr !important; } }
-            @media (max-width: 760px) { .home-lower { grid-template-columns: 1fr !important; } }
-          `}</style>
+        <Funnel stages={stages} accentKey={accentKey} />
 
-          <div style={{ background: "var(--card)", border: "1px solid var(--border)", borderRadius: 16, padding: "20px 22px", display: "flex", flexDirection: "column", gap: 14, minWidth: 0 }}>
-            <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", gap: 12 }}>
-              <span style={{ fontFamily: "var(--font-display)", fontWeight: 700, fontSize: 16, letterSpacing: "-.02em" }}>Waiting on you</span>
-              <span style={{ fontSize: 13, color: "var(--muted)" }}>{waiting.length} to review</span>
-            </div>
-            {topWaiting.length > 0 ? (
-              <>
-                <div style={{ display: "flex", flexDirection: "column" }}>
-                  {topWaiting.map((l, i) => (
-                    <Link
-                      key={l._id}
-                      href="/campaign/work"
-                      style={{
-                        display: "flex",
-                        alignItems: "baseline",
-                        gap: 10,
-                        padding: "11px 0",
-                        borderTop: i === 0 ? "none" : "1px solid var(--border)",
-                        textDecoration: "none",
-                        color: "inherit",
-                        minWidth: 0,
-                      }}
-                    >
-                      <span style={{ fontSize: 14.5, fontWeight: 600, whiteSpace: "nowrap" }}>{l.name}</span>
-                      <span style={{ fontSize: 13, color: "var(--muted)", flex: 1, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                        {l.excerpt ?? l.detail}
-                      </span>
-                      <span style={{ fontSize: 12, color: "var(--muted)", whiteSpace: "nowrap" }}>
-                        {l.postedAt ? relativeTime(l.postedAt as unknown as string) : l.source}
-                      </span>
-                    </Link>
-                  ))}
-                </div>
-                <Link href="/campaign/work" className="ky-btn-ember" style={{ padding: "10px 18px", fontSize: 14, border: "none", alignSelf: "flex-start" }}>
-                  Open the queue
-                </Link>
-              </>
-            ) : (
-              <span style={{ fontSize: 14, color: "var(--muted)", lineHeight: 1.55 }}>
-                {leads.length === 0
-                  ? "Nothing found yet. Run a search and anything real will land here."
-                  : "Everything found so far has been reviewed. Search again when you want more."}
-              </span>
-            )}
+        {/* Exactly one primary button on this screen. */}
+        {waiting.length > 0 ? (
+          <Link
+            href="/campaign/work?filter=unread"
+            className="ky-btn-ember ky-primary-cta"
+            style={{ padding: "15px 24px", fontSize: 15.5, fontWeight: 600, border: "none" }}
+          >
+            Work the queue · {waiting.length} waiting
+          </Link>
+        ) : (
+          <div style={{ display: "flex" }}>
+            <SearchAgainButton />
           </div>
+        )}
 
-          <div style={{ background: "var(--card)", border: "1px solid var(--border)", borderRadius: 16, padding: "20px 22px", display: "flex", flexDirection: "column", gap: 12, minWidth: 0 }}>
-            <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", gap: 12 }}>
-              <span style={{ fontFamily: "var(--font-display)", fontWeight: 700, fontSize: 16, letterSpacing: "-.02em" }}>Where they are</span>
-              <Link href="/app/map" style={{ fontSize: 13, color: "var(--ember)", fontWeight: 700, textDecoration: "none" }}>
-                Map →
+        <div style={{ display: "flex", flexDirection: "column", marginTop: 8 }}>
+          <Stage
+            n={1}
+            title="What Kylani read"
+            aside={
+              <Link href="/app/settings" style={{ fontSize: 13, color: "var(--muted)" }}>
+                Correct this
               </Link>
-            </div>
+            }
+          >
+            <p style={{ margin: 0, fontSize: 15, lineHeight: 1.6, color: "var(--muted-strong)", maxWidth: "64ch" }}>
+              {campaign.whatYouSell || "Nothing read yet — run a search and Kylani will describe your product back to you."}
+            </p>
+          </Stage>
+
+          <Stage
+            n={2}
+            title="Who buys this"
+            aside={
+              segments.length > 0 ? (
+                <span style={{ fontSize: 13, color: "var(--muted)" }}>
+                  {segments.length} {segments.length === 1 ? "theory" : "theories"}
+                </span>
+              ) : null
+            }
+          >
+            {segments.length > 0 ? (
+              <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 300px), 1fr))", gap: 14 }}>
+                {segments.map((s) => (
+                  <SegmentCard key={s.key} segment={s} />
+                ))}
+              </div>
+            ) : (
+              <EmptyNote>Run a search and Kylani will propose two to four buyers, then go looking for real people matching each one.</EmptyNote>
+            )}
+          </Stage>
+
+          <Stage
+            n={3}
+            title="Who it found"
+            aside={
+              leads.length > 0 ? (
+                <Link href="/campaign/work" style={{ fontSize: 13, fontWeight: 600, color: "var(--ember)" }}>
+                  See all {leads.length} →
+                </Link>
+              ) : null
+            }
+          >
+            {topWaiting.length > 0 ? (
+              <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+                {topWaiting.map((l) => (
+                  <Link
+                    key={l._id}
+                    href="/campaign/work"
+                    style={{
+                      display: "flex",
+                      flexDirection: "column",
+                      gap: 6,
+                      background: "var(--card)",
+                      border: "1px solid var(--border)",
+                      borderRadius: 14,
+                      padding: "14px 16px",
+                      textDecoration: "none",
+                      color: "inherit",
+                      minWidth: 0,
+                    }}
+                  >
+                    <span style={{ display: "flex", alignItems: "baseline", gap: 8, flexWrap: "wrap" }}>
+                      <span style={{ fontSize: 14.5, fontWeight: 700 }}>{l.name}</span>
+                      {l.role && <span style={{ fontSize: 13, color: "var(--muted)" }}>{l.role}</span>}
+                      {l.company && <span style={{ fontSize: 13, color: "var(--muted)" }}>· {l.company}</span>}
+                    </span>
+                    {l.excerpt && (
+                      <span style={{ fontSize: 13.5, lineHeight: 1.5, color: "var(--muted-strong)" }}>{l.excerpt}</span>
+                    )}
+                    {l.source && <span style={{ fontSize: 12, color: "var(--faint)" }}>{l.source}</span>}
+                  </Link>
+                ))}
+              </div>
+            ) : (
+              <EmptyNote>Nothing waiting. Kylani is still searching — new people land here.</EmptyNote>
+            )}
+          </Stage>
+
+          <Stage
+            n={4}
+            title="Where they are"
+            aside={<span id="communities" style={{ fontSize: 13, color: "var(--muted)" }}>{communities.length} searched</span>}
+          >
             {topCommunities.length > 0 ? (
               <div style={{ display: "flex", flexDirection: "column" }}>
                 {topCommunities.map((c, i) => (
-                  <div key={c._id} style={{ display: "flex", alignItems: "baseline", gap: 10, padding: "9px 0", borderTop: i === 0 ? "none" : "1px solid var(--border)", minWidth: 0 }}>
-                    <span style={{ fontSize: 14, fontWeight: 600, flex: 1, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{c.name}</span>
-                    <span style={{ fontSize: 12.5, color: "var(--muted)", whiteSpace: "nowrap" }}>{c.leadCount} found</span>
-                    <span style={{ fontSize: 11.5, fontWeight: 700, color: c.fit === "Strong fit" ? "var(--green)" : "var(--muted)", whiteSpace: "nowrap" }}>{c.fit}</span>
+                  <div
+                    key={c._id}
+                    style={{
+                      display: "flex",
+                      alignItems: "baseline",
+                      gap: 12,
+                      padding: "11px 2px",
+                      borderTop: i === 0 ? "none" : "1px solid var(--border)",
+                      minWidth: 0,
+                    }}
+                  >
+                    <span style={{ fontSize: 14, fontWeight: 600, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                      {c.name}
+                    </span>
+                    <span className="ky-tnum" style={{ marginLeft: "auto", fontSize: 13, color: c.leadCount > 0 ? "var(--ink)" : "var(--faint)", flexShrink: 0 }}>
+                      {c.leadCount > 0 ? `${c.leadCount} ${c.leadCount === 1 ? "person" : "people"}` : "none yet"}
+                    </span>
                   </div>
                 ))}
               </div>
             ) : (
-              <span style={{ fontSize: 14, color: "var(--muted)", lineHeight: 1.55 }}>No communities confirmed yet.</span>
+              <EmptyNote>No communities resolved yet.</EmptyNote>
             )}
-          </div>
+          </Stage>
 
-          <div style={{ background: "var(--card)", border: "1px solid var(--border)", borderRadius: 16, padding: "20px 22px", display: "flex", flexDirection: "column", gap: 12, minWidth: 0 }}>
-            <span style={{ fontFamily: "var(--font-display)", fontWeight: 700, fontSize: 16, letterSpacing: "-.02em" }}>What Kylani has learnt</span>
-            {latestFinding ? (
-              <>
-                <span style={{ fontSize: 11.5, fontWeight: 700, letterSpacing: ".08em", color: "var(--ember)" }}>{latestFinding.tag.toUpperCase()}</span>
-                <span style={{ fontFamily: "var(--font-display)", fontWeight: 700, fontSize: 16.5, lineHeight: 1.3, letterSpacing: "-.02em" }}>{latestFinding.headline}</span>
-                <span style={{ fontSize: 13.5, color: "var(--muted)", lineHeight: 1.55 }}>{latestFinding.body}</span>
-                <Link href="/app/findings" style={{ fontSize: 13, fontWeight: 700, color: "var(--ember)", textDecoration: "none", marginTop: "auto" }}>
-                  All findings →
-                </Link>
-              </>
-            ) : (
-              <span style={{ fontSize: 14, color: "var(--muted)", lineHeight: 1.55 }}>
-                Nothing yet — findings come from real replies, so this fills in once messages have gone out and people
-                have answered. Kylani won&apos;t guess at them.
-              </span>
-            )}
-          </div>
+          {findings.length > 0 && (
+            <Stage n={5} title="What Kylani learned">
+              <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+                {findings.slice(0, 4).map((f) => (
+                  <div key={f._id} style={{ display: "flex", flexDirection: "column", gap: 3, minWidth: 0 }}>
+                    <span style={{ fontSize: 14, fontWeight: 600 }}>{f.headline}</span>
+                    <span style={{ fontSize: 13.5, lineHeight: 1.5, color: "var(--muted)" }}>{f.body}</span>
+                    <span style={{ fontSize: 12, color: "var(--faint)" }}>{relativeTime(f.createdAt as unknown as string)}</span>
+                  </div>
+                ))}
+              </div>
+            </Stage>
+          )}
         </div>
       </div>
     </DashboardShell>
+  );
+}
+
+/** A quiet, verb-led note for a section with nothing in it yet. Never an apology. */
+function EmptyNote({ children }: { children: React.ReactNode }) {
+  return (
+    <p style={{ margin: 0, fontSize: 14, lineHeight: 1.55, color: "var(--muted)", maxWidth: "58ch" }}>{children}</p>
   );
 }

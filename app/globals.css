@@ -552,3 +552,17 @@ button {
     display: none !important;
   }
 }
+
+/* The one primary button on a screen.
+   Full width on a phone, where a thumb-height target spanning the column is the right shape, and
+   sized to its own text above that — a 1000px-wide button on a desktop reads as a banner, not as a
+   control, and the eye stops trusting it as the single thing to press. */
+.ky-primary-cta {
+  width: 100%;
+}
+@media (min-width: 700px) {
+  .ky-primary-cta {
+    width: auto;
+    align-self: flex-start;
+  }
+}
