@@ -5,6 +5,7 @@ import { crawlDiscourse } from "../lib/ingest/sources/discourse";
 import { crawlStackExchange } from "../lib/ingest/sources/stackexchange";
 import { crawlLemmy } from "../lib/ingest/sources/lemmy";
 import { crawlBluesky, BLUESKY_STANDING_QUERIES } from "../lib/ingest/sources/bluesky";
+import { blueskyCredentialProblems } from "../lib/search/bluesky";
 import {
   backfillEmbeddings,
   classifyBacklog,
@@ -520,6 +521,26 @@ async function seedSources(): Promise<void> {
   // Healthy sources only. A degraded or blocked source has had its interval deliberately doubled by
   // the backoff in pollSource, and resetting that here would undo the one mechanism that stops the
   // crawler hammering a host that is already unhappy with it.
+  // A credential that was wrong is not a source that is dead.
+  //
+  // While BLUESKY_APP_PASSWORD was rejected, every standing query failed twice and the backoff in
+  // pollSource marked it `blocked` — correct behaviour for a host that does not want us, and wrong
+  // here, because the fix is a variable rather than anything about the source. Nothing else would
+  // ever revive them: `dueSources` skips blocked rows, so fixing the password would have left 20
+  // permanently silent sources and no error to explain it.
+  //
+  // Only Bluesky, and only when credentials are present. This does NOT touch the other platforms'
+  // backoff, which is doing exactly its job.
+  if (process.env.BLUESKY_IDENTIFIER && process.env.BLUESKY_APP_PASSWORD) {
+    const revived = await sources.updateMany(
+      { platform: "bluesky", health: { $in: ["degraded", "blocked"] } },
+      { $set: { health: "ok", pollIntervalMinutes: 15, updatedAt: new Date() } },
+    );
+    if (revived.modifiedCount > 0) {
+      log(`revived ${revived.modifiedCount} bluesky source(s) that a rejected credential had blocked`);
+    }
+  }
+
   const intervals: Record<string, number> = { hn: 5, stackexchange: 45, discourse: 30, lemmy: 20, bluesky: 15 };
   for (const [platform, minutes] of Object.entries(intervals)) {
     const res = await sources.updateMany(
@@ -586,6 +607,13 @@ async function main(): Promise<void> {
         "queries will not be seeded. searchPosts answers 403 to unauthenticated datacenter traffic, " +
         "so there is no unkeyed mode to fall back to. Set both and restart to add the source.",
     );
+  } else {
+    // Checked at startup rather than only on the first 401, because a shape problem is knowable
+    // before spending a login attempt on it — and a bad login is the expensive kind of mistake
+    // here, since Bluesky rate-limits failures and the account is shared by 20 sources.
+    for (const problem of blueskyCredentialProblems()) {
+      log(`WARNING: ${problem}`);
+    }
   }
   if (!process.env.VOYAGE_API_KEY) log("WARNING: VOYAGE_API_KEY is not set — documents will be stored without embeddings, so retrieval stays lexical-only. They are backfilled automatically once the key is added.");
 

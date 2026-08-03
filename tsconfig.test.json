@@ -36,6 +36,7 @@
     "lib/ingest/pipeline.ts",
     "lib/ingest/sources/hackernews.ts",
     "lib/ingest/sources/lemmy.ts",
+    "lib/search/bluesky.ts",
     "lib/ingest/people.ts",
     "lib/people/profiles.ts",
     "lib/ingest/classify.ts",
