@@ -393,7 +393,14 @@ function LeadCard({ lead, isNew, pinned, onInteract }: { lead: DiscoverLead; isN
         <span style={{ fontSize: 12.5, color: "var(--muted)" }}>{lead.venueName}</span>
         <span style={{ fontSize: 12.5, color: "var(--muted)", marginLeft: "auto" }}>{relativeTime(lead.postedAt as unknown as string)}</span>
       </div>
-      <blockquote style={{ margin: 0, borderLeft: "2px solid var(--ember)", padding: "1px 0 1px 13px", fontSize: 14, lineHeight: 1.55, color: "var(--muted-strong)" }}>
+      {/* What this is about, in one line, read before anything else. Plain text and NOT in quote
+          marks: when the classifier has run this is its own third-person restatement, and wrapping
+          it in quotes attributed a sentence to a person who never wrote it. */}
+      {lead.summary && (
+        <span style={{ fontSize: 14.5, fontWeight: 600, lineHeight: 1.45, color: "var(--ink)" }}>{lead.summary}</span>
+      )}
+      {/* The evidence, always a literal span of the real post — this is the part that is a quote. */}
+      <blockquote style={{ margin: 0, borderLeft: "2px solid var(--ember)", padding: "1px 0 1px 13px", fontSize: 13.5, lineHeight: 1.55, color: "var(--muted-strong)" }}>
         &ldquo;{lead.excerpt}&rdquo;
       </blockquote>
       <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>

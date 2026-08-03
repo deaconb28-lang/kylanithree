@@ -207,3 +207,51 @@ export function vocabularyOverlap(text: string, keywords: string[]): number {
   for (const w of wanted) if (present.has(w)) hits += 1;
   return hits / wanted.size;
 }
+
+/**
+ * One line saying what a lead is about, so a founder knows before reading the quote.
+ *
+ * This is a SUMMARY and must never be rendered as a quotation. The classifier's `problemStatement`
+ * is a neutral third-person restatement — "needs a project management tool to replace Microsoft
+ * Project" — and it was previously being shown inside quote marks on the card, attributing to a
+ * real person a sentence they never wrote. Summary and quote are different claims and the UI now
+ * keeps them apart: this on top in plain text, the verbatim span below in the blockquote.
+ *
+ * When there is no classifier statement (an unclassified document, or a live-shallow lead), the
+ * single most relevant sentence of the post stands in. That is still the person's own words, which
+ * is a weaker summary but never a wrong one.
+ */
+export function leadSummary(opts: {
+  /** The classifier's restatement, when the document has one. */
+  problemStatement?: string;
+  body: string;
+  keywords: string[];
+  maxChars?: number;
+}): string | undefined {
+  const { problemStatement, body, keywords, maxChars = 150 } = opts;
+
+  const stated = normalize(problemStatement ?? "");
+  if (stated.length >= 15) return trimTo(stated, maxChars);
+
+  // Fall back to the best-matching single sentence — deliberately one, not a window: the job here
+  // is "what is this about", and two sentences is already the quote's job.
+  const sentences = splitSentences(body).filter((s) => s.length >= 25);
+  if (sentences.length === 0) return undefined;
+
+  const wanted = terms(keywords);
+  if (wanted.size === 0) return trimTo(sentences[0], maxChars);
+
+  let best = sentences[0];
+  let bestScore = -1;
+  for (const s of sentences) {
+    const sw = new Set(s.toLowerCase().match(/[a-z0-9']+/g) ?? []);
+    let hits = 0;
+    for (const w of wanted) if (sw.has(w)) hits += 1;
+    const score = hits === 0 ? 0 : hits + hits / Math.sqrt(sw.size || 1);
+    if (score > bestScore) {
+      bestScore = score;
+      best = s;
+    }
+  }
+  return bestScore > 0 ? trimTo(best, maxChars) : undefined;
+}

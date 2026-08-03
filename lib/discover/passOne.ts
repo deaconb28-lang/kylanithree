@@ -3,7 +3,7 @@ import { searchHackerNews } from "../search/hackernews";
 import { searchStackExchange } from "../search/stackexchange";
 import { personFingerprint } from "../credits/fingerprint";
 import { lexicalGate, normalizeForIntent, INTENT_WEIGHT, INTENT_TYPES, type IntentType } from "../search/intent";
-import { relevantExcerpt, matchedTerms } from "../search/excerpt";
+import { relevantExcerpt, matchedTerms, leadSummary } from "../search/excerpt";
 import { communitiesForNiche } from "./nicheMap";
 import type { DiscoverLead } from "./collections";
 
@@ -64,17 +64,21 @@ type CorpusRow = {
 
 /** Shared by both routes so a swap between them cannot change what a lead looks like. */
 function toLeadFromCorpus(r: CorpusRow, keywords: string[]): DiscoverLead {
-  // The classifier's one-line restatement when it made one, otherwise the span of the real post
-  // most about this founder's vocabulary. Both are the person's actual problem rather than the
-  // first 240 characters, which on a forum is usually a greeting.
-  const source = r.problemStatement || r.body;
-  const excerpt = relevantExcerpt(source, keywords);
+  // Two different claims, kept apart.
+  //
+  // The summary says what this is about and is allowed to be the classifier's third-person
+  // restatement. The excerpt is evidence and must always come from the BODY — it used to be
+  // `problemStatement || body`, so a classified lead had its restatement rendered inside quote
+  // marks on the card, attributing to a real person a sentence nobody wrote.
+  const summary = leadSummary({ problemStatement: r.problemStatement, body: r.body, keywords });
+  const excerpt = relevantExcerpt(r.body, keywords);
   return {
     personFingerprint: r.personFingerprint,
     author: r.authorRef,
     platform: r.platform,
     venueName: r.platform === "hn" ? "Hacker News" : r.platform,
     permalink: r.url,
+    summary,
     excerpt,
     postedAt: r.postedAt,
     intentType: r.intentType,
@@ -85,7 +89,7 @@ function toLeadFromCorpus(r: CorpusRow, keywords: string[]): DiscoverLead {
     // somewhere far from the quote on screen. A claim the reader cannot check against the text in
     // front of them is worse than no claim — it is the fabrication problem wearing a different hat.
     // Deriving it from the shown text makes the reason verifiable by looking.
-    matchedFor: matchedTerms(excerpt, keywords),
+    matchedFor: matchedTerms(`${summary ?? ""} ${excerpt}`, keywords),
     score: scoreOf(r.intentType, r.postedAt),
     foundInPass: 1 as const,
   };
@@ -233,16 +237,20 @@ async function fromLiveSources(opts: { keywords: string[]; venueIds: string[]; b
     if (!lexicalGate(normalizeForIntent(text)).passed) return null;
     const fp = personFingerprint({ platform: c.platform, authorHandle: c.author });
     if (!fp) return null;
-    const liveExcerpt = relevantExcerpt(c.body || c.title, queries);
+    const liveBody = c.body || c.title;
+    const liveExcerpt = relevantExcerpt(liveBody, queries);
+    // No classifier has seen this yet, so the summary is the post's own strongest sentence.
+    const liveSummary = leadSummary({ body: liveBody, keywords: queries });
     return {
       personFingerprint: fp,
       author: c.author,
       platform: c.platform,
       venueName: c.venueName,
       permalink: c.permalink,
+      summary: liveSummary,
       excerpt: liveExcerpt,
       postedAt: c.postedAt,
-      matchedFor: matchedTerms(liveExcerpt, queries),
+      matchedFor: matchedTerms(`${liveSummary ?? ""} ${liveExcerpt}`, queries),
       score: scoreOf(undefined, c.postedAt),
       foundInPass: 1 as const,
     };

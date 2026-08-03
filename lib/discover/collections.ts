@@ -19,6 +19,15 @@ export interface DiscoverLead {
   venueName: string;
   /** The evidence post. */
   permalink: string;
+  /**
+   * One line saying what this is about, so a founder knows before reading the quote.
+   *
+   * NOT a quotation and must never be rendered as one — when the classifier has run this is its
+   * neutral third-person restatement, which no human wrote. The card shows it as plain text above
+   * the blockquote, which carries `excerpt`.
+   */
+  summary?: string;
+  /** A literal span of the real post. Always the person's own words. */
   excerpt: string;
   postedAt: Date;
   intentType?: IntentType;
