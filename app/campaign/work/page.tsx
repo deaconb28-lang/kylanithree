@@ -6,8 +6,9 @@ import DashboardShell from "../../../components/dashboard/DashboardShell";
 import SearchAgainButton from "../../../components/dashboard/SearchAgainButton";
 import type { HypothesisDoc, LeadDoc, SuppressionReason } from "../../../lib/collections";
 import { SUPPRESSION_REASON_LABELS, SUPPRESSION_REASONS } from "../../../lib/suppression";
-import LeadStars from "../../../components/LeadStars";
-import { starsFromTotal, labelFromTotal } from "../../../lib/search/leadScore";
+import LeadTier from "../../../components/LeadTier";
+import { tierFromTotal } from "../../../lib/search/leadScore";
+import { REJECTION_REASONS, REJECTION_REASON_LABELS, type RejectionReason } from "../../../lib/leads/rejectionReasons";
 import { relativeTime } from "../../../lib/relativeTime";
 
 type Lead = LeadDoc & { _id: string };
@@ -32,6 +33,12 @@ function QueueInner() {
   const [sendNote, setSendNote] = useState<string | null>(null);
   const [rewriting, setRewriting] = useState(false);
   const [suppressPickerOpen, setSuppressPickerOpen] = useState(false);
+  // "Not a fit" cannot complete without a reason, so the action bar is REPLACED by a reason row
+  // rather than opening a modal over it. A modal would be a second decision on top of the first;
+  // this is the same decision, finished.
+  const [rejectingId, setRejectingId] = useState<string | null>(null);
+  const [undoFor, setUndoFor] = useState<{ id: string; name: string } | null>(null);
+  const [shortcutsOpen, setShortcutsOpen] = useState(false);
   // Carried over from Today, which this screen replaced. It is the only place the product asks
   // whether an approved message actually worked, and that answer is the ground truth every
   // ranking signal is ultimately trying to predict — losing it in the merge would have been the
@@ -99,21 +106,10 @@ function QueueInner() {
     // Quality bands first: with everything that qualified now shipping, triage is by score rather
     // than by scrolling. Persona filters still work for slicing a specific hypothesis.
     if (filter === "all") return leads;
-    if (filter === "hot") return leads.filter((l) => (l.stars ?? 0) >= 4);
-    if (filter === "strong") return leads.filter((l) => (l.stars ?? 0) >= 3);
+    if (filter === "strong") return leads.filter((l) => tierFromTotal(l.scoreTotal ?? 0) === "strong");
     if (filter === "unread") return leads.filter((l) => l.status === "waiting");
     return leads.filter((l) => l.hypothesisKey === filter);
   }, [leads, filter]);
-
-  const scoreOf = (l: Lead) =>
-    typeof l.scoreTotal === "number"
-      ? {
-          total: l.scoreTotal,
-          stars: l.stars ?? starsFromTotal(l.scoreTotal),
-          label: l.scoreLabel ?? labelFromTotal(l.scoreTotal),
-          breakdown: l.scoreBreakdown ?? { intent: 0, confidence: 0, recency: 0, engagement: 0 },
-        }
-      : null;
 
   const primaryHypothesis = hypotheses?.find((h) => h.status === "primary") ?? null;
   const primaryWaitingCount = leads?.filter((l) => l.hypothesisKey === primaryHypothesis?.key && l.status === "waiting").length ?? 0;
@@ -127,6 +123,48 @@ function QueueInner() {
       </div>
     </div>
   );
+
+  // Keyboard operation of the whole queue.
+  //
+  // Registered after the handlers it calls so it closes over the current lead rather than a stale
+  // one. Every shortcut is a no-op while typing — a founder editing a draft must be able to write
+  // the letter "e" without the app interpreting it — and while the reason row is open, because a
+  // stray key there would drop someone with a reason they did not choose.
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      const el = e.target as HTMLElement | null;
+      const typing = el && (el.tagName === "INPUT" || el.tagName === "TEXTAREA" || el.isContentEditable);
+      if (typing || e.metaKey || e.ctrlKey || e.altKey) return;
+      if (rejectingId) {
+        if (e.key === "Escape") setRejectingId(null);
+        return;
+      }
+
+      const k = e.key.toLowerCase();
+      if (k === "j" || e.key === "ArrowDown") {
+        e.preventDefault();
+        setSelected((i) => Math.min(i + 1, Math.max(0, filtered.length - 1)));
+      } else if (k === "k" || e.key === "ArrowUp") {
+        e.preventDefault();
+        setSelected((i) => Math.max(0, i - 1));
+      } else if (k === "e") {
+        e.preventDefault();
+        setEditing((v) => !v);
+      } else if (k === "x") {
+        e.preventDefault();
+        const current = filtered[Math.min(selected, Math.max(0, filtered.length - 1))];
+        if (current && current.status === "waiting") setRejectingId(current._id);
+      } else if (k === "?") {
+        e.preventDefault();
+        setShortcutsOpen((v) => !v);
+      } else if (e.key === "Escape") {
+        setShortcutsOpen(false);
+        setEditing(false);
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [filtered, selected, rejectingId]);
 
   if (loadError) {
     return (
@@ -206,11 +244,32 @@ function QueueInner() {
     moveToNextWaiting(filtered, selected);
   };
 
-  const drop = async () => {
-    await patchLead(lead._id, { status: "dropped" });
-    setLeads((ls) => ls!.map((l) => (l._id === lead._id ? { ...l, status: "dropped" } : l)));
+  /**
+   * Drop a lead WITH a reason. There is no reason-free path any more.
+   *
+   * Every rejection is a training signal — it re-ranks this founder's queue through
+   * /api/leads' demotion pass — and a dismissal without one is that signal thrown away. The
+   * optimistic update happens first because the founder has already decided; the write catching up
+   * afterwards is not something they should have to wait for.
+   */
+  const reject = async (reason: RejectionReason) => {
+    const target = lead;
+    setRejectingId(null);
+    setLeads((ls) => ls!.map((l) => (l._id === target._id ? { ...l, status: "dropped" } : l)));
     setEditing(false);
+    setUndoFor({ id: target._id, name: target.name });
     moveToNextWaiting(filtered, selected);
+    await fetch(`/api/leads/${target._id}/reject`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ reason }),
+    }).catch(() => {});
+  };
+
+  const undoReject = async (id: string) => {
+    setUndoFor(null);
+    setLeads((ls) => ls!.map((l) => (l._id === id ? { ...l, status: "waiting" } : l)));
+    await fetch(`/api/leads/${id}/reject`, { method: "DELETE" }).catch(() => {});
   };
 
   const suppress = async (reason: SuppressionReason) => {
@@ -312,8 +371,10 @@ function QueueInner() {
             <div style={{ display: "flex", gap: 8, fontSize: 13.5, flexWrap: "wrap" }}>
               {[
                 { key: "all", label: `All ${leads.length}` },
-                { key: "hot", label: `★ 4+ · ${leads.filter((l) => (l.stars ?? 0) >= 4).length}` },
-                { key: "strong", label: `★ 3+ · ${leads.filter((l) => (l.stars ?? 0) >= 3).length}` },
+                // Named to match the tiers on the cards. "★ 3+" filtered on a scale the UI no
+                // longer shows anywhere, so it asked the founder to think in a unit that had been
+                // deleted.
+                { key: "strong", label: `Strong ${leads.filter((l) => tierFromTotal(l.scoreTotal ?? 0) === "strong").length}` },
                 { key: "unread", label: `Not actioned ${leads.filter((l) => l.status === "waiting").length}` },
                 ...(hypotheses ?? [])
                 .map((h) => ({ key: h.key, count: leads.filter((l) => l.hypothesisKey === h.key).length, name: h.name }))
@@ -342,7 +403,6 @@ function QueueInner() {
           <div style={{ flex: 1, overflow: "auto", display: "flex", flexDirection: "column" }}>
             {filtered.map((l, i) => {
               const st = l.status;
-              const sc = scoreOf(l);
               const actioned = st !== "waiting";
               return (
                 <div
@@ -371,9 +431,9 @@ function QueueInner() {
                       {relativeTime(l.postedAt)}
                     </span>
                   </div>
-                  {sc && (
+                  {typeof l.scoreTotal === "number" && (
                     <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                      <LeadStars score={sc} size={12} showLabel={false} />
+                      <LeadTier total={l.scoreTotal} showReasons={false} size="sm" />
                       <span style={{ fontSize: 12, color: "var(--muted)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
                         {l.company}
                       </span>
@@ -396,17 +456,7 @@ function QueueInner() {
             <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
               <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
                 <span style={{ fontFamily: "var(--font-display)", fontWeight: 700, fontSize: 24, letterSpacing: "-.02em" }}>{lead.name}</span>
-                {typeof lead.scoreTotal === "number" && (
-                  <LeadStars
-                    size={16}
-                    score={{
-                      total: lead.scoreTotal,
-                      stars: lead.stars ?? starsFromTotal(lead.scoreTotal),
-                      label: lead.scoreLabel ?? labelFromTotal(lead.scoreTotal),
-                      breakdown: lead.scoreBreakdown ?? { intent: 0, confidence: 0, recency: 0, engagement: 0 },
-                    }}
-                  />
-                )}
+                <LeadTier total={lead.scoreTotal} breakdown={lead.scoreBreakdown} />
               </div>
               <span style={{ fontSize: 14.5, color: "var(--muted)" }}>
                 {lead.role} · found in {lead.company}
@@ -504,6 +554,30 @@ function QueueInner() {
             )}
             {sendError && <span style={{ fontSize: 13, color: "var(--ember)" }}>{sendError}</span>}
             {sendNote && <span style={{ fontSize: 13, color: "var(--muted)" }}>{sendNote}</span>}
+            {/* The reason row REPLACES the action bar for the length of one decision. An inline row
+                rather than a modal, because this is the same decision the founder already started —
+                a dialog would make it two. */}
+            {rejectingId === lead._id ? (
+              <div style={{ display: "flex", alignItems: "center", gap: 8, paddingTop: 12, borderTop: "1px solid var(--border)", flexWrap: "wrap" }}>
+                <span style={{ fontSize: 13.5, color: "var(--muted)", marginRight: 2 }}>Why?</span>
+                {REJECTION_REASONS.map((r) => (
+                  <button
+                    key={r}
+                    className="ky-btn-outline"
+                    onClick={() => reject(r)}
+                    style={{ padding: "8px 13px", fontSize: 13.5, fontWeight: 500, minHeight: 0 }}
+                  >
+                    {REJECTION_REASON_LABELS[r]}
+                  </button>
+                ))}
+                <button
+                  onClick={() => setRejectingId(null)}
+                  style={{ marginLeft: "auto", background: "none", border: "none", cursor: "pointer", fontSize: 13, color: "var(--muted)" }}
+                >
+                  Cancel
+                </button>
+              </div>
+            ) : (
             <div style={{ display: "flex", alignItems: "center", gap: 10, paddingTop: 4, borderTop: "1px solid var(--border)", flexWrap: "wrap" }}>
               {editing ? (
                 <button
@@ -544,8 +618,12 @@ function QueueInner() {
                 </button>
               )}
               {status === "waiting" && !editing && (
-                <button className="ky-btn-outline" onClick={drop} style={{ padding: "12px 18px", fontSize: 15.5, fontWeight: 500, color: "var(--muted)" }}>
-                  Drop
+                <button
+                  className="ky-btn-outline"
+                  onClick={() => setRejectingId(lead._id)}
+                  style={{ padding: "12px 18px", fontSize: 15.5, fontWeight: 500, color: "var(--muted)" }}
+                >
+                  Not a fit
                 </button>
               )}
               {status === "waiting" && !editing && (
@@ -590,6 +668,78 @@ function QueueInner() {
               )}
               <span style={{ marginLeft: "auto", fontSize: 13.5, color: "var(--muted)" }}>Follow-up in 5 days if no reply</span>
             </div>
+            )}
+
+            {/* Undo. The rejection is already written, so this is a real reversal rather than a
+                delayed commit — a founder who taps the wrong reason should not have to wait out a
+                timer to fix it, and the row can sit here until they move on. */}
+            {shortcutsOpen && (
+              <div
+                style={{
+                  display: "flex",
+                  gap: "6px 18px",
+                  flexWrap: "wrap",
+                  background: "var(--card-alt)",
+                  border: "1px solid var(--border)",
+                  borderRadius: 12,
+                  padding: "12px 14px",
+                  fontSize: 13,
+                  color: "var(--muted)",
+                }}
+              >
+                {[
+                  ["J / K", "move"],
+                  ["E", "edit"],
+                  ["X", "not a fit"],
+                  ["Esc", "close"],
+                  ["?", "this"],
+                ].map(([key, what]) => (
+                  <span key={key} style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
+                    <kbd
+                      style={{
+                        fontFamily: "inherit",
+                        fontSize: 12,
+                        fontWeight: 700,
+                        color: "var(--ink)",
+                        background: "var(--card)",
+                        border: "1px solid var(--border-strong)",
+                        borderRadius: 5,
+                        padding: "1px 6px",
+                      }}
+                    >
+                      {key}
+                    </kbd>
+                    {what}
+                  </span>
+                ))}
+              </div>
+            )}
+
+            {undoFor && (
+              <div
+                role="status"
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 12,
+                  background: "var(--card-alt)",
+                  border: "1px solid var(--border)",
+                  borderRadius: 12,
+                  padding: "10px 14px",
+                  flexWrap: "wrap",
+                }}
+              >
+                <span style={{ fontSize: 13.5, color: "var(--muted)" }}>
+                  Dropped {undoFor.name}. The next search will use that.
+                </span>
+                <button
+                  onClick={() => undoReject(undoFor.id)}
+                  style={{ marginLeft: "auto", background: "none", border: "none", cursor: "pointer", fontSize: 13.5, fontWeight: 700, color: "var(--ember)" }}
+                >
+                  Undo
+                </button>
+              </div>
+            )}
           </div>
 
           {primaryHypothesis && (

@@ -84,3 +84,41 @@ export function rankLeads<T extends { intentTier: IntentTier; confidence: number
       return new Date(b.postedAt).getTime() - new Date(a.postedAt).getTime();
     });
 }
+
+/**
+ * The three named tiers a founder actually sees.
+ *
+ * Replaces a five-star rating that had no legend anywhere in the product. A star count is a claim
+ * of precision the score does not have — "3.5 stars" implies a scale the reader can calibrate, and
+ * nobody could, because nothing said what five meant. Three named tiers say as much as the score
+ * can honestly support, and each one is shown with the reason underneath rather than alone.
+ */
+export type LeadTier = "strong" | "medium" | "weak";
+
+export function tierFromTotal(total: number): LeadTier {
+  if (total >= 68) return "strong";
+  if (total >= 44) return "medium";
+  return "weak";
+}
+
+/**
+ * Why this lead scored the way it did, in the founder's language.
+ *
+ * Built from the breakdown rather than restated by a model: every clause is a real component of the
+ * number beside it, so "why is this strong" has a checkable answer. Empty when nothing stands out,
+ * which is itself honest — a lead can be middling for no single reason.
+ */
+export function tierReasons(breakdown: {
+  intent: number;
+  confidence: number;
+  recency: number;
+  engagement: number;
+}): string[] {
+  const out: string[] = [];
+  if (breakdown.intent >= 24) out.push("asked for a tool like yours");
+  else if (breakdown.intent >= 16) out.push("described the problem");
+  if (breakdown.recency >= 16) out.push("posted recently");
+  if (breakdown.engagement >= 8) out.push("the thread got attention");
+  if (breakdown.confidence >= 16) out.push("clear match");
+  return out;
+}

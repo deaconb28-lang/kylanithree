@@ -7,7 +7,7 @@ import type { GeneratedSeed } from "../../lib/generateCampaignSeed";
 import type { ScoredLead, Venue } from "../../lib/search/types";
 import type { SiteAnalysis } from "../../lib/types";
 import { useNotificationPermission } from "../../lib/useNotificationPermission";
-import LeadStars from "../LeadStars";
+import LeadTier from "../LeadTier";
 import { rankLeads } from "../../lib/search/leadScore";
 import { sinceFlowStart, trackClient } from "../../lib/discover/clientTrack";
 import SearchWheel, { type FieldVenue } from "../discover/SearchWheel";
@@ -372,7 +372,7 @@ export default function StepSearch({
                     <span style={{ fontSize: 15, fontWeight: 600 }}>{l.author}</span>
                     <span style={{ fontSize: 13, color: "var(--muted)" }}>{l.venueName}</span>
                     <span style={{ marginLeft: "auto" }}>
-                      <LeadStars score={l.leadScore} />
+                      <LeadTier total={l.leadScore.total} breakdown={l.leadScore.breakdown} />
                     </span>
                   </div>
                   <span style={{ fontSize: 13.5, color: "var(--muted-strong)", lineHeight: 1.5 }}>&ldquo;{l.excerpt}&rdquo;</span>
