@@ -19,12 +19,50 @@ terms. Nothing else in the table is affected: every other host answered.
 |---|---|
 | **Lemmy** (17 instances) | `/api/v3/post/list` answers unauthenticated on 17 of 20 instances probed. Reddit-shaped conversation — a person posting a problem into a topical community — with no key, no registration and no datacenter-IP block. This is the closest thing to the source the product most wants and least plausibly gets. |
 | **Bluesky** (20 standing queries) | Already a query-time source; now crawled continuously. The crawl unit is a *phrase* rather than a place, because a flat network has no communities to enumerate. |
-
-| **Reddit** (60 subreddits) | The public `.json` endpoints, which need no key at all. See below. |
+| **GitHub issue search** (18 standing queries) | Open, free, full-text, **no credential of any kind**, and every hit carries an addressable public profile. `/search/issues` answered `200` unauthenticated with 4,688 hits for one problem phrase. |
+| **Reddit** (60 subreddits) | The public `.json` endpoints — **built but blocked**, see below. |
 
 Bluesky is seeded **only when credentials exist** — see the note in `worker/index.ts`; two failed
 polls is all it takes for the backoff to mark a source blocked, so seeding it on a worker with no
 app password would bury twenty rows that never recover.
+
+### GitHub: the only source that needs no credential
+
+`lib/ingest/sources/github.ts`. Standing queries rather than places, like Bluesky — there are 400
+million repositories and the useful axis is the language of the complaint, not which repo it
+appeared in.
+
+Two rate limits, and they are very different numbers:
+
+| Endpoint | Unauthenticated | With `GITHUB_TOKEN` |
+|---|---|---|
+| `/search/issues` (the crawl) | **10 / minute** | 30 / minute |
+| `/users/{login}` (person enrichment) | **60 / hour** | 5,000 / hour |
+
+The crawl is comfortable unkeyed: 18 queries at 30-minute intervals is ~0.6 requests a minute
+against a limit of 10. **Person enrichment is not** — 60/hour is exhausted almost immediately, which
+is why a token is worth setting even though nothing strictly requires one.
+
+**A wrong token is worse than no token, and that is a measured result.** The sandbox that built this
+source has a 14-character `GITHUB_TOKEN` in its environment; sending it turned a search that answers
+`200` unauthenticated into a hard `401`. So `githubTokenProblem()` checks the shape and drops a
+malformed value rather than sending it, and a well-formed token rejected at runtime falls back to
+unauthenticated once, loudly. Absent is never treated as a fault — unauthenticated access working is
+the entire reason GitHub was chosen over Reddit.
+
+Two things the crawler does that matter downstream:
+
+- **Issue bodies are cleaned before storage.** Fenced code, indented code, `<details>` log dumps and
+  issue-template HTML comments are stripped. This is not tidying: the lexical gate, the classifier
+  and the embedding all read this text, and an issue that is 3,000 characters of stack trace around
+  one sentence of complaint gets judged on the stack trace by all three. The template comments
+  matter for a second reason — they are the maintainer's words, not the author's, and leaving them
+  in would attribute a template to a person.
+- **Bots are excluded on the account flag**, not guessed from the name, plus the `[bot]` suffix for
+  automation running under ordinary accounts.
+
+The bias is toward technical buyers, which is a real limitation — this supplements the forum
+sources rather than replacing them.
 
 ### Reddit: the API is closed, the JSON is not
 
@@ -99,7 +137,7 @@ tick would have retired all 60 rows and the registry would have deleted itself o
 
 | Source | Result | Verdict |
 |---|---|---|
-| GitHub `search/issues` | `200`, `total_count: 5700` for `"looking for a tool" in:body` | **Strongest unbuilt candidate.** People describing tooling pain in their own words, with a public profile attached to every one. 60 req/hr unauthenticated, 30/min with a token. |
+| GitHub `search/issues` | `200`, thousands of hits per problem phrase | **Built.** See below. |
 | dev.to `/api/articles` | `200`, free, no key | **Worth building.** Small volume, high signal for developer-tool niches. |
 | Lobsters `/newest.json` | `200`, free, no key | **Worth building.** Very small, very high signal. Cheap enough that the low volume does not matter. |
 | Product Hunt GraphQL | `429` + Cloudflare interstitial | **No** without an OAuth token. |
@@ -180,9 +218,7 @@ None of these find a person describing a problem. They answer "who is this compa
 
 ## What to build next, in order
 
-1. **GitHub issues and discussions.** The best remaining ratio of signal to friction: open, free,
-   full-text, and every hit carries an addressable public profile — which matters because the
-   person crawler can then actually enrich them.
+1. ~~GitHub issues~~ — **built.** See above.
 2. **dev.to and Lobsters.** Cheap, open, and they round out developer-tool coverage that currently
    leans entirely on Hacker News and Stack Exchange.
 3. **Job boards, as a separate lead type.** RemoteOK, Remotive and Arbeitnow are one crawler each.

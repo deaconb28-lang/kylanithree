@@ -127,7 +127,7 @@ recollection — read it before proposing a new source, because most of the obvi
 answered there with a status code.
 
 Crawling now: **Hacker News, Stack Exchange (166 sites), Discourse (31 forums), Lemmy (17
-instances), Bluesky (20 standing queries)**.
+instances), Bluesky (20 standing queries), GitHub issues (18 standing queries)**.
 
 - **Lemmy is the Reddit substitute.** `/api/v3/post/list` is open on 17 of 20 instances probed —
   no key, no registration, no datacenter-IP block. Reddit itself is paid, blocks server traffic and
@@ -137,9 +137,21 @@ instances), Bluesky (20 standing queries)**.
   are drawn from `NEED_MARKERS`, so the crawl is pre-filtered by the same gate that would otherwise
   discard most of it. **Seeded only when credentials exist** — two failed polls is all the backoff
   needs to mark a source blocked, and it would never recover once the password was finally set.
-- **Ruled out, by policy rather than effort: X, Reddit, LinkedIn, Facebook, Threads.** None is a
-  matter of finding the right endpoint. Strongest unbuilt candidate is **GitHub issue search** —
-  open, free, full-text, and every hit has an addressable public profile.
+- **GitHub needs no credential at all** — the only source in the registry that does not. But the
+  two limits are very different: search is 10/min unkeyed, while person enrichment
+  (`/users/{login}`) is **60/hour** and is exhausted almost at once. Set `GITHUB_TOKEN` for the
+  people half. **A malformed token is worse than none** — a 14-char value in the sandbox turned a
+  working unauthenticated 200 into a 401, so `githubTokenProblem()` drops a bad-shaped token rather
+  than sending it.
+- **Reddit is built and blocked.** The API needs Responsible Builder approval; the public `.json`
+  path is refused at the edge for datacenter traffic — 403 on 60/60 subreddits from Railway and 403
+  in 21ms from Vercel. `crawlReddit` already uses `oauth.reddit.com` when `REDDIT_CLIENT_ID` and
+  `REDDIT_CLIENT_SECRET` exist, and the worker re-enables the 60 rows the moment they appear, so
+  approval is a form and not a code change. **Do not add proxy rotation.**
+- **Ruled out, by policy rather than effort: X, LinkedIn, Facebook, Threads.** Facebook public post
+  search is removed outright (`Unsupported get request`), not merely gated; Instagram's
+  `ig_hashtag_search` is real but returns no addressable author for media you do not own, which
+  fails a product that sends email.
 
 ### Identity: two traps, both now covered by tests
 

@@ -1,4 +1,5 @@
 import { People, type PersonDoc } from "./collections";
+import { githubAuthHeaders, githubToken } from "./sources/github";
 
 // Person enrichment — the half of the crawler that scrapes PEOPLE rather than posts.
 //
@@ -275,6 +276,84 @@ async function fetchReddit(username: string): Promise<PersonProfile | null> {
   };
 }
 
+/**
+ * Raised when a platform is temporarily refusing lookups rather than saying this person is
+ * unknown. The caller must NOT charge an attempt for it.
+ *
+ * This is the classifier's outage bug in a second place, and it would have been just as silent.
+ * `enrichPeopleBacklog` charges a failed attempt whenever a profile comes back null, and three
+ * charges drop a person out of the backlog permanently. GitHub's unenumerated core limit is 60 an
+ * hour without a token — the probe that designed this file exhausted it in two requests — so an
+ * unkeyed worker would burn through the enrichment backlog condemning people for a rate limit,
+ * exactly as the empty Anthropic balance condemned 6,500 documents for a billing lapse.
+ */
+export class PersonLookupUnavailable extends Error {
+  readonly retryable = true;
+}
+
+/**
+ * GitHub, by login. Public, and the only profile in the registry that sometimes carries a real
+ * email address — `email` is populated when the person has chosen to publish it, which is a
+ * genuine contact channel rather than a handle to guess from.
+ *
+ * Never falls back to the commit-log address. A `noreply` or committer email harvested from commits
+ * is not something the person published for contact, and treating it as one is exactly the kind of
+ * thing this product must not do.
+ */
+async function fetchGitHub(login: string): Promise<PersonProfile | null> {
+  // Same guard as the crawler: a malformed GITHUB_TOKEN is dropped rather than sent, because it
+  // would turn a request that works unauthenticated into a 401.
+  const token = githubToken();
+  const res = await fetch(`https://api.github.com/users/${encodeURIComponent(login)}`, {
+    headers: githubAuthHeaders(),
+    signal: AbortSignal.timeout(TIMEOUT_MS),
+  }).catch(() => null);
+
+  if (!res) throw new PersonLookupUnavailable("GitHub unreachable");
+  // Distinguishing these two is the entire point. 404 means no such user, ever — charge it. 403 or
+  // 429 with the budget spent means "ask again later" and must cost the person nothing.
+  if (res.status === 403 || res.status === 429) {
+    throw new PersonLookupUnavailable(
+      `GitHub rate limit (${res.status}, remaining=${res.headers.get("x-ratelimit-remaining") ?? "?"})` +
+        (token ? "" : " — set GITHUB_TOKEN to raise the core limit from 60/hour to 5,000/hour"),
+    );
+  }
+  if (!res.ok) return null;
+
+  const user = (await res.json().catch(() => null)) as {
+    login?: string;
+    name?: string;
+    bio?: string;
+    email?: string;
+    blog?: string;
+    company?: string;
+    location?: string;
+    created_at?: string;
+    public_repos?: number;
+    followers?: number;
+    type?: string;
+  } | null;
+  if (!user?.login || user.type === "Bot") return null;
+
+  const created = user.created_at ? Date.parse(user.created_at) : NaN;
+  // Their own words first. Where someone has left the bio empty, company and location are still
+  // facts they published about themselves — combined only when there is something to combine, so
+  // nobody gets a bio invented out of two absent fields.
+  const context = [user.company?.trim(), user.location?.trim()].filter(Boolean).join(" · ");
+  const bio = user.bio?.trim() || (context.length > 0 ? context : undefined);
+
+  return {
+    displayName: user.name?.trim() || user.login,
+    bio,
+    profileUrl: `https://github.com/${encodeURIComponent(user.login)}`,
+    accountAgeDays: Number.isFinite(created) ? daysSince(created / 1000) : undefined,
+    // Followers, not repo count: it is the closest thing GitHub publishes to standing, and the
+    // field already warns that reputation is not comparable across platforms.
+    reputation: typeof user.followers === "number" ? user.followers : undefined,
+    platformPostCount: typeof user.public_repos === "number" ? user.public_repos : undefined,
+  };
+}
+
 /** Dispatch. Returns null when the platform is unknown or the person cannot be addressed. */
 export async function fetchPersonProfile(person: PersonDoc): Promise<PersonProfile | null> {
   const scope = person.scope;
@@ -303,6 +382,9 @@ export async function fetchPersonProfile(person: PersonDoc): Promise<PersonProfi
     case "reddit":
       // Flat site, globally unique usernames — same as Bluesky, nothing to qualify.
       return fetchReddit(bare);
+    case "github":
+      // Flat namespace: one global login per person.
+      return fetchGitHub(bare);
     default:
       return null;
   }
@@ -313,6 +395,8 @@ export interface EnrichStats {
   enriched: number;
   failed: number;
   unaddressable: number;
+  /** Skipped because their platform was rate-limiting. Charged nothing; will be retried. */
+  deferred: number;
 }
 
 /**
@@ -325,7 +409,11 @@ export interface EnrichStats {
 export async function enrichPeopleBacklog(opts: { limit?: number } = {}): Promise<EnrichStats> {
   const limit = opts.limit ?? 25;
   const people = await People();
-  const stats: EnrichStats = { considered: 0, enriched: 0, failed: 0, unaddressable: 0 };
+  const stats: EnrichStats = { considered: 0, enriched: 0, failed: 0, unaddressable: 0, deferred: 0 };
+  // Platforms that have said "later" during this pass. Once one rate-limits, every remaining person
+  // on it is skipped without a lookup: the next request would fail the same way, and the only thing
+  // it could change is to spend more of a budget that is already gone.
+  const rateLimited = new Set<string>();
 
   const backlog = await people
     .find({
@@ -340,8 +428,29 @@ export async function enrichPeopleBacklog(opts: { limit?: number } = {}): Promis
     .toArray();
 
   for (const person of backlog) {
+    if (rateLimited.has(person.platform)) {
+      stats.deferred += 1;
+      continue;
+    }
+
     stats.considered += 1;
-    const profile = await fetchPersonProfile(person);
+    let profile: PersonProfile | null;
+    try {
+      profile = await fetchPersonProfile(person);
+    } catch (err) {
+      // A platform refusing lookups is not a verdict about this person, so nothing is charged. The
+      // classifier learned this the expensive way: charging an attempt for an outage condemned
+      // 6,500 documents that had never been judged, and three charges here would silently drop a
+      // person out of the backlog forever with no error to show for it.
+      if (err instanceof PersonLookupUnavailable) {
+        rateLimited.add(person.platform);
+        stats.deferred += 1;
+        stats.considered -= 1;
+        console.error(`[people] ${person.platform} deferred: ${err.message}`);
+        continue;
+      }
+      throw err;
+    }
 
     if (!profile) {
       // Count the attempt either way. A person nobody can address is not retried forever just
@@ -350,6 +459,7 @@ export async function enrichPeopleBacklog(opts: { limit?: number } = {}): Promis
         person.platform === "hn" ||
         person.platform === "bluesky" ||
         person.platform === "reddit" ||
+        person.platform === "github" ||
         Boolean(person.scope);
       if (!addressable) stats.unaddressable += 1;
       else stats.failed += 1;

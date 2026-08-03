@@ -1,6 +1,7 @@
 import { Corpus, logScrape } from "../ingest/collections";
 import { searchHackerNews } from "../search/hackernews";
 import { searchStackExchange } from "../search/stackexchange";
+import { searchGithub } from "../search/github";
 import { personFingerprint } from "../credits/fingerprint";
 import { lexicalGate, normalizeForIntent, INTENT_WEIGHT, INTENT_TYPES, type IntentType } from "../search/intent";
 import { relevantExcerpt, matchedTerms, leadSummary } from "../search/excerpt";
@@ -80,6 +81,7 @@ const VENUE_LABEL: Record<string, string> = {
   lemmy: "Lemmy",
   bluesky: "Bluesky",
   reddit: "Reddit",
+  github: "GitHub",
   quora: "Quora",
 };
 
@@ -289,6 +291,14 @@ async function fromLiveSources(opts: { keywords: string[]; venueIds: string[]; b
           .catch(() => []),
       );
     }
+    // Unconditional, unlike the two above, because GitHub is not a venue the niche map has to
+    // nominate — it is one search endpoint over every public repository, and it needs no key, so
+    // there is no configuration under which adding it can fail the run.
+    jobs.push(
+      searchGithub({ ...common, query: q })
+        .then((cs) => cs.map(toLead).filter((l): l is DiscoverLead => l !== null))
+        .catch(() => []),
+    );
     for (const v of venueIds.filter((id) => id.startsWith("stackexchange:"))) {
       jobs.push(
         searchStackExchange({ ...common, query: q, site: v.slice("stackexchange:".length) })

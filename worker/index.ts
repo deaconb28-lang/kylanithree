@@ -6,19 +6,9 @@ import { crawlStackExchange } from "../lib/ingest/sources/stackexchange";
 import { crawlLemmy } from "../lib/ingest/sources/lemmy";
 import { crawlBluesky, BLUESKY_STANDING_QUERIES } from "../lib/ingest/sources/bluesky";
 import { crawlReddit } from "../lib/ingest/sources/reddit";
+import { crawlGithub, GITHUB_STANDING_QUERIES } from "../lib/ingest/sources/github";
 import { hasRedditCredentials } from "../lib/search/reddit";
 import { blueskyCredentialProblems } from "../lib/search/bluesky";
-
-/**
- * Should Reddit be crawled at all?
- *
- * Credentials are the real answer: the unkeyed path is blocked at the edge for datacenter traffic,
- * measured from two providers. The env flag stays as an override for a network that does accept
- * unauthenticated requests, so the finding is not baked in as an assumption forever.
- */
-function redditCrawlEnabled(): boolean {
-  return hasRedditCredentials() || process.env.REDDIT_JSON_ENABLED === "true";
-}
 import {
   backfillEmbeddings,
   classifyBacklog,
@@ -43,6 +33,17 @@ import { ensureSearchIndexes, searchIndexStatus } from "../lib/ingest/searchInde
 // when the worker is behind, the productive sources are the ones that still get served.
 //
 // Run: npm run worker
+
+/**
+ * Should Reddit be crawled at all?
+ *
+ * Credentials are the real answer: the unkeyed path is blocked at the edge for datacenter traffic,
+ * measured from two providers. The env flag stays as an override for a network that does accept
+ * unauthenticated requests, so the finding is not baked in as an assumption forever.
+ */
+function redditCrawlEnabled(): boolean {
+  return hasRedditCredentials() || process.env.REDDIT_JSON_ENABLED === "true";
+}
 
 const TICK_MS = 60_000;
 // Was 20, with 197 sources in the registry — a ceiling of 20 polls a minute could not keep even one
@@ -76,6 +77,9 @@ const CONCURRENCY: Record<string, number> = {
   // to get without an approval process, so this access is the only access. Two concurrent requests
   // to save a few seconds is not worth being the reason it stops working.
   reddit: 1,
+  // Search is 10 requests a minute unauthenticated and 30 with a token — a per-account budget, not
+  // a per-host politeness question, so two in flight would just reach the same ceiling sooner.
+  github: 1,
 };
 const DEFAULT_CONCURRENCY = 2;
 // Classification is the only paid step here. Draining a few batches per tick keeps the backlog
@@ -148,7 +152,11 @@ async function pollSource(source: SourceDoc & { _id?: ObjectId }, correlationId:
                   await crawlBluesky({ query: source.identifier, cursor: source.lastCursor })
                 : source.platform === "reddit"
                   ? await crawlReddit({ subreddit: source.identifier, cursor: source.lastCursor })
-                  : null;
+                  : source.platform === "github"
+                    ? // The identifier IS the standing query, as with Bluesky — GitHub has 400
+                      // million repositories and no useful set of "places" to enumerate.
+                      await crawlGithub({ query: source.identifier, cursor: source.lastCursor })
+                    : null;
 
     if (!page) {
       log(`skip ${source.platform}:${source.identifier} — no crawler for this platform`);
@@ -505,6 +513,26 @@ async function seedSources(): Promise<void> {
     // Bluesky, where the crawl unit is a phrase rather than a place. See sources/bluesky.ts —
     // there are no communities to enumerate on a flat network, so the standing queries ARE the
     // registry, and a phrase that yields nothing sinks in the scheduler's own ordering.
+    // GitHub issue search. The only source here that needs NO credential of any kind — verified at
+    // 200 unauthenticated with 4,688 hits for a single problem phrase — and the one with the
+    // richest people behind it, since every hit has an addressable public profile and some publish
+    // a real email.
+    //
+    // Standing queries rather than places, like Bluesky: 400 million repositories, and the useful
+    // axis is the language of the complaint rather than which repo it appeared in.
+    ...GITHUB_STANDING_QUERIES.map((query) => ({
+      platform: "github" as const,
+      identifier: query,
+      accessMethod: "api" as const,
+      baseUrl: "https://api.github.com",
+      // 30 minutes across 18 queries is ~0.6 requests a minute against a limit of 10/min
+      // unauthenticated (30 with a token) — a wide margin, deliberately, because the same limit is
+      // shared with anything else this account does against the search API.
+      pollIntervalMinutes: 30,
+      health: "ok" as const,
+      docYield30d: 0,
+      enabled: true,
+    })),
     // Reddit, through the public `.json` endpoints — see lib/ingest/sources/reddit.ts for why that
     // path rather than OAuth (the Responsible Builder Policy closed self-service credentials).
     //
@@ -632,7 +660,7 @@ async function seedSources(): Promise<void> {
     }
   }
 
-  const intervals: Record<string, number> = { hn: 5, stackexchange: 45, discourse: 30, lemmy: 20, bluesky: 15, reddit: 60 };
+  const intervals: Record<string, number> = { hn: 5, stackexchange: 45, discourse: 30, lemmy: 20, bluesky: 15, reddit: 60, github: 30 };
   for (const [platform, minutes] of Object.entries(intervals)) {
     const res = await sources.updateMany(
       { platform, health: "ok", pollIntervalMinutes: { $gt: minutes } },
