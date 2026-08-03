@@ -341,6 +341,57 @@ export async function GET(req: NextRequest) {
     }
   }
 
+  // Is Reddit's 403 about Railway specifically, or about datacenters generally?
+  //
+  // The worker measured a uniform, instant 403 across 60 unrelated subreddits — an IP-level refusal
+  // of Railway's egress range, not a per-subreddit or User-Agent problem. That leaves one question
+  // this route can answer and the worker cannot: whether Vercel's egress is refused too. Same
+  // honest User-Agent, same public endpoint, one request — this measures where a legitimate request
+  // is accepted from. It is NOT an attempt to disguise one.
+  //
+  // Opt-in via ?reddit=probe so uptime monitors do not spend requests against a rate limit that is
+  // already the tightest in the registry.
+  if (req.nextUrl.searchParams.get("reddit") === "probe") {
+    const redditT0 = Date.now();
+    const sub = req.nextUrl.searchParams.get("subreddit") || "smallbusiness";
+    try {
+      const res = await fetch(`https://www.reddit.com/r/${encodeURIComponent(sub)}/new.json?raw_json=1&limit=1`, {
+        headers: {
+          Accept: "application/json",
+          "User-Agent": process.env.REDDIT_USER_AGENT || "web:app.kylani.lead-search:v1.0",
+        },
+        signal: AbortSignal.timeout(8000),
+      });
+      const body = await res.text();
+      let posts: number | undefined;
+      try {
+        posts = (JSON.parse(body) as { data?: { children?: unknown[] } }).data?.children?.length;
+      } catch {
+        // A block serves an HTML interstitial rather than JSON, which is itself the answer.
+      }
+      checks.redditProbe = {
+        subreddit: sub,
+        status: res.status,
+        ms: Date.now() - redditT0,
+        posts,
+        note:
+          res.status === 403
+            ? "Vercel's egress is refused too — this is Reddit declining datacenter traffic generally, not a Railway problem. The legitimate paths are an approved Responsible Builder application or the metered commercial tier."
+            : res.ok
+              ? "Vercel's egress is accepted where Railway's is not. Running the crawler here is a deployment choice, not a disguise — but it is subject to the same rate limits and could be blocked later."
+              : `Unexpected status ${res.status} — not the 403 the worker sees.`,
+        // First bytes only, so an interstitial is identifiable without dumping a page into the log.
+        bodyStart: body.slice(0, 120).replace(/\s+/g, " "),
+      };
+    } catch (err) {
+      checks.redditProbe = {
+        subreddit: sub,
+        ms: Date.now() - redditT0,
+        error: (err instanceof Error ? err.message : String(err)).slice(0, 200),
+      };
+    }
+  }
+
   // Quora has no API — the source finds question URLs via web search and then fetches each page
   // itself, so what matters here is whether Quora serves us a page at all. It blocks datacenter IPs
   // aggressively, and when it does this source contributes nothing rather than degrading.
