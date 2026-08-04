@@ -35,40 +35,10 @@ export const TESTIMONIALS = [
   },
 ];
 
-export const STEPS = [
-  {
-    k: "Ten minutes",
-    label: "Ten minutes",
-    sub: "paste & correct",
-    tag: "10 min · once",
-    h: "Paste the URL, correct my guess.",
-    b: "I read your site, propose two to four buyers, and you fix what I got wrong.",
-  },
-  {
-    k: "The first week",
-    label: "The first week",
-    sub: "approve & send",
-    tag: "~45 min · week 1",
-    h: "40 drafts, each anchored to something real.",
-    b: "You approve them. They send from your own inbox, so they arrive as you.",
-  },
-  {
-    k: "Every morning",
-    label: "Every morning",
-    sub: "one card",
-    tag: "60 sec · daily",
-    h: "One person, one drafted reply.",
-    b: "Someone described your problem yesterday. Post or skip. A minute a day.",
-  },
-  {
-    k: "Every month",
-    label: "Every month",
-    sub: "findings",
-    tag: "5 min · monthly",
-    h: "Findings, not open rates.",
-    b: "Operations managers reply six times more often than the directors you targeted.",
-  },
-];
+// STEPS is gone with the four-stage "ten minutes, then every morning" section it drove. That page
+// described the product's time cost in prose beside mocked-up panels; the question a founder has
+// before pasting a URL is whether the people it comes back with are worth writing to, and only the
+// output answers that. Replaced by components/landing/Demo.tsx, which replays a captured real run.
 
 export const FAQS = [
   {
@@ -93,9 +63,10 @@ export const FAQS = [
   },
 ];
 
-// Illustrative placeholders for the hero's cycling input. They are visibly example URLs rather than
-// claimed customers — which is the distinction that outlived the logo gallery they used to match.
-export const URLS = ["berth.app", "fathom.dev", "pocketledger.io", "saltandpine.co"];
+// The hero's URL input no longer names an example company. Its placeholder is "your url here" —
+// an instruction rather than a specimen. The old rotating list of invented domains (and the
+// `useUrlCycle` hook that rotated it) went with the customer-logo gallery they were matched to:
+// both were the marketing site quietly naming companies that do not exist.
 
 export type ChannelKey = "gmail" | "reddit" | "slack" | "discord" | "forums" | "x" | "other";
 

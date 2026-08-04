@@ -152,6 +152,8 @@ export default function Hero() {
           >
             <input
               ref={inputRef}
+              // Named so the demo section's "Run it on yours" can send someone straight back here.
+              id="ky-url"
               aria-label="Your product's URL"
               aria-invalid={error ? true : undefined}
               aria-describedby={error ? "ky-url-error" : undefined}
@@ -160,7 +162,7 @@ export default function Hero() {
                 setTypedUrl(e.target.value);
                 if (error) setError(null);
               }}
-              placeholder="berth.app"
+              placeholder="your url here"
               inputMode="url"
               autoComplete="url"
               style={{

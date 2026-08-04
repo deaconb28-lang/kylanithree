@@ -1,7 +1,7 @@
 import Hero from "../components/landing/Hero";
 import ProcessSteps from "../components/landing/ProcessSteps";
 import AdsComparison from "../components/landing/AdsComparison";
-import TimeStepper from "../components/landing/TimeStepper";
+import Demo from "../components/landing/Demo";
 import RevenueFindings from "../components/landing/RevenueFindings";
 import Testimonials from "../components/landing/Testimonials";
 import Pricing from "../components/landing/Pricing";
@@ -14,7 +14,7 @@ export default function Home() {
       <Hero />
       <ProcessSteps />
       <AdsComparison />
-      <TimeStepper />
+      <Demo />
       <RevenueFindings />
       <Testimonials />
       <Pricing />
