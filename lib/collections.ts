@@ -127,12 +127,13 @@ export interface StripeConnection {
   connectedAt?: Date;
 }
 
-// This is Kylani's OWN subscription billing (Pro/Founder, via the platform's Stripe account and
-// its real Payment Links — see lib/billing.ts) — a completely separate concept from
+// This is Kylani's OWN subscription billing (one plan, via the platform's Stripe account and real
+// Checkout Sessions — see lib/billing.ts and app/api/stripe/checkout) — a completely separate concept from
 // StripeConnection above, which is a founder connecting THEIR OWN Stripe account so Map can show
 // their real product revenue. Never conflate the two.
 export interface SubscriptionInfo {
-  plan: "pro" | "founder";
+  /** "kylani" is the only plan sold. "pro"/"founder" are legacy rows still honoured — see lib/billing.ts. */
+  plan: "kylani" | "pro" | "founder";
   interval: "monthly" | "annual";
   status: "active" | "past_due" | "canceled" | "incomplete";
   stripeCustomerId: string;

@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { classifySpendToday } from "@/lib/ingest/budget";
 import { getDb } from "@/lib/mongodb";
 import { redditAuthMode } from "@/lib/search/reddit";
+import { stripeKeySource, stripeMode, checkoutConfigured, billingConfigured } from "@/lib/stripe";
+import { PLAN } from "@/lib/billing";
 import { hasBlueskyCredentials, searchBluesky } from "@/lib/search/bluesky";
 import { webSearchProvider } from "@/lib/search/websearch";
 import { apolloHealth, enrichCompanyByDomain, hasApolloKey } from "@/lib/enrich/apollo";
@@ -44,6 +46,12 @@ export async function GET(req: NextRequest) {
     BLUESKY_APP_PASSWORD: present("BLUESKY_APP_PASSWORD"),
     X_BEARER_TOKEN: present("X_BEARER_TOKEN"),
     BRAVE_SEARCH_API_KEY: present("BRAVE_SEARCH_API_KEY"),
+    // Both names, because the code accepts both and the deployments actually use STRIPE_API_KEY.
+    // Reporting only STRIPE_SECRET_KEY is what made a live key look absent.
+    STRIPE_SECRET_KEY: present("STRIPE_SECRET_KEY"),
+    STRIPE_API_KEY: present("STRIPE_API_KEY"),
+    STRIPE_WEBHOOK_SECRET: present("STRIPE_WEBHOOK_SECRET"),
+    STRIPE_PRICE_ID: present("STRIPE_PRICE_ID"),
     // Lowercase on purpose — that is the name actually set in Railway and Vercel, confirmed by
     // reading the deployed variables rather than assuming APOLLO_API_KEY.
     apollo_one: present("apollo_one"),
@@ -395,6 +403,30 @@ export async function GET(req: NextRequest) {
         error: (err instanceof Error ? err.message : String(err)).slice(0, 200),
       };
     }
+  }
+
+  // --- billing ------------------------------------------------------------
+  // "Can we take money" is three separate questions and the answers differ: a key alone opens
+  // checkout, the webhook secret is what records the result, and live vs test decides whether a
+  // real card is charged. Reported apart because a subscription that is paid and never written back
+  // is the worst of the three failures and the least visible.
+  {
+    const source = stripeKeySource();
+    checks.billing = {
+      keySource: source,
+      mode: stripeMode(),
+      canOpenCheckout: checkoutConfigured(),
+      canRecordPayments: billingConfigured(),
+      priceIdOverride: Boolean(process.env.STRIPE_PRICE_ID),
+      plan: { name: PLAN.name, amountCents: PLAN.amountCents, currency: PLAN.currency, lookupKey: PLAN.lookupKey },
+      note: !source
+        ? "No Stripe key under STRIPE_SECRET_KEY or STRIPE_API_KEY — checkout returns 503."
+        : !process.env.STRIPE_WEBHOOK_SECRET
+          ? "Key present but STRIPE_WEBHOOK_SECRET is missing. Checkout deliberately refuses to open: Stripe would charge the card and nothing would write the subscription back, so the customer would pay and stay locked out."
+          : stripeMode() === "test"
+            ? "Configured, in TEST mode — no real card will be charged."
+            : "Configured and live.",
+    };
   }
 
   // Quora has no API — the source finds question URLs via web search and then fetches each page

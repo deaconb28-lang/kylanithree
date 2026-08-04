@@ -95,6 +95,41 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
       return session;
     },
   },
+  events: {
+    /**
+     * Attribute a brand-new account to whoever referred them.
+     *
+     * `createUser` fires exactly once per account, which is the only correct moment: on every later
+     * sign-in the cookie may still be present, and re-running attribution would let one referral be
+     * claimed repeatedly. The unique index on `referredUserId` would refuse the duplicate anyway —
+     * this is belt as well as braces.
+     *
+     * Every failure is swallowed. A referral that cannot be attributed must NEVER be able to block
+     * somebody creating an account.
+     */
+    async createUser({ user }) {
+      try {
+        if (!user.id) return;
+        const { cookies } = await import("next/headers");
+        const { recordReferral, resolveReferralCode, ensureReferralCode, REFERRAL_COOKIE } = await import(
+          "@/lib/referrals"
+        );
+        // Register the new account's own code first, so they can refer others immediately.
+        await ensureReferralCode(user.id);
+
+        const code = (await cookies()).get(REFERRAL_COOKIE)?.value;
+        if (!code) return;
+        const outcome = await recordReferral({
+          code,
+          referredUserId: user.id,
+          resolveCodeToUserId: resolveReferralCode,
+        });
+        if (outcome !== "recorded") console.error(`[referrals] not attributed (${outcome}) for ${user.id}`);
+      } catch (err) {
+        console.error("[referrals] createUser hook failed:", err instanceof Error ? err.message : err);
+      }
+    },
+  },
   pages: {
     signIn: "/signin",
     // Without this, a failure lands on Auth.js's own /api/auth/error page — an unstyled page whose

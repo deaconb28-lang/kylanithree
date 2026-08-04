@@ -46,6 +46,8 @@
     "lib/discover/collections.ts",
     "lib/discover/rerank.ts",
     "lib/enrich/apollo.ts",
-    "lib/buyers/confidence.ts"
+    "lib/buyers/confidence.ts",
+    "lib/billing.ts",
+    "lib/referrals.ts"
   ]
 }

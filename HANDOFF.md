@@ -120,6 +120,62 @@ Apollo renaming a field would present as "this company has no data" rather than 
 Running the equivalent `curl` locally proves nothing: there is no key in the sandbox, so it just
 returns `{"error":"Api key required"}`.
 
+### Billing: one plan at $49.99/mo, real Checkout, and a referral program
+
+The four hardcoded Stripe **Payment Link URLs are gone** (`PAYMENT_LINKS`, `buildCheckoutUrl` and
+`/api/stripe/checkout-links` are all deleted). Two tiers over two intervals were never real — there
+was one product behind all of them and no per-tier enforcement anywhere in the code.
+
+- **`lib/billing.ts` is the single source of the number.** `PLAN.amountCents = 4999`, and
+  `formattedPrice()` formats *that* — the landing page, `/app/trial` and the Stripe Price all derive
+  from one constant. The old page hardcoded `"$89"` as a string beside links whose amounts nobody
+  could see, so the till and the page could disagree with nothing to catch it.
+- **The Price is resolved by `lookup_key`, not by a pasted id** (`lib/stripePrice.ts`). A Stripe
+  Price is **immutable**, so a `price_…` in an env var keeps charging the old amount forever after a
+  price change, silently. The key encodes the amount (`kylani_monthly_4999`), so a new price needs a
+  new key and the two cannot drift. `resolvePriceId()` creates the Product and Price once if they do
+  not exist, and **throws rather than falling back** if the resolved price disagrees with `PLAN`.
+- **The key is read under two names.** The code read `STRIPE_SECRET_KEY`; the deployments have
+  `STRIPE_API_KEY`. Nothing threw — the Stripe client falls back to `sk_test_placeholder` and every
+  call fails with an auth error naming neither variable. Both names now work, `STRIPE_SECRET_KEY`
+  wins, and `/api/health` → `checks.billing.keySource` reports which.
+- **`/api/stripe/checkout` refuses to open without `STRIPE_WEBHOOK_SECRET`,** returning 503. This is
+  deliberate and is the guard that matters: without the webhook Stripe still takes the money and
+  nothing writes the subscription to Mongo, so the customer pays and stays locked out with no error
+  anywhere. Taking money we cannot record is worse than not selling.
+
+**Referrals — both sides get a month** (`lib/referrals.ts`). The referee's first month is free via a
+reused Stripe coupon at checkout; the referrer is credited $49.99 as a **negative customer balance
+transaction**, which Stripe applies to their next invoice automatically — no payout rails, no KYC,
+and no way for a credit to leave the system as cash.
+
+The ordering is the whole design and it is what stops this being farmed: the credit fires on the
+referee's **first paid invoice**, never at signup. Reward on signup and a referral is worth $49.99
+for the cost of an email address. Reward on a cleared payment and the attacker has to pay us $49.99
+to extract $49.99, which is a wash rather than an attack. Details worth not re-deriving:
+
+- The referee's first invoice is **$0** (their coupon covered it), so `amount_paid > 0` is checked
+  or every single referee would trigger a reward automatically.
+- `status: "pending"` sits in the update **filter**, not in a prior read — Stripe retries webhooks
+  freely, so the database decides who claims the transition, not a read-then-write.
+- The unique index on `referredUserId` makes double-attribution **impossible** rather than unlikely.
+  It is ensured on the write path (`ensureReferralIndexesOnce`) because attribution happens in an
+  Auth.js `createUser` event on Vercel, where no startup hook runs.
+- A referral earned while the referrer is still on trial stays `qualified` — owed, not paid, because
+  there is no Stripe customer yet. `settleQualifiedReferrals()` pays it the moment they subscribe.
+  The dashboard shows `pending` / `qualified` / `rewarded` as three separate numbers on purpose:
+  blending them would claim money had moved when it may not have.
+- `proxy.ts` captures `?r=<code>` into an httpOnly cookie because the path from landing to account
+  is not one hop — a query parameter does not survive the Google round trip. The regex and cookie
+  name are **duplicated** there rather than imported: `lib/referrals.ts` pulls in the MongoDB driver,
+  which cannot be bundled into the proxy. Change all three together.
+
+**Unverified from the sandbox:** no Stripe call has been made — there is no key here, and checkout
+needs a session, which needs Mongo. The code paths typecheck, lint, build and are covered by tests
+for the arithmetic and the refusals; the live Checkout Session, the coupon and the balance
+transaction have **not** been exercised. Test-mode keys plus a Stripe CLI webhook forward is the way
+to close that, and `/api/health` → `checks.billing` says whether the deployment can even try.
+
 ### Sources: five platforms now, and where the rest were ruled out
 
 `docs/source-evaluation.md` is the record, and it is built from actual probe responses rather than
@@ -272,8 +328,9 @@ while the classifier is down just grows the invisible half faster.
     cycle in case the indexes are rebuilt, then delete it.
 
 - **Rotate the Bluesky app password.** It was pasted into chat in an earlier session.
-- Founder/Studio plan naming is undecided, which blocks the billing half of the credits system
-  (`lib/credits/`, `docs/credits.md`). Metering works and records; nothing is debited.
+- ~~Founder/Studio plan naming is undecided~~ — **settled: there is one plan, "Kylani", at
+  $49.99/month.** See the Billing section below. `lib/credits/` still meters without debiting; that
+  is now a separate question from pricing, not blocked by it.
 - ~~Google sign-in failing with `?error=Configuration`~~ — **resolved.** `MONGODB_URI` is set in
   production and `/api/health` now reports `mongo.ok: true` (~115ms, database `kylani`, 4 users),
   `googleOAuth.configurationErrorCause: null`, and `summary.signupAndGoogleSignIn: "should work"`.
@@ -580,7 +637,14 @@ AUTH_URL=               # canonical origin, e.g. https://www.kylani.app
 VOYAGE_API_KEY=         # embeddings, worker
 STACKEXCHANGE_KEY=
 BLUESKY_IDENTIFIER= / BLUESKY_APP_PASSWORD=
-STRIPE_CLIENT_ID= / STRIPE_SECRET_KEY=   # optional
+STRIPE_SECRET_KEY=      # Kylani's OWN subscription billing. STRIPE_API_KEY is read as a fallback,
+                        # because that is the name actually set on Railway/Vercel — same trap as
+                        # `apollo_one`. /api/health -> checks.billing.keySource says which one won.
+STRIPE_WEBHOOK_SECRET=  # REQUIRED to sell. Without it /api/stripe/checkout returns 503 on purpose:
+                        # Stripe would charge the card and nothing would write the subscription back.
+STRIPE_PRICE_ID=        # optional override. Normally the price is resolved (and created once) by
+                        # the lookup key `kylani_monthly_4999` — see lib/stripePrice.ts.
+STRIPE_CLIENT_ID=       # Stripe CONNECT only (a founder linking their own account for Map). Optional.
 NEXT_PUBLIC_ONBOARDING_FLOW=             # set to "legacy" to roll onboarding back
 REDDIT_CLIENT_ID= / REDDIT_CLIENT_SECRET=
                         # Reddit, and the ONLY thing standing between the built crawler and a

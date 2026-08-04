@@ -3,7 +3,8 @@
 import { Suspense, useEffect, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import DashboardShell from "../../../components/dashboard/DashboardShell";
-import { PLAN_COPY, type BillingInterval, type SubscriptionPlan } from "../../../lib/billing";
+import { PLAN, PLAN_COPY, TRIAL_DAYS, formattedPrice, type BillingInterval, type SubscriptionPlan } from "../../../lib/billing";
+import ReferralPanel from "../../../components/dashboard/ReferralPanel";
 
 type Subscription = {
   plan: SubscriptionPlan;
@@ -12,7 +13,6 @@ type Subscription = {
   currentPeriodEnd?: string | null;
 };
 type Campaign = { productName: string; trialEndsAt: string | null; subscription?: Subscription };
-type CheckoutLinks = Record<SubscriptionPlan, Record<BillingInterval, string>>;
 
 const STATUS_LABEL: Record<Subscription["status"], string> = {
   active: "Active",
@@ -36,27 +36,45 @@ function BillingNotice() {
   );
 }
 
-function PlanCard({
-  plan,
-  interval,
-  onIntervalChange,
-  checkoutUrl,
-  isCurrent,
-}: {
-  plan: SubscriptionPlan;
-  interval: BillingInterval;
-  onIntervalChange: (i: BillingInterval) => void;
-  checkoutUrl: string | null;
-  isCurrent: boolean;
-}) {
-  const copy = PLAN_COPY[plan];
+/**
+ * The single plan, and the button that opens a real Stripe Checkout Session.
+ *
+ * This replaced two side-by-side tier cards with a monthly/annual toggle, each linking to one of
+ * four fixed Payment Link URLs. The toggle is gone because there is one interval; the links are
+ * gone because a Payment Link cannot carry a per-customer referral discount.
+ *
+ * The price is rendered from `formattedPrice()`, the same cents the Stripe Price is created with,
+ * so the figure on this page and the figure on the invoice cannot drift apart.
+ */
+function PlanCard({ isCurrent }: { isCurrent: boolean }) {
+  const [opening, setOpening] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const subscribe = async () => {
+    setOpening(true);
+    setError(null);
+    try {
+      const res = await fetch("/api/stripe/checkout", { method: "POST" });
+      const data = await res.json();
+      if (!res.ok || !data.url) {
+        setError(data.error ?? "Couldn't open checkout right now.");
+        setOpening(false);
+        return;
+      }
+      window.location.href = data.url;
+    } catch {
+      setError("Couldn't reach the server.");
+      setOpening(false);
+    }
+  };
+
   return (
     <div
       style={{
-        flex: 1,
-        minWidth: 280,
-        background: plan === "founder" ? "var(--attention)" : "var(--card)",
-        border: plan === "founder" ? "1px solid var(--attention-border)" : "1px solid var(--border)",
+        width: "min(100%, 440px)",
+        margin: "0 auto",
+        background: "var(--card)",
+        border: "1.5px solid var(--ember)",
         borderRadius: 20,
         padding: 28,
         display: "flex",
@@ -67,36 +85,22 @@ function PlanCard({
       }}
     >
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10 }}>
-        <span style={{ fontFamily: "var(--font-display)", fontWeight: 800, fontSize: 20, letterSpacing: "-.02em" }}>{copy.name}</span>
+        <span style={{ fontFamily: "var(--font-display)", fontWeight: 800, fontSize: 20, letterSpacing: "-.02em" }}>{PLAN.name}</span>
         {isCurrent && (
           <span style={{ fontSize: 10.5, fontWeight: 700, color: "var(--green)", background: "var(--green-tint)", padding: "3px 8px", borderRadius: 999, letterSpacing: ".03em" }}>
             YOUR PLAN
           </span>
         )}
       </div>
-      <p style={{ margin: 0, fontSize: 14, color: "var(--muted)", lineHeight: 1.55 }}>{copy.tagline}</p>
 
-      <div style={{ display: "flex", gap: 6, fontSize: 13, background: "var(--card-alt)", padding: 4, borderRadius: 999, width: "fit-content" }}>
-        {(["monthly", "annual"] as const).map((i) => (
-          <span
-            key={i}
-            onClick={() => onIntervalChange(i)}
-            style={{
-              cursor: "pointer",
-              padding: "6px 13px",
-              borderRadius: 999,
-              fontWeight: 600,
-              background: interval === i ? "var(--ink)" : "transparent",
-              color: interval === i ? "var(--card)" : "var(--muted-strong)",
-            }}
-          >
-            {i === "monthly" ? "Monthly" : "Annual"}
-          </span>
-        ))}
-      </div>
+      <span style={{ fontFamily: "var(--font-display)", fontWeight: 800, fontSize: 40, letterSpacing: "-.03em", lineHeight: 1 }}>
+        {formattedPrice()}
+        <span style={{ fontSize: 16, fontWeight: 500, color: "var(--muted)" }}>/month</span>
+      </span>
+      <p style={{ margin: 0, fontSize: 14, color: "var(--muted)", lineHeight: 1.55 }}>{PLAN.tagline}</p>
 
       <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-        {copy.features.map((f) => (
+        {PLAN.features.map((f) => (
           <div key={f} style={{ display: "flex", alignItems: "flex-start", gap: 9 }}>
             <div style={{ width: 17, height: 17, borderRadius: 999, background: "var(--ember)", display: "grid", placeItems: "center", flexShrink: 0, marginTop: 2 }}>
               <svg width="9" height="9" viewBox="0 0 10 10" fill="none" stroke="#fff" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M2 5.2l2 2 4-4.4" /></svg>
@@ -110,15 +114,15 @@ function PlanCard({
         <a href="/api/stripe/portal" className="ky-btn-outline" style={{ padding: "13px 20px", fontSize: 14.5, fontWeight: 600, textAlign: "center" }}>
           Manage billing
         </a>
-      ) : checkoutUrl ? (
-        <a href={checkoutUrl} className="ky-btn-ember" style={{ padding: "13px 20px", fontSize: 14.5, border: "none", textAlign: "center" }}>
-          Subscribe {interval === "monthly" ? "monthly" : "annually"} on Stripe
-        </a>
       ) : (
-        <span style={{ fontSize: 13, color: "var(--muted)", textAlign: "center" }}>Loading checkout link…</span>
+        <button className="ky-btn-ember" onClick={subscribe} disabled={opening} style={{ padding: "13px 20px", fontSize: 14.5, border: "none", opacity: opening ? 0.6 : 1 }}>
+          {opening ? "Opening Stripe…" : "Subscribe"}
+        </button>
       )}
+      {/* The technical reason never reaches here — toUserError logs it and returns a sentence. */}
+      {error && <span style={{ fontSize: 13, color: "var(--ember)", textAlign: "center" }}>{error}</span>}
       <span style={{ fontSize: 12, color: "var(--muted)", textAlign: "center" }}>
-        Pricing shown at checkout on Stripe · cancel anytime · nothing sends without your approval
+        Secure checkout on Stripe · cancel anytime · nothing sends without your approval
       </span>
     </div>
   );
@@ -126,8 +130,6 @@ function PlanCard({
 
 function TrialInner() {
   const [campaign, setCampaign] = useState<Campaign | null>(null);
-  const [links, setLinks] = useState<CheckoutLinks | null>(null);
-  const [interval, setInterval] = useState<BillingInterval>("monthly");
   const [loadError, setLoadError] = useState<string | null>(null);
   const [attempt, setAttempt] = useState(0);
 
@@ -146,8 +148,6 @@ function TrialInner() {
       .catch(() => {
         if (!cancelled) setLoadError("Couldn't reach the server.");
       });
-    // Non-critical — the plan cards already show "Loading checkout link…" until this resolves.
-    fetch("/api/stripe/checkout-links").then((r) => r.json()).then(setLinks).catch(() => {});
     return () => {
       cancelled = true;
     };
@@ -207,7 +207,7 @@ function TrialInner() {
                   ? "Your setup is complete."
                   : daysLeft > 0
                     ? `Your trial is active — no action needed yet. ${daysLeft} day${daysLeft === 1 ? "" : "s"} left, ends ${endedLabel}.`
-                    : `Your 7-day trial ended ${endedLabel}. Nothing's paused — subscribe below whenever you're ready.`}
+                    : `Your ${TRIAL_DAYS}-day trial ended ${endedLabel}. Nothing's paused — subscribe below whenever you're ready.`}
           </p>
         </div>
 
@@ -251,17 +251,13 @@ function TrialInner() {
           </div>
         )}
 
-        <div style={{ position: "relative", display: "flex", gap: 20, width: "100%", maxWidth: 900, flexWrap: "wrap" }}>
-          {(["pro", "founder"] as const).map((plan) => (
-            <PlanCard
-              key={plan}
-              plan={plan}
-              interval={interval}
-              onIntervalChange={setInterval}
-              checkoutUrl={links?.[plan][interval] ?? null}
-              isCurrent={isActive && subscription!.plan === plan}
-            />
-          ))}
+        <div style={{ position: "relative", width: "100%", maxWidth: 900, display: "flex", flexDirection: "column", gap: 20 }}>
+          <PlanCard isCurrent={isActive} />
+          {/* Shown to everyone, subscribed or not: a trial user can refer, and the credit waits as
+              `qualified` until they have a Stripe customer to apply it to. */}
+          <div style={{ width: "min(100%, 440px)", margin: "0 auto", textAlign: "left" }}>
+            <ReferralPanel />
+          </div>
         </div>
       </div>
     </DashboardShell>
