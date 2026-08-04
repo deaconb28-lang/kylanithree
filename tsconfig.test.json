@@ -49,6 +49,7 @@
     "lib/buyers/confidence.ts",
     "lib/billing.ts",
     "lib/referrals.ts",
-    "lib/stripe.ts"
+    "lib/stripe.ts",
+    "lib/favicon.ts"
   ]
 }

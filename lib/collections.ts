@@ -252,3 +252,27 @@ export async function Suppressions() {
 export async function SearchRuns() {
   return (await getDb()).collection<SearchRunDoc>("searchRuns");
 }
+
+/**
+ * Billing that outlives a campaign.
+ *
+ * The subscription and the connected Stripe account live on `CampaignDoc` because that is where
+ * they were first needed, but neither actually belongs to a campaign — they belong to the account.
+ * Deleting a campaign therefore has to lift them somewhere, or a paying customer would be stranded:
+ * Stripe keeps charging the card and nothing in our database says they are subscribed. See
+ * `lib/account/reset.ts`, which writes here on delete and reads it back when the next campaign is
+ * created.
+ *
+ * Most accounts have no row here at all. Its presence means "this account has had billing that
+ * currently has no campaign to sit on".
+ */
+export interface AccountBillingDoc {
+  userId: string;
+  subscription?: SubscriptionInfo;
+  stripe?: StripeConnection;
+  updatedAt: Date;
+}
+
+export async function AccountBilling() {
+  return (await getDb()).collection<AccountBillingDoc>("accountBilling");
+}

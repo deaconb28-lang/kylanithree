@@ -5,6 +5,7 @@ import { CHANNELS } from "../data";
 import { meterLeads } from "../credits/meter";
 import { ensureCreditIndexes } from "../credits/indexes";
 import { slugify } from "../seed";
+import { restoreBillingOnto } from "../account/reset";
 import { Searches, type DiscoverLead, type SearchDoc } from "./collections";
 
 // Turning an anonymous discover run into a real account's campaign.
@@ -149,6 +150,11 @@ export async function claimSearch(userId: string, searchId: string, plan?: strin
         updatedAt: now,
       } satisfies CampaignDoc)
     ).insertedId.toString();
+
+  // If this account deleted a previous campaign while subscribed, put the subscription back on the
+  // new one. Without this, "start fresh" would silently drop a paying customer to unsubscribed while
+  // Stripe carried on billing them. No-op for an account that has never had billing.
+  if (!existing) await restoreBillingOnto(userId);
 
   // Dedupe against anything the account already has, by person — a founder who ran discover twice
   // should get the union, not the same handle listed twice under two campaigns.

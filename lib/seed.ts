@@ -4,6 +4,7 @@ import { scoreLead } from "./search/leadScore";
 import { CHANNELS } from "./data";
 import { meterLeads } from "./credits/meter";
 import { ensureCreditIndexes } from "./credits/indexes";
+import { restoreBillingOnto } from "./account/reset";
 
 export function slugify(text: string) {
   return text.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)/g, "") || "buyer";
@@ -232,6 +233,10 @@ export async function finalizeOnboarding(userId: string, onboarding: OnboardingA
   };
   const { insertedId: campaignId } = await campaigns.insertOne(campaign);
   const cid = campaignId.toString();
+
+  // A previously deleted campaign may have carried a subscription with it. Put it back, or "start
+  // fresh" would leave a paying customer reading as unsubscribed while Stripe kept billing them.
+  await restoreBillingOnto(userId);
 
   // generated.leads/communities can legitimately be empty — generateCampaignSeed only returns
   // real, verified search results now rather than a fabricated quota, so a fresh campaign may

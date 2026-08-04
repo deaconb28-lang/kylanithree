@@ -7,7 +7,7 @@ import { relativeTime } from "../../../lib/relativeTime";
 import type { DiscoverLead } from "../../../lib/discover/collections";
 import { anonId as getAnonId, sinceFlowStart, trackClient } from "../../../lib/discover/clientTrack";
 import SearchWheel, { type FieldVenue } from "../../../components/discover/SearchWheel";
-import Avatar from "../../../components/Avatar";
+import SiteIcon from "../../../components/SiteIcon";
 import { highlightSegments } from "../../../lib/search/excerpt";
 
 // The whole onboarding, on one screen.
@@ -399,14 +399,14 @@ function WorkPanel({
                   border: "none",
                   padding: 0,
                   cursor: "pointer",
-                  // A ring in the panel's own background separates the discs where they overlap.
-                  borderRadius: 999,
+                  // A ring in the panel's own background separates the tiles where they overlap.
+                  borderRadius: 8,
                   boxShadow: "0 0 0 2px var(--card)",
                   marginLeft: i === 0 ? 0 : -8,
                   lineHeight: 0,
                 }}
               >
-                <Avatar displayName={l.person?.displayName} handle={l.author} size={26} />
+                <SiteIcon url={l.permalink} displayName={l.person?.displayName} handle={l.author} size={26} title={l.person?.displayName?.trim() || l.author} />
               </button>
             ))}
             {leads.length > 7 && (
@@ -463,7 +463,7 @@ function LeadCard({ lead, isNew, pinned, onInteract }: { lead: DiscoverLead; isN
 
   const identity = (
     <>
-      <Avatar displayName={name} handle={lead.author} size={30} />
+      <SiteIcon url={lead.permalink} displayName={name} handle={lead.author} size={30} />
       <span style={{ fontSize: 14, fontWeight: 700, color: "var(--ink)" }}>{name || lead.author}</span>
     </>
   );
@@ -538,8 +538,13 @@ function LeadCard({ lead, isNew, pinned, onInteract }: { lead: DiscoverLead; isN
       </blockquote>
 
       {/* One line for the person, replacing what used to be an identity row, a bio row and an
-          actions row. The avatar and name ARE the profile link, so the separate "Profile" link is
-          folded in rather than dropped. */}
+          actions row. The site icon and name ARE the profile link, so the separate "Profile" link is
+          folded in rather than dropped.
+
+          The icon is the SITE, not the person — the name beside it already says who, and a column of
+          marks says at a glance whether these fourteen people are spread across Hacker News, GitHub
+          and three forums or all sitting in one thread. Falls back to initials, so a host with no
+          resolvable icon renders a person rather than a broken square. */}
       <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap", minWidth: 0, fontSize: 12.5, color: "var(--muted)" }}>
         {person?.profileUrl ? (
           <a

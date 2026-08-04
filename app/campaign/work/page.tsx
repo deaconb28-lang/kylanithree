@@ -7,7 +7,7 @@ import SearchAgainButton from "../../../components/dashboard/SearchAgainButton";
 import type { HypothesisDoc, LeadDoc, SuppressionReason } from "../../../lib/collections";
 import { SUPPRESSION_REASON_LABELS, SUPPRESSION_REASONS } from "../../../lib/suppression";
 import LeadTier from "../../../components/LeadTier";
-import Avatar from "../../../components/Avatar";
+import SiteIcon from "../../../components/SiteIcon";
 import { tierFromTotal } from "../../../lib/search/leadScore";
 import { REJECTION_REASONS, REJECTION_REASON_LABELS, type RejectionReason } from "../../../lib/leads/rejectionReasons";
 import { relativeTime } from "../../../lib/relativeTime";
@@ -616,7 +616,7 @@ function QueueInner() {
                 }}
               >
                 <span style={{ display: "flex", alignItems: "center", gap: 8, minWidth: 0 }}>
-                  <Avatar displayName={l.name} handle={l.name} size={26} />
+                  <SiteIcon url={l.permalink} displayName={l.name} handle={l.name} size={26} title={l.company} />
                   <span className="ky-tnum" style={{ fontSize: 11.5, color: "var(--faint)", marginLeft: "auto" }}>{i + 1}</span>
                 </span>
                 <span style={{ fontSize: 14, fontWeight: 600, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
@@ -634,7 +634,7 @@ function QueueInner() {
         <section style={{ display: "flex", flexDirection: "column", gap: 20 }}>
           <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 20, flexWrap: "wrap" }}>
             <div style={{ display: "flex", alignItems: "flex-start", gap: 13, minWidth: 0 }}>
-              <Avatar displayName={lead.name} handle={lead.name} size={44} />
+              <SiteIcon url={lead.permalink} displayName={lead.name} handle={lead.name} size={44} title={lead.company} />
               <div style={{ display: "flex", flexDirection: "column", gap: 6, minWidth: 0 }}>
                 <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
                   <span style={{ fontFamily: "var(--font-display)", fontWeight: 700, fontSize: 25, letterSpacing: "-.02em" }}>{lead.name}</span>

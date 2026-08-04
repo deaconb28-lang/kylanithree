@@ -251,7 +251,155 @@ export default function SettingsPage() {
             {campaign.paused ? "Resume campaign" : "Pause campaign"}
           </button>
         </div>
+
+        <DangerZone productName={campaign.productName} />
       </div>
     </DashboardShell>
+  );
+}
+
+/**
+ * Delete the campaign and start over.
+ *
+ * Two things make this safe enough to put on a settings page. The founder has to type their own
+ * product name — a one-click irreversible button eventually gets pressed by somebody who meant to
+ * press Pause, which sits directly above it — and the server checks the same thing, because a
+ * confirmation the client could skip is not a confirmation.
+ *
+ * The copy states what survives as well as what goes. "Deletes everything" would be a lie: people
+ * who unsubscribed stay suppressed, and an active subscription moves to the next campaign rather
+ * than being cancelled. Saying so is also the honest answer to "will this stop my billing" — it
+ * will not, and somebody who wanted that needs the billing portal instead.
+ */
+function DangerZone({ productName }: { productName: string }) {
+  const [open, setOpen] = useState(false);
+  const [typed, setTyped] = useState("");
+  const [deleting, setDeleting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const matches = typed.trim().toLowerCase() === productName.trim().toLowerCase();
+
+  const remove = async () => {
+    if (!matches) return;
+    setDeleting(true);
+    setError(null);
+    try {
+      const res = await fetch("/api/campaign", {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ confirm: typed }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        setError(data.error ?? "Couldn't delete the campaign.");
+        setDeleting(false);
+        return;
+      }
+      // A full navigation rather than a router push: every dashboard route holds campaign data in
+      // its own state, and the campaign this page was rendering no longer exists.
+      window.location.href = "/onboarding";
+    } catch {
+      setError("Couldn't reach the server.");
+      setDeleting(false);
+    }
+  };
+
+  return (
+    <div
+      style={{
+        border: "1px solid var(--attention-border)",
+        borderRadius: 16,
+        padding: "22px 24px",
+        display: "flex",
+        flexDirection: "column",
+        gap: 14,
+        background: "var(--card)",
+      }}
+    >
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 16, flexWrap: "wrap" }}>
+        <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+          <span style={{ fontFamily: "var(--font-display)", fontWeight: 700, fontSize: 17, color: "var(--ember)" }}>
+            Delete this campaign
+          </span>
+          <span style={{ fontSize: 14, color: "var(--muted)", lineHeight: 1.5 }}>
+            Removes {productName} and everything found for it, then takes you back to the start.
+          </span>
+        </div>
+        {!open && (
+          <button
+            onClick={() => setOpen(true)}
+            className="ky-btn-outline"
+            style={{ padding: "12px 20px", fontSize: 14.5, fontWeight: 600, color: "var(--ember)", borderColor: "var(--attention-border)", whiteSpace: "nowrap" }}
+          >
+            Delete campaign
+          </button>
+        )}
+      </div>
+
+      {open && (
+        <div style={{ display: "flex", flexDirection: "column", gap: 14, borderTop: "1px solid var(--border)", paddingTop: 16 }}>
+          <div style={{ display: "flex", flexDirection: "column", gap: 7, fontSize: 13.5, color: "var(--muted-strong)", lineHeight: 1.5 }}>
+            <span style={{ fontWeight: 600, color: "var(--ink)" }}>This cannot be undone. It deletes:</span>
+            <span>· every lead and draft, including approved ones not yet sent</span>
+            <span>· your communities, hypotheses and findings</span>
+            <span>· the discover run this campaign came from</span>
+            {/* Stated as plainly as the deletions. Somebody clicking this to stop being charged
+                needs to know it will not, and the suppression line is a promise to people who are
+                not in the room. */}
+            <span style={{ fontWeight: 600, color: "var(--ink)", marginTop: 5 }}>It keeps:</span>
+            <span>· anyone who unsubscribed — they stay suppressed and will not be contacted again</span>
+            <span>· your subscription and billing history. This does not cancel anything.</span>
+          </div>
+
+          <label style={{ display: "flex", flexDirection: "column", gap: 7 }}>
+            <span style={{ fontSize: 13.5, color: "var(--muted)" }}>
+              Type <strong style={{ color: "var(--ink)" }}>{productName}</strong> to confirm.
+            </span>
+            <input
+              value={typed}
+              onChange={(e) => setTyped(e.target.value)}
+              placeholder={productName}
+              autoComplete="off"
+              spellCheck={false}
+              style={{
+                padding: "11px 14px",
+                fontSize: 14.5,
+                fontFamily: "inherit",
+                color: "var(--ink)",
+                background: "var(--card-alt)",
+                border: "1px solid var(--border-strong)",
+                borderRadius: 10,
+                maxWidth: 320,
+              }}
+            />
+          </label>
+
+          {error && <span style={{ fontSize: 13.5, color: "var(--ember)" }}>{error}</span>}
+
+          <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
+            <button
+              onClick={remove}
+              disabled={!matches || deleting}
+              className="ky-btn-ember"
+              style={{ padding: "11px 20px", fontSize: 14.5, border: "none", opacity: !matches || deleting ? 0.45 : 1, cursor: matches && !deleting ? "pointer" : "not-allowed" }}
+            >
+              {deleting ? "Deleting…" : "Delete campaign permanently"}
+            </button>
+            <button
+              onClick={() => {
+                setOpen(false);
+                setTyped("");
+                setError(null);
+              }}
+              disabled={deleting}
+              className="ky-btn-outline"
+              style={{ padding: "11px 20px", fontSize: 14.5, fontWeight: 600 }}
+            >
+              Cancel
+            </button>
+          </div>
+        </div>
+      )}
+    </div>
   );
 }
