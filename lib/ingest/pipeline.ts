@@ -193,6 +193,15 @@ export function isInfrastructureFailure(err: unknown): boolean {
   // A 400 is the ambiguous one: it covers both "your balance is too low" and a genuine malformed
   // request. Matched on the message rather than assumed either way.
   if (/credit balance|billing|quota|insufficient|payment|rate.?limit|overloaded|capacity/.test(message)) return true;
+  // A rejection of the REQUEST is not a verdict on the documents inside it. "This model does not
+  // support the effort parameter" is the case that proved it: switching to Haiku made every batch
+  // 400, and because an unrecognised 400 charges an attempt, 600 good documents were on their way
+  // to being condemned for a parameter WE sent. Anything naming a model, a parameter or an
+  // unsupported field is our configuration being wrong, and the text is innocent.
+  // Matched on the SPECIFIC complaint, not on Anthropic's generic `invalid_request_error` type —
+  // that type also covers a structured-output rejection driven by one document's content, which is
+  // exactly the case the attempt counter exists for and must keep charging.
+  if (/does not support|unsupported (parameter|field)|unknown parameter|unexpected keyword|model not found|no such model/.test(message)) return true;
   if (/timeout|timed out|aborted|socket|econn|enotfound|network|fetch failed/.test(message)) return true;
   return false;
 }
@@ -204,7 +213,10 @@ export function isInfrastructureFailure(err: unknown): boolean {
  * attempts, plus anything stored before `classifierStage` existed, which the backlog query filters
  * on and would therefore never see.
  */
-const CLASSIFY_REPAIR_VERSION = 1;
+// 2: the Haiku switch sent an unsupported `effort` parameter, every batch 400'd, and the
+// unrecognised-400 rule charged each document in them a retry. Bumping this gives those documents
+// their attempts back — they were never judged, they were charged for our own bad request.
+const CLASSIFY_REPAIR_VERSION = 2;
 
 export type ClassifyRepairStats = { unblocked: number; staged: number };
 

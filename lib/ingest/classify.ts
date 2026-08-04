@@ -156,7 +156,11 @@ export async function classifyBatch(opts: { documents: ClassifyInput[]; timeoutM
       max_tokens: 2500,
       system: SYSTEM,
       messages: [{ role: "user", content }],
-      output_config: { effort: "low", format: zodOutputFormat(VerdictSchema) },
+      // No `effort` here. It is a Claude 5-family parameter and Haiku rejects the whole request
+      // with `400 "This model does not support the effort parameter"` — which is a rejection of our
+      // REQUEST, not of any document in it, and cost 600 documents a retry attempt before it was
+      // caught. `format` is supported on both.
+      output_config: { format: zodOutputFormat(VerdictSchema) },
     },
     { timeout: timeoutMs },
   );
