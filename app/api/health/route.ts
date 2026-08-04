@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { classifySpendToday } from "@/lib/ingest/budget";
 import { getDb } from "@/lib/mongodb";
 import { redditAuthMode } from "@/lib/search/reddit";
 import { hasBlueskyCredentials, searchBluesky } from "@/lib/search/bluesky";
@@ -249,6 +250,10 @@ export async function GET(req: NextRequest) {
       peopleEnriched,
       documentsByPlatform: Object.fromEntries(byPlatform.map((p) => [p._id ?? "unknown", p.n])),
       searchableShare: documents > 0 ? `${Math.round((classified / documents) * 100)}%` : "—",
+      // What classification has cost today, in the only unit the worker controls. Surfaced because
+      // the alternative is finding out from the bill: this ran up ~$150 in a day with nothing
+      // anywhere able to notice.
+      classifyToday: await classifySpendToday(),
       note:
         backlog > classified
           ? "More documents are waiting on the classifier than have cleared it. Check the worker logs for classify errors — an exhausted ANTHROPIC_API_KEY balance stops classification while crawling continues, so the collection grows and search does not."

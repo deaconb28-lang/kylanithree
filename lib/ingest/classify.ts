@@ -16,7 +16,19 @@ import type { IntentType } from "../search/intent";
 // complain and how founders describe their product. That gap is why naive semantic search on raw
 // posts underperforms.
 
-export const CLASSIFIER_MODEL = "claude-sonnet-5";
+// Haiku, not Sonnet, and this was a cost decision made against a real bill.
+//
+// Classification ran on Sonnet at 12 batches a tick during backlog catch-up and burned ~$150 in a
+// day. It is the only paid step in the worker and it runs forever, so the model choice here is the
+// single biggest lever on what this product costs to operate.
+//
+// The task suits a small model: it is structured extraction against a zod schema — pick one of
+// seven intent types, restate the problem in one line, pull out named products and a role. It is
+// not open-ended reasoning. The place quality could slip is `problemStatement`, which feeds the
+// embedding, so watch the leads/none ratio in the worker logs after this change: batches have been
+// running 25-30% leads, and a sharp move in either direction means the model is judging
+// differently rather than the corpus having changed.
+export const CLASSIFIER_MODEL = "claude-haiku-4-5-20251001";
 export const CLASSIFIER_VERSION = `${CLASSIFIER_MODEL}/v1`;
 
 export const CLASSIFY_BATCH_SIZE = 20;
@@ -132,14 +144,16 @@ export async function classifyBatch(opts: { documents: ClassifyInput[]; timeoutM
       (d) =>
         `<post id="${d.id}" platform="${d.platform}" posted="${d.postedAt.toISOString().slice(0, 10)}">\n${
           d.title ? `${d.title}\n` : ""
-        }${d.body.slice(0, 2000)}\n</post>`,
+        }${d.body.slice(0, 1200)}\n</post>`,
     )
     .join("\n\n");
 
   const result = await getAnthropic().messages.parse(
     {
       model: CLASSIFIER_MODEL,
-      max_tokens: 8000,
+      // 2500, down from 8000. Output is billed and 20 verdicts do not need eight thousand tokens —
+      // the ceiling was never reached, it just left room for a runaway response to be paid for.
+      max_tokens: 2500,
       system: SYSTEM,
       messages: [{ role: "user", content }],
       output_config: { effort: "low", format: zodOutputFormat(VerdictSchema) },

@@ -5,6 +5,7 @@ import { lexicalGate } from "../search/intent";
 import { LEXICON_VERSION } from "../search/intent";
 import { personFingerprint } from "../credits/fingerprint";
 import { classifyBatch, needsReview, CLASSIFIER_VERSION, CLASSIFY_BATCH_SIZE, type ClassifyInput } from "./classify";
+import { claimClassifyBatch } from "./budget";
 import { embed, embeddingInput, hasEmbeddingProvider, EMBED_MODEL, EMBED_BATCH_SIZE } from "./embed";
 
 // normalize -> gate -> store -> classify -> resolve person.
@@ -261,6 +262,8 @@ export async function repairClassifyBacklog(): Promise<ClassifyRepairStats> {
 
 export type ClassifyStats = {
   considered: number;
+  /** Set when today's classification budget is spent. The caller must stop, not retry. */
+  budgetExhausted?: boolean;
   classified: number;
   leads: number;
   none: number;
@@ -294,6 +297,15 @@ export async function classifyBacklog(opts: { limit?: number; timeoutMs?: number
     .toArray();
   stats.considered = pending.length;
   if (pending.length === 0) return stats;
+
+  // Claim this batch against today's spend before paying for it. See lib/ingest/budget.ts — the
+  // worker ran up ~$150 in a day and nothing in the system could notice or stop it.
+  const budget = await claimClassifyBatch(pending.length);
+  if (!budget.allowed) {
+    stats.considered = 0;
+    stats.budgetExhausted = true;
+    return stats;
+  }
 
   const inputs: ClassifyInput[] = pending.map((d) => ({
     id: String(d._id),

@@ -22,6 +22,7 @@ import { hasEmbeddingProvider } from "../lib/ingest/embed";
 import { isPermanentSourceError } from "../lib/ingest/errors";
 import { enrichPeopleBacklog } from "../lib/ingest/people";
 import { ensureSearchIndexes, searchIndexStatus } from "../lib/ingest/searchIndexes";
+import { ensureBudgetIndexes, classifySpendToday } from "../lib/ingest/budget";
 
 // The ingestion worker. Runs on Railway, NOT on Vercel.
 //
@@ -82,28 +83,26 @@ const CONCURRENCY: Record<string, number> = {
   github: 1,
 };
 const DEFAULT_CONCURRENCY = 2;
-// Classification is the only paid step here. Draining a few batches per tick keeps the backlog
-// moving without letting a large crawl spike the Anthropic bill in one go.
+// Classification is the only paid step in this worker, so these three numbers ARE the operating
+// cost. Retrieval only reads documents with an intentType, so classification still has to keep up
+// with the crawl — but only just. Running ahead of it buys nothing and is billed anyway.
 //
-// Raised with the crawl rate, and it has to be: retrieval only ever reads documents with an
-// intentType, so an unclassified document is invisible to search. Crawling faster without
-// classifying faster would grow the collection and not the corpus — storage with nothing to show
-// for it. 6 batches x 20 documents is 120/tick, which stays ahead of the new poll rate.
-const CLASSIFY_BATCHES_PER_TICK = 6;
+// 2, down from 6. Right-sized against the MEASURED crawl rate rather than guessed: documents grow
+// at roughly 13 a minute, so 2 batches a tick is 40 documents a minute — three times the headroom
+// needed to stay ahead. Six was ~9x over-provisioned, and since this is the only paid step in the
+// worker, over-provisioning it is simply spending money to idle.
+const CLASSIFY_BATCHES_PER_TICK = 2;
 /**
  * Batches run at once while there is a real backlog to drain.
  *
- * Classification was strictly sequential, so a tick could fit about six model calls into its own 60
- * seconds and no more — fine for keeping up with the crawl, useless for clearing a backlog of
- * thousands. Three at a time with a deeper batch count turns roughly 120 documents a tick into
- * roughly 480, which is the difference between draining 6,700 documents in an hour and in five.
- *
- * Capped at 3 rather than opened up: this is the only paid step in the worker, and the point is to
- * drain a backlog in an evening, not to spend a month's classification budget in ten minutes.
+ * Was 3 wide and 12 deep, which drained 6,700 documents in an hour and cost ~$150 in a day. The
+ * lesson is that catch-up is a burst, not a mode to leave running: 4 deep and 2 wide still clears a
+ * 1,600-document backlog in about twenty minutes, which is fast enough for something nobody is
+ * watching.
  */
-const CLASSIFY_CONCURRENCY = 3;
+const CLASSIFY_CONCURRENCY = 2;
 /** Batches per tick while catching up. Ignored once the backlog is small. */
-const CLASSIFY_CATCHUP_BATCHES = 12;
+const CLASSIFY_CATCHUP_BATCHES = 4;
 /** Above this many unclassified documents, the classifier runs in catch-up mode. */
 const CLASSIFY_CATCHUP_THRESHOLD = 500;
 // People looked up per tick. Free, but rate-limited by the platforms rather than by cost, and
@@ -375,6 +374,14 @@ async function classifyPass(): Promise<void> {
         done += 1;
         try {
           const stats = await classifyBacklog({});
+          if (stats.budgetExhausted) {
+            // Loud, and once per pass rather than once per worker: a spend cap that stops work
+            // quietly recreates exactly the "why is the corpus not growing" outage this codebase
+            // already spent a day undoing.
+            if (!stop) log("classification paused — today's batch budget is spent. See CLASSIFY_DAILY_BATCH_CAP.");
+            stop = true;
+            return;
+          }
           if (stats.considered === 0) {
             stop = true;
             return;
@@ -741,6 +748,7 @@ async function main(): Promise<void> {
   // logged and stepped over rather than thrown. It threw once, and the worker crash-looped
   // indefinitely because one index definition had changed shape.
   await ensureIngestIndexes();
+  await ensureBudgetIndexes();
 
   // The Atlas Search and Vector Search indexes. These were a manual Atlas-console step and the top
   // blocker on the whole retrieval path for months; on M10 with driver v6 they are just a call.
@@ -795,6 +803,8 @@ async function main(): Promise<void> {
       );
     }
     log(`${await unclassifiedCount()} document(s) waiting on a verdict`);
+    const spend = await classifySpendToday();
+    if (spend) log(`classified ${spend.documents} document(s) in ${spend.batches} batch(es) today, cap ${spend.cap} batches`);
   } catch (err) {
     // Never fatal. A worker that will not start because a repair failed is strictly worse than one
     // that crawls and classifies at the old rate.
