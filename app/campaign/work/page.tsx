@@ -7,6 +7,7 @@ import SearchAgainButton from "../../../components/dashboard/SearchAgainButton";
 import type { HypothesisDoc, LeadDoc, SuppressionReason } from "../../../lib/collections";
 import { SUPPRESSION_REASON_LABELS, SUPPRESSION_REASONS } from "../../../lib/suppression";
 import LeadTier from "../../../components/LeadTier";
+import Avatar from "../../../components/Avatar";
 import { tierFromTotal } from "../../../lib/search/leadScore";
 import { REJECTION_REASONS, REJECTION_REASON_LABELS, type RejectionReason } from "../../../lib/leads/rejectionReasons";
 import { relativeTime } from "../../../lib/relativeTime";
@@ -614,8 +615,11 @@ function QueueInner() {
                   opacity: decided && !current ? 0.5 : 1,
                 }}
               >
-                <span className="ky-tnum" style={{ fontSize: 11.5, color: "var(--faint)" }}>{i + 1}</span>
-                <span style={{ fontSize: 14.5, fontWeight: 600, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+                <span style={{ display: "flex", alignItems: "center", gap: 8, minWidth: 0 }}>
+                  <Avatar displayName={l.name} handle={l.name} size={26} />
+                  <span className="ky-tnum" style={{ fontSize: 11.5, color: "var(--faint)", marginLeft: "auto" }}>{i + 1}</span>
+                </span>
+                <span style={{ fontSize: 14, fontWeight: 600, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
                   {l.name}
                 </span>
                 <span style={{ fontSize: 12, color: "var(--muted)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
@@ -629,15 +633,18 @@ function QueueInner() {
         {/* ---- The one person in front of you ---- */}
         <section style={{ display: "flex", flexDirection: "column", gap: 20 }}>
           <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 20, flexWrap: "wrap" }}>
-            <div style={{ display: "flex", flexDirection: "column", gap: 7, minWidth: 0 }}>
-              <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
-                <span style={{ fontFamily: "var(--font-display)", fontWeight: 700, fontSize: 25, letterSpacing: "-.02em" }}>{lead.name}</span>
-                <LeadTier total={lead.scoreTotal} breakdown={lead.scoreBreakdown} />
+            <div style={{ display: "flex", alignItems: "flex-start", gap: 13, minWidth: 0 }}>
+              <Avatar displayName={lead.name} handle={lead.name} size={44} />
+              <div style={{ display: "flex", flexDirection: "column", gap: 6, minWidth: 0 }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
+                  <span style={{ fontFamily: "var(--font-display)", fontWeight: 700, fontSize: 25, letterSpacing: "-.02em" }}>{lead.name}</span>
+                  <LeadTier total={lead.scoreTotal} breakdown={lead.scoreBreakdown} />
+                </div>
+                <span style={{ fontSize: 14.5, color: "var(--muted)" }}>
+                  {lead.role} · found in {lead.company}
+                  {lead.postedAt ? ` · posted ${relativeTime(lead.postedAt)}` : ""}
+                </span>
               </div>
-              <span style={{ fontSize: 14.5, color: "var(--muted)" }}>
-                {lead.role} · found in {lead.company}
-                {lead.postedAt ? ` · posted ${relativeTime(lead.postedAt)}` : ""}
-              </span>
             </div>
             <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
               {(status === "approved" || status === "sent") && (

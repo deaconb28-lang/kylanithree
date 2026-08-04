@@ -7,6 +7,7 @@ import { relativeTime } from "../../../lib/relativeTime";
 import type { DiscoverLead } from "../../../lib/discover/collections";
 import { anonId as getAnonId, sinceFlowStart, trackClient } from "../../../lib/discover/clientTrack";
 import SearchWheel, { type FieldVenue } from "../../../components/discover/SearchWheel";
+import Avatar from "../../../components/Avatar";
 
 // The whole onboarding, on one screen.
 //
@@ -442,7 +443,9 @@ function LeadCard({ lead, isNew, pinned, onInteract }: { lead: DiscoverLead; isN
       {/* Who this is. `person` is present only when the crawler's enrichment pass has actually met
           them, so a card with nothing known says the handle and the venue and stops — it never
           renders an empty profile block implying they have no bio. */}
-      <div style={{ display: "flex", flexDirection: "column", gap: 3, minWidth: 0 }}>
+      <div style={{ display: "flex", alignItems: "flex-start", gap: 10, minWidth: 0 }}>
+        <Avatar displayName={name} handle={lead.author} size={32} />
+        <div style={{ display: "flex", flexDirection: "column", gap: 3, minWidth: 0, flex: 1 }}>
         <div style={{ display: "flex", alignItems: "baseline", gap: 8, flexWrap: "wrap", minWidth: 0 }}>
           <span style={{ fontSize: 14, fontWeight: 700 }}>{name || lead.author}</span>
           {name && <span style={{ fontSize: 12.5, color: "var(--muted)" }}>{lead.author}</span>}
@@ -456,6 +459,7 @@ function LeadCard({ lead, isNew, pinned, onInteract }: { lead: DiscoverLead; isN
             {person.bio}
           </span>
         )}
+        </div>
       </div>
 
       <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
@@ -499,13 +503,16 @@ function PeoplePanel({ leads, onJump }: { leads: DiscoverLead[]; onJump: (finger
           <button
             key={l.personFingerprint}
             onClick={() => onJump(l.personFingerprint)}
-            style={{ background: "none", border: "none", padding: 0, textAlign: "left", cursor: "pointer", fontFamily: "inherit", display: "flex", flexDirection: "column", gap: 1, minWidth: 0 }}
+            style={{ background: "none", border: "none", padding: 0, textAlign: "left", cursor: "pointer", fontFamily: "inherit", display: "flex", alignItems: "center", gap: 9, minWidth: 0 }}
           >
-            <span style={{ fontSize: 13.5, fontWeight: 600, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
-              {l.person?.displayName?.trim() || l.author}
-            </span>
-            <span style={{ fontSize: 12, color: "var(--muted)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
-              {l.person?.bio || l.venueName}
+            <Avatar displayName={l.person?.displayName} handle={l.author} size={30} />
+            <span style={{ display: "flex", flexDirection: "column", gap: 1, minWidth: 0 }}>
+              <span style={{ fontSize: 13.5, fontWeight: 600, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+                {l.person?.displayName?.trim() || l.author}
+              </span>
+              <span style={{ fontSize: 12, color: "var(--muted)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+                {l.person?.bio || l.venueName}
+              </span>
             </span>
           </button>
         ))}

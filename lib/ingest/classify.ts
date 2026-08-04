@@ -33,6 +33,27 @@ export const CLASSIFIER_VERSION = `${CLASSIFIER_MODEL}/v1`;
 
 export const CLASSIFY_BATCH_SIZE = 20;
 
+// PROMPT CACHING DOES NOT APPLY HERE, and this note exists so nobody spends an afternoon finding
+// that out the hard way. Caching below a model's minimum is SILENTLY IGNORED — no error, no
+// warning, both usage counters just read 0 — so adding `cache_control` would look like a fix and
+// do nothing, which is the exact failure shape this codebase keeps deleting.
+//
+// Two independent reasons, either one fatal:
+//
+//   1. The static prefix is far too small. Only the system prompt is constant across batches, and
+//      it is ~1,270 tokens against Haiku 4.5's 4,096-token minimum — 2,800 short. (The thresholds
+//      differ sharply by model: Opus 5 is 512, Sonnet 5 is 1,024, Haiku 4.5 is 4,096. Switching to
+//      the cheapest model raised the caching bar by 4x.)
+//   2. Even if it were met, the ceiling is small. A batch is ~7,300 input tokens, of which ~6,000
+//      are the twenty documents — which are different every single call, by definition. Caching
+//      could only ever touch the ~1,270-token system prefix: about 17% of input, times the 90%
+//      discount, so ~15% of input cost. The model switch cut roughly 66%.
+//
+// If classification cost needs to come down further, the Message Batches API is the real lever:
+// a flat 50% discount, and this workload is already asynchronous — the worker does not need a
+// synchronous answer. The trade is up to 24h of turnaround, which means the corpus lags a day.
+// That is a product decision, not a code cleanup.
+
 const VerdictSchema = z.object({
   verdicts: z.array(
     z.object({

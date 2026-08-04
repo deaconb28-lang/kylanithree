@@ -123,6 +123,19 @@ export default function HomePage() {
     });
   }, [leads, hypotheses]);
 
+  // Ranked, the way Explee ranks its fit table — strongest evidence first rather than whatever
+  // order the hypotheses happened to be written in. Confidence leads where there is a score, and
+  // leads found breaks the tie, which today is almost always the operative term: nothing can be
+  // sent, so most hypotheses honestly have no score at all.
+  const rankedSegments = useMemo(
+    () =>
+      [...segments].sort((a, b) => {
+        const byScore = (b.confidence.score ?? -1) - (a.confidence.score ?? -1);
+        return byScore !== 0 ? byScore : b.leadCount - a.leadCount;
+      }),
+    [segments],
+  );
+
   if (loadError) {
     return (
       <DashboardShell active="campaign">
@@ -269,7 +282,7 @@ export default function HomePage() {
           >
             {segments.length > 0 ? (
               <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 300px), 1fr))", gap: 14 }}>
-                {segments.map((s) => (
+                {rankedSegments.map((s) => (
                   <SegmentCard key={s.key} segment={s} />
                 ))}
               </div>
