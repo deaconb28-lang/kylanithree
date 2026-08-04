@@ -48,6 +48,7 @@
     "lib/enrich/apollo.ts",
     "lib/buyers/confidence.ts",
     "lib/billing.ts",
-    "lib/referrals.ts"
+    "lib/referrals.ts",
+    "lib/stripe.ts"
   ]
 }

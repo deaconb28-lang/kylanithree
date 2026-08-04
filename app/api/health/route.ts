@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { classifySpendToday } from "@/lib/ingest/budget";
 import { getDb } from "@/lib/mongodb";
 import { redditAuthMode } from "@/lib/search/reddit";
-import { stripeKeySource, stripeMode, checkoutConfigured, billingConfigured } from "@/lib/stripe";
+import { stripeKeySource, stripeKeyShape, stripeMode, stripeProbe, checkoutConfigured, billingConfigured } from "@/lib/stripe";
 import { PLAN } from "@/lib/billing";
 import { hasBlueskyCredentials, searchBluesky } from "@/lib/search/bluesky";
 import { webSearchProvider } from "@/lib/search/websearch";
@@ -412,8 +412,12 @@ export async function GET(req: NextRequest) {
   // is the worst of the three failures and the least visible.
   {
     const source = stripeKeySource();
+    const shape = stripeKeyShape();
     checks.billing = {
       keySource: source,
+      // The variable NAME says nothing about what is in it — `STRIPE_API_KEY` is just a name, and
+      // a publishable key pasted into it would look configured while authenticating nothing.
+      keyShape: shape,
       mode: stripeMode(),
       canOpenCheckout: checkoutConfigured(),
       canRecordPayments: billingConfigured(),
@@ -421,12 +425,23 @@ export async function GET(req: NextRequest) {
       plan: { name: PLAN.name, amountCents: PLAN.amountCents, currency: PLAN.currency, lookupKey: PLAN.lookupKey },
       note: !source
         ? "No Stripe key under STRIPE_SECRET_KEY or STRIPE_API_KEY — checkout returns 503."
-        : !process.env.STRIPE_WEBHOOK_SECRET
-          ? "Key present but STRIPE_WEBHOOK_SECRET is missing. Checkout deliberately refuses to open: Stripe would charge the card and nothing would write the subscription back, so the customer would pay and stay locked out."
-          : stripeMode() === "test"
-            ? "Configured, in TEST mode — no real card will be charged."
-            : "Configured and live.",
+        : shape === "publishable"
+          ? "The value set is a PUBLISHABLE key (pk_…). That key is public, belongs in the browser, and cannot authenticate any API call — every charge would fail. Replace it with the secret key (sk_…)."
+          : shape === "unrecognised"
+            ? "The value set does not look like a Stripe key (expected sk_… or rk_…). Checkout will fail on authentication."
+            : !process.env.STRIPE_WEBHOOK_SECRET
+              ? "Key present but STRIPE_WEBHOOK_SECRET is missing. Checkout deliberately refuses to open: Stripe would charge the card and nothing would write the subscription back, so the customer would pay and stay locked out."
+              : stripeMode() === "test"
+                ? "Configured, in TEST mode — no real card will be charged."
+                : "Configured and live.",
     };
+
+    // Opt-in, because it makes a real API call and this endpoint is hit by uptime monitors. Free
+    // and read-only: `balance.retrieve` creates nothing and charges nothing, and its livemode flag
+    // comes from Stripe rather than from our own prefix parsing.
+    if (req.nextUrl.searchParams.get("stripe") === "probe") {
+      (checks.billing as Record<string, unknown>).probe = await stripeProbe();
+    }
   }
 
   // Quora has no API — the source finds question URLs via web search and then fetches each page
