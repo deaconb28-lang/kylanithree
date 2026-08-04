@@ -1,5 +1,5 @@
 import type { Metadata, Viewport } from "next";
-import { Fraunces, Public_Sans } from "next/font/google";
+import { Fraunces, IBM_Plex_Mono, Public_Sans } from "next/font/google";
 import { Analytics } from "@vercel/analytics/next";
 import AuthProvider from "../components/AuthProvider";
 import AddToHomeScreen from "../components/AddToHomeScreen";
@@ -25,6 +25,23 @@ const fraunces = Fraunces({
   subsets: ["latin"],
   style: ["normal", "italic"],
   axes: ["SOFT", "WONK", "opsz"],
+  display: "swap",
+});
+
+// The agent's own voice, and the ONE brand element added for v0.8 — logged as a deliberate
+// exception to "zero new brand elements" rather than smuggled in.
+//
+// It earns the exception by being semantic rather than decorative: mono marks text the MACHINE
+// produced or measured — a worklog line, a stage delta, a card's purpose line, a reasoning line
+// above a draft. Setting those in the body face would leave nothing distinguishing what Kylani did
+// from what the founder wrote, which is the distinction the whole dashboard turns on.
+//
+// One weight, 400, and only the latin subset: this is for short technical strings, never for
+// reading. A second weight would be a second download to bold text that should not be bold.
+const plexMono = IBM_Plex_Mono({
+  variable: "--font-mono",
+  subsets: ["latin"],
+  weight: ["400"],
   display: "swap",
 });
 
@@ -63,7 +80,7 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en" className={`${publicSans.variable} ${fraunces.variable}`}>
+    <html lang="en" className={`${publicSans.variable} ${fraunces.variable} ${plexMono.variable}`}>
       <body style={{ fontFamily: "var(--font-public-sans), system-ui, sans-serif" }}>
         <AuthProvider>{children}</AuthProvider>
         <AddToHomeScreen />

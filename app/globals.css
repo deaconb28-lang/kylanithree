@@ -53,6 +53,9 @@
   /* One display face for the whole product, not just the hero. Named by role rather than by
      typeface so the next change is one line here instead of a hundred call sites. */
   --font-display: var(--font-fraunces), Georgia, "Times New Roman", serif;
+  /* Machine voice. See app/layout.tsx — mono marks what Kylani produced or measured, never
+     decoration, and the ui-monospace fallback keeps the meaning if the webfont never lands. */
+  --font-machine: var(--font-mono), ui-monospace, SFMono-Regular, Menlo, monospace;
 
   --ease: cubic-bezier(0.32, 0.72, 0, 1);
   --focus: 0 0 0 3px rgba(210, 67, 26, 0.3);
@@ -523,4 +526,148 @@ button {
     width: auto;
     align-self: flex-start;
   }
+}
+
+/* --- v0.8 campaign spine ------------------------------------------------------------------
+   The funnel as navigation. Four nodes, three connectors, and the connectors carry the rates.
+
+   The draw-once animation is the only motion here and it is gated on prefers-reduced-motion in the
+   stylesheet rather than in JS — the FINISHED spine is the default render, so a reduced-motion
+   visitor gets the true state on the first paint rather than a JS-driven snap after hydration.
+   Same rule the hero's field entrance follows, for the same reason. */
+.ky-spine {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  align-items: stretch;
+  gap: 0;
+}
+.ky-spine-cell {
+  position: relative;
+  display: flex;
+  align-items: center;
+  min-width: 0;
+}
+.ky-spine-link {
+  position: relative;
+  flex: 0 0 clamp(18px, 4vw, 56px);
+  height: 1px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.ky-spine-rule {
+  position: absolute;
+  inset: 0;
+  background: var(--border-strong);
+  transform-origin: left center;
+}
+.ky-spine-rate {
+  position: absolute;
+  top: -22px;
+  font-family: var(--font-machine);
+  font-size: 11px;
+  color: var(--faint);
+  white-space: nowrap;
+  background: var(--paper);
+  padding: 0 4px;
+}
+.ky-spine-node {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  align-items: flex-start;
+  padding: 14px 14px 13px;
+  border: 1px solid transparent;
+  border-radius: 13px;
+  background: transparent;
+  font: inherit;
+  color: inherit;
+  cursor: pointer;
+  text-align: left;
+  transition:
+    background 0.16s var(--ease),
+    border-color 0.16s var(--ease);
+}
+.ky-spine-node:hover {
+  background: var(--wash-active);
+}
+/* Selection is --active-bg, never --ember. Coral means "Kylani did something"; a tab the founder
+   clicked is something the founder did. */
+.ky-spine-node.active {
+  background: var(--active-bg);
+  border-color: var(--border-strong);
+}
+.ky-spine-count {
+  font-family: var(--font-display);
+  font-weight: 800;
+  font-size: clamp(26px, 3.4vw, 36px);
+  line-height: 1.05;
+  letter-spacing: -0.03em;
+  font-variant-numeric: tabular-nums;
+}
+.ky-spine-label {
+  font-size: 13.5px;
+  font-weight: 600;
+  color: var(--muted-strong);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 100%;
+}
+.ky-spine-delta {
+  font-family: var(--font-machine);
+  font-size: 11.5px;
+  color: var(--faint);
+  white-space: nowrap;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .ky-spine-rule {
+    animation: kySpineDraw 0.5s var(--ease) both;
+  }
+  .ky-spine-cell:nth-child(2) .ky-spine-rule {
+    animation-delay: 0.1s;
+  }
+  .ky-spine-cell:nth-child(3) .ky-spine-rule {
+    animation-delay: 0.2s;
+  }
+  .ky-spine-cell:nth-child(4) .ky-spine-rule {
+    animation-delay: 0.3s;
+  }
+  .ky-spine-rate {
+    /* kyRise, not a new keyframe: the fade the rest of the product already uses. */
+    animation: kyRise 0.4s var(--ease) both;
+    animation-delay: 0.45s;
+  }
+}
+@keyframes kySpineDraw {
+  from {
+    transform: scaleX(0);
+  }
+  to {
+    transform: scaleX(1);
+  }
+}
+
+/* Four stages stay visible on a phone. A horizontal scroller hides half the funnel behind a
+   gesture nobody knows to make, and seeing all four at once is the entire point of the band. */
+@media (max-width: 720px) {
+  .ky-spine {
+    grid-template-columns: repeat(2, 1fr);
+    gap: 6px;
+  }
+  .ky-spine-link {
+    display: none;
+  }
+  .ky-spine-node {
+    border-color: var(--border);
+  }
+}
+
+.ky-add-slot:hover {
+  border-color: var(--ember);
+  color: var(--ember);
+  background: var(--ember-tint);
 }
