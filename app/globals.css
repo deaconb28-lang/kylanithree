@@ -339,22 +339,6 @@ button {
     stroke-opacity: 0.7;
   }
 }
-@keyframes kyMarqueeLeft {
-  from {
-    transform: translate3d(0, 0, 0);
-  }
-  to {
-    transform: translate3d(-50%, 0, 0);
-  }
-}
-@keyframes kyMarqueeRight {
-  from {
-    transform: translate3d(-50%, 0, 0);
-  }
-  to {
-    transform: translate3d(0, 0, 0);
-  }
-}
 @keyframes kyBarFill {
   from {
     transform: scaleX(0);
@@ -397,12 +381,6 @@ button {
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .ky-track-a,
-  .ky-track-b {
-    animation: none !important;
-    overflow-x: auto !important;
-    scrollbar-width: thin;
-  }
   * {
     animation-duration: 0.001ms !important;
     animation-iteration-count: 1 !important;
@@ -486,10 +464,6 @@ button {
   box-shadow: var(--lift-3);
 }
 
-.ky-track-row:hover {
-  animation-play-state: paused;
-}
-
 /* The gallery wordmarks are flat artwork drawn in dark ink for a light ground, so on a dark page
    they vanish. They used to sit on a light plate to survive that; the plates read as a row of
    bright panels and are gone.
@@ -502,22 +476,9 @@ button {
    and would mangle the coloured tiles that replaced them. The app icons are opaque and legible on
    either background, so they need no dark-mode treatment at all. */
 
-.ky-marquee-mask {
-  -webkit-mask-image: linear-gradient(
-    to right,
-    transparent 0,
-    #000 80px,
-    #000 calc(100% - 80px),
-    transparent 100%
-  );
-  mask-image: linear-gradient(
-    to right,
-    transparent 0,
-    #000 80px,
-    #000 calc(100% - 80px),
-    transparent 100%
-  );
-}
+/* .ky-marquee-mask, .ky-track-a/b and the kyMarquee keyframes are gone with the scrolling gallery.
+   Two rows moving in opposite directions meant no logo could be read without waiting for it, and
+   the mask hid half of every row at any moment — see components/landing/Gallery.tsx. */
 
 .ky-sidebar-link {
   display: flex;

@@ -1,5 +1,5 @@
 import Hero from "../components/landing/Hero";
-import Marquee from "../components/landing/Marquee";
+import Gallery from "../components/landing/Gallery";
 import ProcessSteps from "../components/landing/ProcessSteps";
 import AdsComparison from "../components/landing/AdsComparison";
 import TimeStepper from "../components/landing/TimeStepper";
@@ -13,7 +13,7 @@ export default function Home() {
   return (
     <div id="how">
       <Hero />
-      <Marquee />
+      <Gallery />
       <ProcessSteps />
       <AdsComparison />
       <TimeStepper />
