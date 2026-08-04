@@ -6,10 +6,10 @@
 // already unreferenced by the time it was removed — the account-level seeding that used to inject
 // it (`ensureSeeded`) went earlier — so this was the last copy of it in the repo.
 
-// The gallery's brands moved to `lib/brands.ts` when the scrolling marquee became a static logo
-// wall. `GalleryMark`, `GalleryProduct` and `GALLERY_PRODUCTS` went with it, along with the twelve
-// app tiles they described — a shelf of identically shaped icons read as one company's app suite,
-// which is what the wordmarks now avoid.
+// The customer-logo gallery is gone entirely, along with `GalleryMark`, `GalleryProduct` and
+// `GALLERY_PRODUCTS`. It went through three forms — twelve wordmark PNGs, twelve drawn app tiles,
+// then twenty-five drawn wordmarks — and the objection that finally landed applies to all three:
+// a wall of logos is a customer list, and every name on this one was invented.
 
 export const TESTIMONIALS = [
   {
@@ -93,8 +93,8 @@ export const FAQS = [
   },
 ];
 
-// Illustrative placeholders for the hero's cycling input, matched to the invented brands on the
-// gallery shelf so the marketing site names one cast rather than two.
+// Illustrative placeholders for the hero's cycling input. They are visibly example URLs rather than
+// claimed customers — which is the distinction that outlived the logo gallery they used to match.
 export const URLS = ["berth.app", "fathom.dev", "pocketledger.io", "saltandpine.co"];
 
 export type ChannelKey = "gmail" | "reddit" | "slack" | "discord" | "forums" | "x" | "other";

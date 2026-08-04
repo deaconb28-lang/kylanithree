@@ -471,14 +471,11 @@ button {
    can be recoloured. invert + hue-rotate flips lightness while returning each hue to roughly where
    it started, so Berth stays teal and Salt & Pine keeps its orange ampersand — they just stop
    being drawn in ink nobody can see. */
-/* .ky-logo-plate is gone with the wordmark PNGs it existed for. It carried an
-   `invert(1) hue-rotate(180deg)` for dark mode — a trick that only works on flat two-tone artwork
-   and would mangle the coloured tiles that replaced them. The app icons are opaque and legible on
-   either background, so they need no dark-mode treatment at all. */
-
-/* .ky-marquee-mask, .ky-track-a/b and the kyMarquee keyframes are gone with the scrolling gallery.
-   Two rows moving in opposite directions meant no logo could be read without waiting for it, and
-   the mask hid half of every row at any moment — see components/landing/Gallery.tsx. */
+/* .ky-logo-plate, .ky-marquee-mask, .ky-track-a/b and the kyMarquee keyframes have all been
+   removed along with the customer-logo gallery they existed for. Kept as a note only because the
+   dark-mode lesson outlives them: the plates used `invert(1) hue-rotate(180deg)`, which works on
+   flat two-tone artwork and mangles anything with real colour in it. Anything opaque needs no
+   dark-mode treatment at all — which is why nothing on this page has one. */
 
 .ky-sidebar-link {
   display: flex;
