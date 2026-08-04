@@ -1,6 +1,9 @@
 import { getDb } from "./mongodb";
 
-export type LeadStatus = "waiting" | "approved" | "dropped" | "sent" | "replied";
+// The lead's own state. `converted` is the terminal one and is FOUNDER-ENTERED, never inferred:
+// nothing this product can observe proves a sale, so the only honest source is the person who was
+// paid. See lib/campaign/types.ts for how these map onto the four dashboard stages.
+export type LeadStatus = "waiting" | "approved" | "dropped" | "sent" | "replied" | "converted";
 
 // How strongly this person is expressing the problem right now. Assigned by the scoring stage
 // from the real post text, not guessed — see lib/search/score.ts.
@@ -29,6 +32,8 @@ export interface LeadDoc {
   status: LeadStatus;
   timeSensitive: boolean;
   feedback?: "landed" | "missed";
+  /** When the founder marked this person converted. The only date the cohort table can trust. */
+  convertedAt?: Date;
   // --- evidence: every field below comes from the platform itself, never from a model, which is
   // what makes a lead checkable rather than merely asserted.
   authorHandle?: string;

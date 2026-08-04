@@ -50,6 +50,8 @@
     "lib/billing.ts",
     "lib/referrals.ts",
     "lib/stripe.ts",
-    "lib/favicon.ts"
+    "lib/favicon.ts",
+    "lib/campaign/types.ts",
+    "lib/campaign/funnel.ts"
   ]
 }

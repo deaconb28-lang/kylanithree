@@ -5,6 +5,8 @@ import { requireCampaign } from "@/lib/apiAuth";
 import { Campaigns, Leads, Suppressions } from "@/lib/collections";
 import { sendGmail } from "@/lib/gmail";
 import { toUserError } from "@/lib/apiError";
+import { recordWork } from "@/lib/campaign/worklog";
+import type { WorklogKind } from "@/lib/campaign/types";
 import { signUnsubscribeToken } from "@/lib/unsubscribeToken";
 import { SUPPRESSION_REASON_LABELS } from "@/lib/suppression";
 
@@ -57,7 +59,34 @@ export async function PATCH(req: NextRequest, ctx: { params: Promise<{ id: strin
     }
   }
 
+  // `converted` is founder-entered and terminal, so it gets its own date. Nothing this product can
+  // observe proves a sale; the only honest source for that column is the person who was paid.
+  if (allowed.status === "converted" && !lead?.convertedAt) allowed.convertedAt = new Date();
+
   await leads.updateOne({ _id: new ObjectId(id), userId: result.userId }, { $set: allowed });
+
+  // The worklog is written by the action, never generated for display — see lib/campaign/worklog.ts.
+  // Fire-and-forget: a log line must not be able to fail the send it describes.
+  if (lead && typeof allowed.status === "string") {
+    const who = lead.name || lead.authorHandle || "someone";
+    const line: Partial<Record<string, { kind: WorklogKind; summary: string; rationale?: string }>> = {
+      sent: { kind: "sent", summary: `sent your message to ${who}`, rationale: `Approved by you. ${lead.source ? `Found in ${lead.source}.` : ""}`.trim() },
+      approved: { kind: "drafted", summary: `approved the draft for ${who}`, rationale: sendNote ?? undefined },
+      dropped: { kind: "found", summary: `dropped ${who} from the funnel`, rationale: sendNote ?? "Marked not a fit." },
+      replied: { kind: "replied", summary: `${who} replied` },
+      converted: { kind: "converted", summary: `${who} converted`, rationale: lead.hypothesisKey ? `Serves the ${lead.hypothesisKey} hypothesis.` : undefined },
+    };
+    const entry = line[allowed.status as string];
+    if (entry) {
+      void recordWork({
+        userId: result.userId,
+        campaignId: lead.campaignId,
+        leadId: id,
+        href: `/campaign/work?lead=${id}`,
+        ...entry,
+      });
+    }
+  }
 
   // Only count toward the daily send cap when a message actually went out — approving a lead
   // with no known email doesn't send anything, so it shouldn't inflate "sent today".

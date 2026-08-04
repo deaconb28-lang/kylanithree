@@ -4,6 +4,7 @@ import { z } from "zod";
 import { zodOutputFormat } from "@anthropic-ai/sdk/helpers/zod";
 import { getAnthropic } from "@/lib/anthropic";
 import { toUserError } from "@/lib/apiError";
+import { recordWork } from "@/lib/campaign/worklog";
 import { requireCampaign } from "@/lib/apiAuth";
 import { Leads } from "@/lib/collections";
 
@@ -65,6 +66,20 @@ export async function POST(req: Request, ctx: { params: Promise<{ id: string }> 
       { _id: new ObjectId(id), userId: result.userId },
       { $set: { subject: analysis.parsed_output.subject, draft: analysis.parsed_output.draft, updatedAt: new Date() } },
     );
+
+    // Recorded here rather than on approval: the drafting is the work Kylani did, and the drawer's
+    // whole claim is that it shows labor rather than outcomes.
+    void recordWork({
+      userId: result.userId,
+      campaignId: lead.campaignId,
+      leadId: id,
+      kind: "drafted",
+      summary: `drafted a reply to ${lead.name || lead.authorHandle || "a lead"}`,
+      rationale: lead.quote
+        ? `Anchored to what they said in ${lead.source || "their post"}.`
+        : undefined,
+      href: `/campaign/work?lead=${id}`,
+    });
 
     return NextResponse.json(analysis.parsed_output);
   } catch (err) {

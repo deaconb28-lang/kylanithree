@@ -6,6 +6,7 @@ import { meterLeads } from "../credits/meter";
 import { ensureCreditIndexes } from "../credits/indexes";
 import { slugify } from "../seed";
 import { restoreBillingOnto } from "../account/reset";
+import { recordWork } from "../campaign/worklog";
 import { Searches, type DiscoverLead, type SearchDoc } from "./collections";
 
 // Turning an anonymous discover run into a real account's campaign.
@@ -163,6 +164,20 @@ export async function claimSearch(userId: string, searchId: string, plan?: strin
 
   if (fresh.length > 0) {
     await leadsCol.insertMany(leadDocs({ userId, campaignId, leads: fresh, buyerName }));
+    // The first entry in a new account's worklog, and the reason the drawer is not empty the moment
+    // someone signs up. Named venues rather than a count: "found 14 people" is a number, "found 14
+    // people across Hacker News and 3 forums" is a thing that happened.
+    const venueNames = [...new Set(fresh.map((l) => l.venueName))];
+    void recordWork({
+      userId,
+      campaignId,
+      kind: "found",
+      summary: `found ${fresh.length} ${fresh.length === 1 ? "person" : "people"} across ${venueNames.slice(0, 3).join(", ")}${venueNames.length > 3 ? ` and ${venueNames.length - 3} more` : ""}`,
+      rationale: search.fast?.keywords?.length
+        ? `Looking for people saying things like \u201c${search.fast.keywords[0]}\u201d.`
+        : undefined,
+      href: "/campaign",
+    });
   }
 
   const communities = await Communities();
