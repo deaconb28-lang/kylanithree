@@ -74,16 +74,6 @@ export async function peopleByFingerprint(fingerprints: string[]): Promise<Map<s
   return out;
 }
 
-const PLATFORM_LABEL: Record<string, string> = {
-  hn: "Hacker News",
-  stackexchange: "Stack Exchange",
-  discourse: "the forum",
-  lemmy: "Lemmy",
-  bluesky: "Bluesky",
-  reddit: "Reddit",
-  github: "GitHub",
-};
-
 /**
  * One line about how established this account is, or nothing.
  *
@@ -91,14 +81,17 @@ const PLATFORM_LABEL: Record<string, string> = {
  * never "0 years", which is what a missing `accountAgeDays` would render as if it were defaulted.
  * The whole reason `lib/ingest/people.ts` leaves that field absent is so this can tell the
  * difference between a ten-year account we have not looked up and one that joined today.
+ *
+ * The platform name is deliberately NOT included. It used to read "17 months on Hacker News", and
+ * every call site renders it directly after the venue — so the card said
+ * "Hacker News · 17 months on Hacker News", naming the platform twice in one line.
  */
 export function describeTenure(person: Pick<PublicPerson, "platform" | "accountAgeDays">): string | undefined {
   const days = person.accountAgeDays;
   if (typeof days !== "number" || days < 0) return undefined;
-  const where = PLATFORM_LABEL[person.platform] ?? person.platform;
-  if (days < 60) return `${days} day${days === 1 ? "" : "s"} on ${where}`;
-  if (days < 730) return `${Math.round(days / 30)} months on ${where}`;
-  return `${Math.floor(days / 365)} years on ${where}`;
+  if (days < 60) return `${days} day${days === 1 ? "" : "s"}`;
+  if (days < 730) return `${Math.round(days / 30)} months`;
+  return `${Math.floor(days / 365)} years`;
 }
 
 /** Their name if the platform gave one, otherwise the handle. Never a fabricated human name. */

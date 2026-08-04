@@ -262,3 +262,102 @@ export function leadSummary(opts: {
   }
   return bestScore > 0 ? trimTo(best, maxChars) : undefined;
 }
+
+/**
+ * Where in `text` the founder's matched phrases actually appear, as [start, end) ranges.
+ *
+ * This exists so the card can mark the match inside the quote instead of restating it underneath.
+ * Every lead card used to carry a `matched "can't find first customers"` chip on its own row, and
+ * with fourteen leads that was the same sentence fourteen times — a whole horizontal band per card
+ * spent repeating what the summary above it already implied. Showing WHERE the match is says
+ * strictly more in strictly less space.
+ *
+ * Built on the SAME tokenizer and stop-word set `matchedTerms` uses, deliberately. If the highlight
+ * used its own word rules the two would disagree at the edges, and the failure would be the worst
+ * kind: a card claiming a phrase matched with nothing marked in the text, or — worse — a mark on a
+ * word that did not actually count toward the match. Sharing the rule makes them agree by
+ * construction rather than by coincidence.
+ *
+ * Ranges come back sorted and merged, so overlapping hits from two phrases sharing a word ("first
+ * customers" and "where do I find early customers") render as one continuous mark rather than two
+ * abutting elements with a seam between them.
+ */
+export function highlightRanges(text: string, matchedPhrases: string[]): [number, number][] {
+  if (!text || matchedPhrases.length === 0) return [];
+
+  // The significant words of every matched phrase, by the same standard matchedTerms applies:
+  // three characters or more, and not a stop word.
+  const wanted = new Set<string>();
+  for (const phrase of matchedPhrases) {
+    for (const word of phrase.toLowerCase().match(/[a-z0-9']+/g) ?? []) {
+      if (word.length >= 3 && !IGNORED.has(word)) wanted.add(word);
+    }
+  }
+  if (wanted.size === 0) return [];
+
+  // Walk the text's own tokens so the ranges are real offsets into the original string — indexOf on
+  // each keyword would find substrings inside longer words and mark the "cat" in "scattered", which
+  // is precisely the bug that once routed software products to the Pets Stack Exchange.
+  const found: [number, number][] = [];
+  for (const m of text.toLowerCase().matchAll(/[a-z0-9']+/g)) {
+    const word = m[0];
+    if (m.index === undefined) continue;
+    // The SAME inflection tolerance `lib/search/seSites.ts` applies when routing a keyword to a
+    // site: `\b<keyword>(?:s|es|ing|ed)?\b`. Suffixes are allowed ON the keyword, which means
+    // "customer" marks "customers" but "customers" does not mark "customer" — asymmetric, and
+    // deliberately so, because that is exactly the rule the rest of the product matches by. A
+    // looser stemmer here would mark words that never counted toward the match.
+    // Each suffix stripped INDEPENDENTLY, not through one alternation. `(es|ed|ing|s)$` looks
+    // equivalent and is not: it strips "es" from "struggles" before it ever tries "s", yielding
+    // "struggl" and losing a match the router would have made. The keyword can be the token with
+    // any ONE of those endings removed, so every candidate has to be tested on its own.
+    const candidates = [word, word.replace(/s$/, ""), word.replace(/es$/, ""), word.replace(/ed$/, ""), word.replace(/ing$/, "")];
+    if (candidates.some((c) => c.length >= 3 && wanted.has(c))) {
+      found.push([m.index, m.index + word.length]);
+    }
+  }
+  if (found.length === 0) return [];
+
+  // Merge into continuous regions, bridging the small words that sit BETWEEN matched ones.
+  //
+  // Merging only on adjacency looked wrong the moment it was rendered: "First Ten Customers" came
+  // out as two marks with an unmarked "Ten" in the hole, and "cold outreach not working" as three.
+  // The founder's phrase is the unit they care about, so it should read as one region rather than
+  // as a row of separate stabs.
+  //
+  // Bridged only across a SHORT gap with no sentence punctuation in it. The punctuation test is
+  // what stops a mark running from one sentence into the next and swallowing everything between
+  // two distant hits — a gap containing "." or "," is a different thought, however short it is.
+  const BRIDGE_MAX = 10;
+  found.sort((a, b) => a[0] - b[0]);
+  const merged: [number, number][] = [found[0]];
+  for (const [start, end] of found.slice(1)) {
+    const last = merged[merged.length - 1];
+    const gap = text.slice(last[1], start);
+    if (start <= last[1] || (gap.length <= BRIDGE_MAX && !/[.,;:!?\n]/.test(gap))) {
+      last[1] = Math.max(last[1], end);
+    } else {
+      merged.push([start, end]);
+    }
+  }
+  return merged;
+}
+
+/** `text` split into alternating plain and highlighted segments, ready to render. */
+export function highlightSegments(
+  text: string,
+  matchedPhrases: string[],
+): { text: string; marked: boolean }[] {
+  const ranges = highlightRanges(text, matchedPhrases);
+  if (ranges.length === 0) return [{ text, marked: false }];
+
+  const out: { text: string; marked: boolean }[] = [];
+  let cursor = 0;
+  for (const [start, end] of ranges) {
+    if (start > cursor) out.push({ text: text.slice(cursor, start), marked: false });
+    out.push({ text: text.slice(start, end), marked: true });
+    cursor = end;
+  }
+  if (cursor < text.length) out.push({ text: text.slice(cursor), marked: false });
+  return out;
+}

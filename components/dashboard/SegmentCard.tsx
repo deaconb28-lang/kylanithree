@@ -80,7 +80,10 @@ function Ring({ share, label }: { share: number; label: string }) {
 // counts support it. `gaining` cannot appear until sending works. That is the point.
 const STATUS_STYLE: Record<BuyerConfidence["status"], { color: string; bg: string }> = {
   gaining: { color: "var(--green)", bg: "var(--green-tint)" },
-  disconfirmed: { color: "var(--attention)", bg: "var(--active-bg)" },
+  // --ember, not --attention. --attention is a BACKGROUND token (#fff8f1); using it as a text
+  // colour on --active-bg (#efe9df) is roughly 1.05:1 — invisible. Introduced when this file
+  // switched to derived confidence.
+  disconfirmed: { color: "var(--ember)", bg: "var(--active-bg)" },
   finding: { color: "var(--muted-strong)", bg: "var(--active-bg)" },
   unproven: { color: "var(--muted)", bg: "var(--active-bg)" },
   retired: { color: "var(--muted)", bg: "var(--active-bg)" },

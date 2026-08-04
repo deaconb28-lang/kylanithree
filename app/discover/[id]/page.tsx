@@ -8,6 +8,7 @@ import type { DiscoverLead } from "../../../lib/discover/collections";
 import { anonId as getAnonId, sinceFlowStart, trackClient } from "../../../lib/discover/clientTrack";
 import SearchWheel, { type FieldVenue } from "../../../components/discover/SearchWheel";
 import Avatar from "../../../components/Avatar";
+import { highlightSegments } from "../../../lib/search/excerpt";
 
 // The whole onboarding, on one screen.
 //
@@ -201,10 +202,12 @@ export default function DiscoverPage({ params }: { params: Promise<{ id: string 
           </div>
         ) : (
           <div style={{ display: "grid", gridTemplateColumns: "minmax(260px, 320px) 1fr", gap: 26 }} className="dv-grid">
-            <style>{`@media (max-width: 900px) { .dv-grid { grid-template-columns: 1fr !important; } }`}</style>
+            <style>{`@media (max-width: 900px) { .dv-grid { grid-template-columns: 1fr !important; } .dv-side { position: static !important; } }`}</style>
 
             {/* What Kylani inferred — chips beside the results, never a question in front of them. */}
-            <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+            {/* Sticky above the 900px breakpoint: the map and the inference are reference material
+                for the whole list, and scrolling fourteen leads used to leave both behind. */}
+            <div style={{ display: "flex", flexDirection: "column", gap: 16, alignSelf: "start", position: "sticky", top: 24 }} className="dv-side">
               <InferencePanel
                 fast={fast}
                 searchId={id}
@@ -215,8 +218,12 @@ export default function DiscoverPage({ params }: { params: Promise<{ id: string 
                   setLeads(reranked);
                 }}
               />
-              <WorkPanel working={working} narration={narration} progress={progress} leadCount={leads.length} field={fieldFor(true)} />
-              <PeoplePanel
+              <WorkPanel
+                working={working}
+                narration={narration}
+                progress={progress}
+                leadCount={leads.length}
+                field={fieldFor(true)}
                 leads={leads}
                 onJump={(fp) => {
                   markInteraction(fp);
@@ -225,7 +232,7 @@ export default function DiscoverPage({ params }: { params: Promise<{ id: string 
               />
             </div>
 
-            <div style={{ display: "flex", flexDirection: "column", gap: 12, minWidth: 0 }}>
+            <div style={{ display: "flex", flexDirection: "column", gap: 18, minWidth: 0 }}>
               <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", gap: 12, flexWrap: "wrap" }} aria-live="polite">
                 <h1 style={{ fontFamily: "var(--font-display)", fontWeight: 800, fontSize: "clamp(22px,3vw,30px)", letterSpacing: "-.03em", margin: 0 }}>
                   {leads.length} {leads.length === 1 ? "person" : "people"} describing this problem
@@ -344,12 +351,16 @@ function WorkPanel({
   progress,
   leadCount,
   field,
+  leads,
+  onJump,
 }: {
   working: boolean;
   narration: string[];
   progress: { scanned: number; total: number };
   leadCount: number;
   field: React.ReactNode;
+  leads: DiscoverLead[];
+  onJump: (fingerprint: string) => void;
 }) {
   return (
     <div style={{ background: "var(--card)", border: "1px solid var(--border)", borderRadius: 14, padding: "16px 18px", display: "flex", flexDirection: "column", gap: 10 }}>
@@ -371,6 +382,48 @@ function WorkPanel({
           </span>
         </>
       )}
+      {/* Who turned up, folded in from what used to be its own panel below this one. That panel
+          listed the same fourteen people the cards to the right already show, so it was a whole
+          third panel of duplicate information. An overlapping stack keeps the answer to "who" and
+          keeps the jump-to-lead click, in one row instead of a panel. */}
+      {leads.length > 0 && (
+        <div style={{ display: "flex", flexDirection: "column", gap: 7, margin: "2px 0 2px" }}>
+          <div style={{ display: "flex", alignItems: "center" }}>
+            {leads.slice(0, 7).map((l, i) => (
+              <button
+                key={l.personFingerprint}
+                onClick={() => onJump(l.personFingerprint)}
+                title={l.person?.displayName?.trim() || l.author}
+                style={{
+                  background: "none",
+                  border: "none",
+                  padding: 0,
+                  cursor: "pointer",
+                  // A ring in the panel's own background separates the discs where they overlap.
+                  borderRadius: 999,
+                  boxShadow: "0 0 0 2px var(--card)",
+                  marginLeft: i === 0 ? 0 : -8,
+                  lineHeight: 0,
+                }}
+              >
+                <Avatar displayName={l.person?.displayName} handle={l.author} size={26} />
+              </button>
+            ))}
+            {leads.length > 7 && (
+              <span className="ky-tnum" style={{ marginLeft: 8, fontSize: 12, color: "var(--muted)" }}>+{leads.length - 7}</span>
+            )}
+          </div>
+          {/* Said plainly rather than hidden. Enrichment runs on its own schedule on the worker, so
+              "we have not looked these people up yet" is a normal state — and stating it beats
+              showing bare handles and letting the reader assume that is all there is. */}
+          {leads.filter((l) => l.person?.bio || l.person?.displayName).length < leads.length && (
+            <span style={{ fontSize: 11.5, color: "var(--faint)", lineHeight: 1.45 }}>
+              {leads.filter((l) => l.person?.bio || l.person?.displayName).length} of {leads.length} looked up so far
+            </span>
+          )}
+        </div>
+      )}
+
       <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
         {narration.map((n, i) => (
           <span key={`${n}-${i}`} className="ky-fade-in" style={{ fontSize: 12.5, color: i === narration.length - 1 ? "var(--muted-strong)" : "var(--muted)", lineHeight: 1.5 }}>
@@ -398,131 +451,132 @@ function WorkPanel({
 function LeadCard({ lead, isNew, pinned, onInteract }: { lead: DiscoverLead; isNew: boolean; pinned: boolean; onInteract: () => void }) {
   const person = lead.person;
   const name = person?.displayName?.trim();
+  // Only when it differs. `displayName` falls back to the login on Hacker News, Reddit, Bluesky and
+  // GitHub, so printing both rendered "noreplydev  noreplydev" on most cards.
+  const handle = name && name.toLowerCase() !== lead.author.toLowerCase() ? lead.author : null;
+
+  const segments = highlightSegments(lead.excerpt, lead.matchedFor);
+  const highlighted = segments.some((seg) => seg.marked);
+  // The card must still be able to say why this person is here. Normally the mark in the quote does
+  // it; when the phrase cannot be located in the shown span, the words are named instead.
+  const unlocated = !highlighted && lead.matchedFor.length > 0 ? lead.matchedFor.slice(0, 2) : [];
+
+  const identity = (
+    <>
+      <Avatar displayName={name} handle={lead.author} size={30} />
+      <span style={{ fontSize: 14, fontWeight: 700, color: "var(--ink)" }}>{name || lead.author}</span>
+    </>
+  );
+
   return (
     <div
       onMouseEnter={onInteract}
       className={isNew ? "ky-fade-in" : undefined}
       style={{
-        background: "var(--card)",
-        border: `1px solid ${pinned ? "var(--border-strong)" : "var(--border)"}`,
+        // No border. Fourteen outlined boxes were most of this page's noise, and a white card on
+        // cream paper already reads as a card. Pinned swaps the background instead — --active-bg is
+        // documented as marking a persistent selection, which is exactly what a pin is.
+        background: pinned ? "var(--active-bg)" : "var(--card)",
         borderRadius: 14,
-        padding: "16px 18px",
+        padding: "18px 20px",
         display: "flex",
         flexDirection: "column",
-        gap: 10,
+        gap: 12,
         minWidth: 0,
       }}
     >
       {lead.summary ? (
-        <div style={{ display: "flex", flexDirection: "column", gap: 5 }}>
-          <span style={{ fontSize: 10.5, fontWeight: 700, letterSpacing: ".1em", color: "var(--muted)" }}>WHAT THEY NEED</span>
-          <span style={{ fontFamily: "var(--font-display)", fontSize: 17.5, fontWeight: 700, lineHeight: 1.32, letterSpacing: "-.01em", color: "var(--ink)" }}>
-            {lead.summary}
-          </span>
-        </div>
+        // No "WHAT THEY NEED" label. It taught nothing after the first card and cost a band on all
+        // fourteen. Clamped to three lines because it was unbounded, and a classifier restatement of
+        // a long GitHub issue could run away with the card.
+        <span
+          style={{
+            fontFamily: "var(--font-display)",
+            fontSize: 16.5,
+            fontWeight: 700,
+            lineHeight: 1.35,
+            letterSpacing: "-.01em",
+            color: "var(--ink)",
+            display: "-webkit-box",
+            WebkitLineClamp: 3,
+            WebkitBoxOrient: "vertical",
+            overflow: "hidden",
+          }}
+        >
+          {lead.summary}
+        </span>
       ) : (
-        // No summary is a real state — a lead can reach the screen before anything has restated it.
-        // The quote steps up to carry the card rather than a placeholder sentence being written for
-        // it, and the label says which kind of text this is so the two cards do not read as one.
+        // Kept here and only here: with no summary the quote carries the card, and the label is what
+        // stops the two shapes reading as the same thing.
         <span style={{ fontSize: 10.5, fontWeight: 700, letterSpacing: ".1em", color: "var(--muted)" }}>WHAT THEY SAID</span>
       )}
 
+      {/* The evidence, with the founder's own words marked inside it. That mark replaced a
+          `matched "..."` chip on its own row — the same phrase restated on every card. Showing
+          where the match landed says more, in no space at all. */}
       <blockquote
         style={{
           margin: 0,
-          borderLeft: "2px solid var(--ember)",
+          borderLeft: "2px solid var(--border-strong)",
           padding: "1px 0 1px 13px",
-          fontSize: lead.summary ? 13.5 : 15,
+          fontSize: 14,
           lineHeight: 1.55,
           color: lead.summary ? "var(--muted-strong)" : "var(--ink)",
         }}
       >
-        &ldquo;{lead.excerpt}&rdquo;
+        &ldquo;
+        {segments.map((seg, i) =>
+          seg.marked ? (
+            <mark key={i} style={{ background: "var(--ember-tint)", color: "inherit", padding: "1px 2px", borderRadius: 3 }}>
+              {seg.text}
+            </mark>
+          ) : (
+            <span key={i}>{seg.text}</span>
+          ),
+        )}
+        &rdquo;
       </blockquote>
 
-      {/* Who this is. `person` is present only when the crawler's enrichment pass has actually met
-          them, so a card with nothing known says the handle and the venue and stops — it never
-          renders an empty profile block implying they have no bio. */}
-      <div style={{ display: "flex", alignItems: "flex-start", gap: 10, minWidth: 0 }}>
-        <Avatar displayName={name} handle={lead.author} size={32} />
-        <div style={{ display: "flex", flexDirection: "column", gap: 3, minWidth: 0, flex: 1 }}>
-        <div style={{ display: "flex", alignItems: "baseline", gap: 8, flexWrap: "wrap", minWidth: 0 }}>
-          <span style={{ fontSize: 14, fontWeight: 700 }}>{name || lead.author}</span>
-          {name && <span style={{ fontSize: 12.5, color: "var(--muted)" }}>{lead.author}</span>}
-          <span style={{ fontSize: 12.5, color: "var(--muted)" }}>· {lead.venueName}</span>
-          {person?.tenure && <span style={{ fontSize: 12.5, color: "var(--muted)" }}>· {person.tenure}</span>}
-          <span style={{ fontSize: 12.5, color: "var(--muted)", marginLeft: "auto" }}>{relativeTime(lead.postedAt as unknown as string)}</span>
-        </div>
-        {person?.bio && (
-          // Their own words from their own profile, so it is safe to show as a description of them.
-          <span style={{ fontSize: 12.5, color: "var(--muted)", lineHeight: 1.5, display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden" }}>
-            {person.bio}
-          </span>
-        )}
-        </div>
-      </div>
-
-      <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
-        {lead.matchedFor.slice(0, 3).map((m) => (
-          <span key={m} style={{ fontSize: 11.5, fontWeight: 600, color: "var(--muted)", background: "var(--card-alt)", padding: "3px 8px", borderRadius: 999 }}>
-            matched &ldquo;{m}&rdquo;
-          </span>
-        ))}
-        <span style={{ marginLeft: "auto", display: "inline-flex", gap: 12 }}>
-          {person?.profileUrl && (
-            <a href={person.profileUrl} target="_blank" rel="noopener noreferrer" onClick={onInteract} style={{ fontSize: 12.5, fontWeight: 600, color: "var(--muted-strong)" }}>
-              Profile
-            </a>
-          )}
-          <a href={lead.permalink} target="_blank" rel="noopener noreferrer" onClick={onInteract} style={{ fontSize: 12.5, fontWeight: 700, color: "var(--ember)" }}>
-            Read the post →
-          </a>
-        </span>
-      </div>
-    </div>
-  );
-}
-
-/**
- * The people found, beside the communities searched.
- *
- * The sidebar has always answered "where did we look" and never "who turned up" — which is odd for
- * a product whose whole promise is individuals rather than lists. Communities are the map; this is
- * the result. It only ever renders people already on screen in the list below, so it is a second
- * view of the same truth rather than a second claim.
- */
-function PeoplePanel({ leads, onJump }: { leads: DiscoverLead[]; onJump: (fingerprint: string) => void }) {
-  if (leads.length === 0) return null;
-  const enriched = leads.filter((l) => l.person?.bio || l.person?.displayName).length;
-
-  return (
-    <div style={{ background: "var(--card)", border: "1px solid var(--border)", borderRadius: 14, padding: "16px 18px", display: "flex", flexDirection: "column", gap: 10 }}>
-      <span style={{ fontSize: 10.5, fontWeight: 700, letterSpacing: ".1em", color: "var(--muted)" }}>WHO TURNED UP</span>
-      <div style={{ display: "flex", flexDirection: "column", gap: 9, maxHeight: 300, overflowY: "auto" }}>
-        {leads.slice(0, 12).map((l) => (
-          <button
-            key={l.personFingerprint}
-            onClick={() => onJump(l.personFingerprint)}
-            style={{ background: "none", border: "none", padding: 0, textAlign: "left", cursor: "pointer", fontFamily: "inherit", display: "flex", alignItems: "center", gap: 9, minWidth: 0 }}
+      {/* One line for the person, replacing what used to be an identity row, a bio row and an
+          actions row. The avatar and name ARE the profile link, so the separate "Profile" link is
+          folded in rather than dropped. */}
+      <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap", minWidth: 0, fontSize: 12.5, color: "var(--muted)" }}>
+        {person?.profileUrl ? (
+          <a
+            href={person.profileUrl}
+            target="_blank"
+            rel="noopener noreferrer"
+            onClick={onInteract}
+            style={{ display: "inline-flex", alignItems: "center", gap: 8, textDecoration: "none" }}
           >
-            <Avatar displayName={l.person?.displayName} handle={l.author} size={30} />
-            <span style={{ display: "flex", flexDirection: "column", gap: 1, minWidth: 0 }}>
-              <span style={{ fontSize: 13.5, fontWeight: 600, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
-                {l.person?.displayName?.trim() || l.author}
-              </span>
-              <span style={{ fontSize: 12, color: "var(--muted)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
-                {l.person?.bio || l.venueName}
-              </span>
-            </span>
-          </button>
-        ))}
+            {identity}
+          </a>
+        ) : (
+          <span style={{ display: "inline-flex", alignItems: "center", gap: 8 }}>{identity}</span>
+        )}
+        {handle && <span>{handle}</span>}
+        <span>· {lead.venueName}</span>
+        {/* `describeTenure` no longer repeats the platform, so this reads "17 months" rather than
+            "Hacker News · 17 months on Hacker News". */}
+        {person?.tenure && <span>· {person.tenure}</span>}
+        <span>· {relativeTime(lead.postedAt as unknown as string)}</span>
+        {unlocated.length > 0 && <span>· matched {unlocated.map((m) => `\u201c${m}\u201d`).join(", ")}</span>}
+        <a
+          href={lead.permalink}
+          target="_blank"
+          rel="noopener noreferrer"
+          onClick={onInteract}
+          style={{ marginLeft: "auto", fontSize: 12.5, fontWeight: 700, color: "var(--ember)", whiteSpace: "nowrap" }}
+        >
+          Read the post →
+        </a>
       </div>
-      {/* Said plainly rather than hidden. Enrichment runs on its own schedule on the worker, so
-          "we have not looked these people up yet" is a normal state — and stating it is better than
-          a sidebar that silently shows handles and lets the reader assume that is all there is. */}
-      {enriched < leads.length && (
-        <span style={{ fontSize: 11.5, color: "var(--faint)", lineHeight: 1.45 }}>
-          {enriched} of {leads.length} looked up so far — the rest are still queued.
+
+      {person?.bio && (
+        // Their own words from their own profile. One line rather than two — real value, but not
+        // enough to always cost a full band.
+        <span style={{ fontSize: 12.5, color: "var(--muted)", lineHeight: 1.5, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+          {person.bio}
         </span>
       )}
     </div>

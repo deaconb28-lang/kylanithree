@@ -105,6 +105,14 @@ export function issueBodyToText(body: string | null | undefined): string {
     .replace(/^(?: {4}|\t).*$/gm, " ")
     // Collapsed <details> sections are almost always logs.
     .replace(/<details[\s\S]*?<\/details>/gi, " ")
+    // Issue-template scaffolding. A maintainer wrote these, not the person filing, and they were
+    // reaching the screen AS the author's quote: a real card read
+    // `"-[x] I have searched for an existing issue... ### What problem is this feature going to
+    // solve?"`. That is a template the author ticked, not them describing a need — the one thing a
+    // quote in this product may never be. Checklist lines go entirely; heading markers lose the
+    // hashes but keep their text, since a heading someone typed themselves can be real content.
+    .replace(/^\s*[-*]\s*\[[ xX]\]\s.*$/gm, " ")
+    .replace(/^\s*#{1,6}\s+/gm, "")
     .replace(/<[^>]+>/g, " ")
     .replace(/\r/g, "")
     .replace(/[ \t]+/g, " ")
