@@ -361,3 +361,90 @@ export function highlightSegments(
   if (cursor < text.length) out.push({ text: text.slice(cursor), marked: false });
   return out;
 }
+
+/**
+ * One plain sentence a founder can read at a glance.
+ *
+ * `leadSummary` returns the classifier's `problemStatement` trimmed to 150 characters, and that is
+ * the right input for the embedding — a rich, specific, neutral restatement is exactly what closes
+ * the vocabulary gap between how people complain and how founders describe a product. It is the
+ * wrong output for a card. At 150 characters it runs to two or three lines, carries the classifier's
+ * register ("The author requires a mechanism whereby…"), and a founder scanning fourteen of them
+ * reads none of them.
+ *
+ * So this is a RENDER-TIME transform rather than a change to what the classifier emits. Two things
+ * follow from that, and both are why it is built this way:
+ *
+ *   · Retrieval quality is untouched. The embedded statement stays exactly as rich as it was.
+ *   · It applies retroactively to every document already classified, with no reclassification and
+ *     no cost — tens of thousands of rows, fixed by a function.
+ *
+ * The cap is a CLAUSE boundary, never a mid-sentence ellipsis. "Needs a replacement for a
+ * discontinued tracking plugin now that GA4's engagement metrics fall…" is worse than no summary:
+ * a sentence cut off mid-thought reads as a bug, where the same sentence cut at "now that" reads as
+ * a complete, shorter thought.
+ */
+const SUMMARY_PREFIXES =
+  /^(?:the\s+)?(?:author|user|poster|person|op|they|developer|team)\s+(?:is\s+|are\s+|has\s+|have\s+)?(?:currently\s+)?/i;
+
+/** Clause joiners worth cutting at — each one starts a qualifier the first half survives without. */
+const CLAUSE_BREAKS = [
+  " now that ",
+  " instead of ",
+  " so that ",
+  " because ",
+  " after ",
+  " while ",
+  " rather than ",
+  " in order to ",
+  " which ",
+  ", and ",
+  ", but ",
+  ", ",
+  " — ",
+  "; ",
+];
+
+export function laymanSummary(summary: string | undefined | null, maxChars = 92): string | undefined {
+  if (!summary) return undefined;
+  let s = normalize(summary);
+  if (!s) return undefined;
+
+  // One sentence. `splitSentences` already knows how to do this without breaking on "e.g." and the
+  // like, so the rule is shared rather than re-guessed here.
+  s = splitSentences(s)[0] ?? s;
+
+  // Drop the classifier talking about the author in the third person. The card already shows whose
+  // words these are, immediately below — "The author needs" spends four words saying nothing.
+  s = s.replace(SUMMARY_PREFIXES, "").trim();
+  if (s.length < 12) return undefined;
+
+  if (s.length > maxChars) {
+    // Cut at the LAST clause boundary that still fits. Deliberately last rather than first: the goal
+    // is the longest complete thought under the cap, not the shortest one.
+    let cut = -1;
+    for (const brk of CLAUSE_BREAKS) {
+      const at = s.toLowerCase().lastIndexOf(brk, maxChars);
+      if (at > 24 && at > cut) cut = at;
+    }
+    if (cut > 0) {
+      s = s.slice(0, cut);
+    } else {
+      // No clause boundary, so fall back to a WORD boundary and mark the truncation. `trimTo` is
+      // not reused here: it cuts at an exact character index (mid-word is fine for a quote, where
+      // the reader can see it is an excerpt) and appends the ellipsis AFTER the cap, so the result
+      // is maxChars + 1. A summary that overruns its own cap by one is the kind of thing that only
+      // shows up as a wrapped line on one card in twenty.
+      const room = maxChars - 1;
+      const space = s.lastIndexOf(" ", room);
+      s = `${s.slice(0, space > 24 ? space : room).trimEnd()}\u2026`;
+    }
+  }
+
+  s = s.replace(/[\s,;:—-]+$/, "");
+  if (s.length < 12) return undefined;
+  // Sentence case, and no full stop: these are labels on a card, not prose. A question mark is kept
+  // because it changes the meaning.
+  s = s.charAt(0).toUpperCase() + s.slice(1);
+  return s.replace(/\.$/, "");
+}

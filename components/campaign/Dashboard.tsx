@@ -6,6 +6,7 @@ import CommandHeader from "./CommandHeader";
 import Spine from "./Spine";
 import WorklogDrawer from "./WorklogDrawer";
 import Starter from "./Starter";
+import BetaPanel from "./Beta";
 import type { Autonomy, CampaignPerson, FunnelSummary, PlanCard, StageKey, WorklogItem } from "../../lib/campaign/types";
 import { STAGE_LABEL } from "../../lib/campaign/types";
 
@@ -172,7 +173,10 @@ export default function Dashboard() {
           {stage ? (
             <StageWorkspacePlaceholder stage={stage} people={data.people.filter((p) => p.stage === stage)} />
           ) : (
-            <TodayPlaceholder data={data} />
+            <>
+              <TodayPlaceholder data={data} />
+              <OutreachPanel />
+            </>
           )}
         </>
       ) : (
@@ -276,6 +280,56 @@ function StageWorkspacePlaceholder({ stage, people }: { stage: StageKey; people:
   );
 }
 
+/**
+ * Agentic outreach, stated plainly.
+ *
+ * This is the headline of the whole product — "posts as you, answers every reply" — and it is the
+ * part that is least built. Hiding it during a seven-day trial means the trial never shows what is
+ * being bought; showing it unlabelled means the first unanswered reply is a betrayal. So it is
+ * shown, in full, with each channel carrying the specific thing standing in its way.
+ *
+ * The blockers are REAL and were measured, not guessed: Reddit returns 403 to datacenter traffic
+ * and needs Responsible Builder approval, X has no free write tier, Meta's posting APIs are Pages
+ * and Professional accounts only behind App Review.
+ */
+function OutreachPanel() {
+  const channels: { name: string; state: string; ok: boolean }[] = [
+    { name: "Gmail", state: "sending now, from your own inbox", ok: true },
+    { name: "Hacker News · forums · GitHub", state: "reading now — 29k posts and climbing", ok: true },
+    { name: "Bluesky", state: "reading, once the app password is fixed", ok: false },
+    { name: "Reddit", state: "needs Responsible Builder approval", ok: false },
+    { name: "X", state: "needs the paid API tier to post", ok: false },
+    { name: "Meta", state: "Pages and Professional accounts only, after App Review", ok: false },
+  ];
+  return (
+    <BetaPanel
+      stage="soon"
+      title="Kylani answers every reply"
+      promise="It posts as you, watches the thread, and drafts the response the moment somebody writes back."
+      blocker="Drafting and sending work today. What is not built is the loop that watches a thread after you send and answers on its own — until then every reply is one you open."
+    >
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 260px), 1fr))", gap: 12 }}>
+        {channels.map((c) => (
+          <div key={c.name} style={{ display: "flex", alignItems: "flex-start", gap: 8, fontSize: 13, minWidth: 0 }}>
+            {/* Green means it is running today. Everything else is deliberately not coral: a
+                channel that cannot post yet is a fact about the product, not an agent action. */}
+            <span
+              aria-hidden="true"
+              style={{ width: 6, height: 6, borderRadius: 999, flexShrink: 0, marginTop: 6, background: c.ok ? "var(--green)" : "var(--border-strong)" }}
+            />
+            {/* Stacked, not inline. Side by side, "reading now — 29k posts and climbing" wrapped
+                into a five-line column beside its own label and the row stopped being scannable. */}
+            <span style={{ display: "flex", flexDirection: "column", gap: 2, minWidth: 0 }}>
+              <span style={{ fontWeight: 600 }}>{c.name}</span>
+              <span style={{ fontFamily: "var(--font-machine)", fontSize: 11.5, color: "var(--muted)", lineHeight: 1.5 }}>{c.state}</span>
+            </span>
+          </div>
+        ))}
+      </div>
+    </BetaPanel>
+  );
+}
+
 const STAGE_INTRO: Record<StageKey, string> = {
   found: "Kylani watches communities for people describing the problem you solve, and puts them here with their own words attached.",
   engaged: "Once you approve a message, the person moves here — with what they were sent and when.",
@@ -284,26 +338,30 @@ const STAGE_INTRO: Record<StageKey, string> = {
 };
 
 function CalendarPlaceholder({ data }: { data: DashboardData }) {
-  if (data.plan.length === 0) {
-    return (
-      <Starter
-        kind="templates"
-        title={data.everPlanned ? "Nothing planned this week" : "Plan the week"}
-        body="One board for everything Kylani will do — posts, first outreach, and follow-ups. Pick a cadence and it fills the week from the signals it has already found."
-        templates={[
-          { key: "light", title: "Light", detail: "2 posts/wk · 5 outreach · follow-ups on" },
-          { key: "steady", title: "Steady", detail: "3 posts/wk · 8 outreach · follow-ups on" },
-          { key: "heavy", title: "Heavy", detail: "5 posts/wk · 15 outreach · follow-ups on" },
-        ]}
-        actions={[{ label: "Add something myself", primary: true }]}
-      />
-    );
-  }
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-      <span style={{ fontFamily: "var(--font-machine)", fontSize: 11.5, color: "var(--muted)" }}>
-        {data.plan.length} planned this week
-      </span>
-    </div>
+    <BetaPanel
+      stage="preview"
+      title="The week board"
+      promise="Every post, first outreach and follow-up Kylani will run, on one board. Schedulers plan content; this plans the whole job."
+      blocker="The board and its cadences are built. What is not built yet is the planner that fills empty slots from live signals — so nothing schedules itself today, and anything you add here stays a draft."
+    >
+      {data.plan.length === 0 ? (
+        <Starter
+          kind="templates"
+          title={data.everPlanned ? "Nothing planned this week" : "Pick a cadence"}
+          body="Choose how hard Kylani should push, and the board lays the week out around it."
+          templates={[
+            { key: "light", title: "Light", detail: "2 posts/wk · 5 outreach · follow-ups on" },
+            { key: "steady", title: "Steady", detail: "3 posts/wk · 8 outreach · follow-ups on" },
+            { key: "heavy", title: "Heavy", detail: "5 posts/wk · 15 outreach · follow-ups on" },
+          ]}
+          actions={[{ label: "Add something myself", primary: true }]}
+        />
+      ) : (
+        <span style={{ fontFamily: "var(--font-machine)", fontSize: 11.5, color: "var(--muted)" }}>
+          {data.plan.length} planned this week
+        </span>
+      )}
+    </BetaPanel>
   );
 }

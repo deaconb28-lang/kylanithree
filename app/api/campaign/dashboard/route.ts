@@ -6,6 +6,7 @@ import { daysToConvert } from "@/lib/campaign/funnel";
 import { stageOf, type CampaignPerson } from "@/lib/campaign/types";
 import { recentWork, digestSince } from "@/lib/campaign/worklog";
 import { planBetween, hasAnyPlan, weekStart } from "@/lib/campaign/plan";
+import { laymanSummary } from "@/lib/search/excerpt";
 import { toUserError } from "@/lib/apiError";
 
 export const runtime = "nodejs";
@@ -58,9 +59,14 @@ export async function GET() {
         source: l.source,
         permalink: l.permalink ?? l.sourceUrl,
         quote: l.excerpt ?? l.quote,
-        // Absent rather than substituted. A summary is Kylani's restatement; falling back to the
-        // quote here would attribute the founder's own evidence to the classifier.
-        summary: l.detail && l.detail !== (l.excerpt ?? l.quote) ? l.detail : undefined,
+        // ONE plain sentence, cut at a clause. The stored `detail` is the classifier's restatement,
+        // written for the embedding rather than for a person — see `laymanSummary`. Transformed here
+        // rather than at classify time so retrieval quality is untouched and every already-classified
+        // document is fixed without being reclassified.
+        //
+        // Absent rather than substituted. Falling back to the quote would attribute the person's own
+        // words to the classifier.
+        summary: l.detail && l.detail !== (l.excerpt ?? l.quote) ? laymanSummary(l.detail) : undefined,
         hypothesisKey: l.hypothesisKey,
         intentTier: l.intentTier,
         stars: l.stars,

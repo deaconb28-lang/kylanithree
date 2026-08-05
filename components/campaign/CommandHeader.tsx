@@ -1,6 +1,7 @@
 "use client";
 
 import { AUTONOMY, AUTONOMY_EFFECT, AUTONOMY_LABEL, type Autonomy } from "../../lib/campaign/types";
+import { BetaBadge, type BetaStage } from "./Beta";
 
 // One row: what campaign, which lens, how much rope Kylani has, and what it is doing right now.
 //
@@ -70,7 +71,7 @@ export default function CommandHeader({
         <Segmented
           options={[
             { key: "pipeline", label: "Pipeline" },
-            { key: "calendar", label: "Calendar" },
+            { key: "calendar", label: "Calendar", badge: "preview" },
           ]}
           value={lens}
           onChange={(v) => onLens(v as "pipeline" | "calendar")}
@@ -80,7 +81,9 @@ export default function CommandHeader({
 
       <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
         <Segmented
-          options={AUTONOMY.map((a) => ({ key: a, label: AUTONOMY_LABEL[a] }))}
+          // `run` carries a preview badge because nothing auto-sends yet. A mode that promises
+          // autonomy and quietly does not have it is the worst of the three to get wrong.
+          options={AUTONOMY.map((a) => ({ key: a, label: AUTONOMY_LABEL[a], badge: a === "run" ? ("preview" as const) : undefined }))}
           value={autonomy}
           onChange={(v) => onAutonomy(v as Autonomy)}
           ariaLabel="How much Kylani may do without asking"
@@ -126,7 +129,7 @@ function Segmented({
   ariaLabel,
   small = false,
 }: {
-  options: { key: string; label: string }[];
+  options: { key: string; label: string; badge?: BetaStage }[];
   value: string;
   onChange: (v: string) => void;
   ariaLabel: string;
@@ -157,6 +160,9 @@ function Segmented({
             style={{
               border: "none",
               borderRadius: 999,
+              display: "inline-flex",
+              alignItems: "center",
+              gap: 6,
               padding: small ? "5px 12px" : "7px 16px",
               fontSize: small ? 12.5 : 13.5,
               fontWeight: 600,
@@ -174,6 +180,9 @@ function Segmented({
             }}
           >
             {o.label}
+            {/* The badge rides ON the control rather than appearing after the click. A founder
+                should know the calendar is a preview before they switch to it, not after. */}
+            {o.badge && <BetaBadge stage={o.badge} />}
           </button>
         );
       })}
