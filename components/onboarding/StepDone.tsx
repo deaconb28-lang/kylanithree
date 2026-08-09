@@ -5,7 +5,9 @@ import OnboardingChrome from "./OnboardingChrome";
 
 const CONFETTI = Array.from({ length: 26 }).map((_, i) => ({
   left: ((i * 41 + 5) % 100) + "%",
-  color: ["#E4572E", "#2F7A56", "#DBD3E4", "#CFE0D8", "#14120F"][i % 5],
+  // Monochrome confetti: four steps of the grey ramp plus ink, so the celebration reads as
+  // texture rather than as the one place colour survived.
+  color: ["var(--ink)", "var(--muted)", "var(--border-strong)", "var(--faint)", "var(--muted-strong)"][i % 5],
   shape: i % 3 === 0 ? "999px" : "2px",
   delay: ((i * 63) % 700) + "ms",
 }));

@@ -1,105 +1,111 @@
 :root {
-  /* The hero's palette, adopted as the app's. Retuned in place rather than added alongside: every
-     component already reads these names, so changing the values moves the whole product at once
-     and there is never a second, competing set of colours to keep in sync. */
-  --ink: #14110e;
-  --paper: #f8f4ed;
+  /* MONOCHROME. Pure white ground, pure black ink, and a grey ramp between them.
+     Retuned in place rather than added alongside: every component already reads these names, so
+     changing the values here moves the whole product at once and there is never a second,
+     competing set of colours to keep in sync.
+
+     The style is E-Ink / Paper — the one the design skill returns for a monochrome tool, and the
+     only one it rates WCAG AAA. Its defining move is that SURFACES ARE NOT FILLED. A card is not a
+     lighter rectangle on a darker page; it is white on white, defined by a one-pixel rule. That is
+     why --card and --paper are the same value and why --border does the work that a fill used to.
+
+     THE ACCENT PROBLEM, AND HOW IT IS SOLVED. The whole system rested on one rule: coral meant
+     "Kylani did something" and nothing else. Monochrome deletes that signal, so it moves from HUE
+     to FILL AND WEIGHT — solid black is the agent, outline and grey is everything else. That is
+     strictly better against the skill's own priority-1 rule, "never convey information by colour
+     alone": a filled disc and a hollow one differ for a person who cannot see colour at all, and a
+     coral disc and a grey one do not. --ember stays as a token name because a hundred call sites
+     read it; it now resolves to ink, so every ember fill becomes the strongest mark on the page.
+
+     Every grey below was computed against its own ground, not picked by eye. The floor is 4.5:1 and
+     the value quoted is what it actually measures. */
+  --ink: #000000;
+  --paper: #ffffff;
   --card: #ffffff;
-  --card-alt: #f4efe7;
-  --border: #e4ded4;
-  --border-strong: #dcd5ca;
-  --muted: #5f574e;
-  --muted-strong: #3b352f;
-  /* Quieter than --muted, for captions and the source row. NOT the specified #8A8177, which comes
-     out at 3.5:1 on paper — the brief's own contrast floor is 4.5, and the floor wins over the
-     swatch. This is the nearest tone that clears it. */
-  --faint: #756d64;
-  --ember: #d2431a;
-  --ember-dark: #b33814;
-  --ember-tint: #fdece5;
-  /* What goes ON coral. White clears 4.5:1 against the coral above; it did not against the lighter
-     #DE4E22 the brief named, which is why that coral moved rather than this. */
-  --on-ember: #ffffff;
-  /* The resting bars in the hero field — present, uncountable, not the point. */
-  --field-idle: #dcd5ca;
-  --green: #2f7a56;
-  --green-tint: #e9f2ec;
-  --active-bg: #efe9df;
-  /* A row the eye is currently on. Distinct from --active-bg, which marks a persistent selection
-     in the sidebar; this one is transient — hover, the step in progress, the lead being read. */
-  --wash-active: #f2ece3;
-  /* Translucent card, for surfaces that sit over the gradient wash and should let it through. */
-  --card-veil: rgba(255, 255, 255, 0.86);
-  /* "Look at this" without "something is wrong" — warmer than a card, cooler than an error. */
-  --attention: #fff8f1;
-  --attention-border: #f3d9be;
-  /* For the inverted surfaces (a card painted --ink). Those flip with the theme automatically, so
-     anything sitting on top of one has to flip with it too, or it inverts into unreadability. */
-  --on-ink-muted: #c9c3b9;
-  --on-ink-accent: #ff9d78;
-  --wash: 1;
+  /* The one recessed surface: starters, panel headers, code-ish strips. */
+  --card-alt: #f6f6f6;
+  --border: #e3e3e3;
+  --border-strong: #cfcfcf;
+  --muted: #595959; /* 7.0:1 on white */
+  --muted-strong: #262626; /* 15.1:1 */
+  --faint: #6b6b6b; /* 5.3:1 — the quietest tone that still clears the floor */
+  /* The agent mark. Ink, so a filled control is the highest-contrast thing on the page. */
+  --ember: #000000;
+  --ember-dark: #262626;
+  --ember-tint: #efefef;
+  --on-ember: #ffffff; /* 21:1 */
+  --field-idle: #e0e0e0;
+  /* "Live / working". Also ink: the distinction is carried by a FILLED disc against a hollow one,
+     never by the colour of the disc. */
+  --green: #000000;
+  --green-tint: #f0f0f0;
+  --active-bg: #ededed;
+  /* A row the eye is currently on. Transient, where --active-bg is a persistent selection. */
+  --wash-active: #f6f6f6;
+  --card-veil: rgba(255, 255, 255, 0.9);
+  /* "Look at this" without "something is wrong". */
+  --attention: #f6f6f6;
+  --attention-border: #cfcfcf;
+  /* For surfaces painted --ink. These flip with the theme, so anything on top of one flips too. */
+  --on-ink-muted: #a6a6a6; /* 8.6:1 on black */
+  --on-ink-accent: #ffffff;
+  /* The pastel radial washes are the last colour in the product, so they are switched off rather
+     than recoloured — a grey haze behind a headline is dirt, not atmosphere. Zero here removes them
+     everywhere without touching the five components that draw them. */
+  --wash: 0;
 
-  /* Elevation as three named steps rather than a bespoke shadow per component. Every surface in
-     the app sits at exactly one of these heights, which is what stops a page from reading as a
-     pile of unrelated boxes. */
-  --lift-1: 0 1px 2px rgba(20, 18, 15, 0.05);
-  --lift-2:
-    0 1px 2px rgba(20, 18, 15, 0.05), 0 12px 28px -16px rgba(20, 18, 15, 0.18);
-  --lift-3:
-    0 1px 2px rgba(20, 18, 15, 0.06), 0 28px 60px -28px rgba(20, 18, 15, 0.26);
+  /* Elevation as three named steps. Neutral black now, not the old warm brown — a warm shadow on a
+     pure white ground reads as a stain. */
+  --lift-1: 0 1px 2px rgba(0, 0, 0, 0.06);
+  --lift-2: 0 1px 2px rgba(0, 0, 0, 0.06), 0 12px 28px -16px rgba(0, 0, 0, 0.18);
+  --lift-3: 0 1px 2px rgba(0, 0, 0, 0.07), 0 28px 60px -28px rgba(0, 0, 0, 0.24);
 
-  /* One easing for everything that moves. Motion that all decelerates the same way reads as one
-     surface responding, rather than several components each doing their own thing. */
-  /* One display face for the whole product, not just the hero. Named by role rather than by
-     typeface so the next change is one line here instead of a hundred call sites. */
+  /* One display face for the whole product. Named by role rather than by typeface so the next
+     change is one line here instead of a hundred call sites. */
   --font-display: var(--font-fraunces), Georgia, "Times New Roman", serif;
   /* Machine voice. See app/layout.tsx — mono marks what Kylani produced or measured, never
      decoration, and the ui-monospace fallback keeps the meaning if the webfont never lands. */
   --font-machine: var(--font-mono), ui-monospace, SFMono-Regular, Menlo, monospace;
 
   --ease: cubic-bezier(0.32, 0.72, 0, 1);
-  --focus: 0 0 0 3px rgba(210, 67, 26, 0.3);
+  --focus: 0 0 0 3px rgba(0, 0, 0, 0.35);
 }
 
-/* Dark mode follows the system rather than adding a control nobody asked for. The palette is
-   rebuilt, not inverted: paper stays the darkest surface and cards sit above it, so the same
-   depth relationships hold and every component keeps working without a single change. */
+/* Dark mode is a TRUE INVERSION here, and that is a deliberate reversal of what this file used to
+   do. The old warm palette was rebuilt for dark, because inverting a hue-based system mangles it.
+   A monochrome system has no hues to mangle: black paper with white ink is the same design seen
+   the other way up, and the design skill rates E-Ink dark support as "inverted only" for exactly
+   that reason. Rebuilding it would invent differences that carry no meaning. */
 @media (prefers-color-scheme: dark) {
   :root {
-    --ink: #f7f3ee;
-    --paper: #15120f;
-    --card: #221e1a;
-    --card-alt: #292420;
-    --border: #2c2723;
-    --border-strong: #3d3730;
-    --muted: #a79e94;
-    --muted-strong: #c8c0b6;
-    /* Same story as light: the specified #7E766D lands at 4.2:1 on this ground, so it lifts until
-       it clears. */
-    --faint: #877e74;
-    --ember: #ff7043;
-    --ember-dark: #ff8f6b;
-    --ember-tint: #3a2118;
-    /* Dark ink on coral here, not white — coral is bright enough in dark mode that white on it is
-       the weaker pairing, and this reads at 5.8:1. */
-    --on-ember: #3d1509;
-    --field-idle: #322c26;
-    --green: #5cbb8b;
-    --green-tint: #1b2d24;
-    --active-bg: #2b2822;
-    --wash-active: #2a2721;
-    --card-veil: rgba(34, 30, 26, 0.88);
-    --attention: #2e2117;
-    --attention-border: #4b3624;
-    --on-ink-muted: #4a443d;
-    --on-ink-accent: #b33814;
-    /* The pastel gradient washes are built for paper. At full strength on a dark ground they read
-       as haze, so they are dimmed rather than removed — the warmth is still there, just quieter. */
-    --wash: 0.14;
-    --lift-1: 0 1px 2px rgba(0, 0, 0, 0.4);
-    --lift-2: 0 1px 2px rgba(0, 0, 0, 0.4), 0 12px 28px -16px rgba(0, 0, 0, 0.7);
-    --lift-3: 0 1px 2px rgba(0, 0, 0, 0.5), 0 28px 60px -28px rgba(0, 0, 0, 0.8);
-    --focus: 0 0 0 3px rgba(255, 112, 67, 0.36);
+    --ink: #ffffff;
+    --paper: #000000;
+    --card: #000000;
+    --card-alt: #131313;
+    --border: #262626;
+    --border-strong: #3d3d3d;
+    --muted: #a6a6a6; /* 8.6:1 on black */
+    --muted-strong: #d4d4d4; /* 14.6:1 */
+    --faint: #8a8a8a; /* 6.1:1 */
+    --ember: #ffffff;
+    --ember-dark: #d4d4d4;
+    --ember-tint: #1c1c1c;
+    --on-ember: #000000;
+    --field-idle: #2e2e2e;
+    --green: #ffffff;
+    --green-tint: #1c1c1c;
+    --active-bg: #232323;
+    --wash-active: #161616;
+    --card-veil: rgba(0, 0, 0, 0.9);
+    --attention: #131313;
+    --attention-border: #3d3d3d;
+    --on-ink-muted: #595959;
+    --on-ink-accent: #000000;
+    --wash: 0;
+    --lift-1: 0 1px 2px rgba(0, 0, 0, 0.6);
+    --lift-2: 0 1px 2px rgba(0, 0, 0, 0.6), 0 12px 28px -16px rgba(0, 0, 0, 0.85);
+    --lift-3: 0 1px 2px rgba(0, 0, 0, 0.7), 0 28px 60px -28px rgba(0, 0, 0, 0.9);
+    --focus: 0 0 0 3px rgba(255, 255, 255, 0.4);
   }
 }
 
@@ -373,8 +379,8 @@ button {
   to { transform: rotate(360deg); }
 }
 @keyframes kyGlow {
-  0%, 100% { box-shadow: 0 0 0 0 rgba(228,87,46,.35); }
-  50% { box-shadow: 0 0 0 8px rgba(228,87,46,0); }
+  0%, 100% { box-shadow: 0 0 0 0 rgba(0,0,0,.3); }
+  50% { box-shadow: 0 0 0 8px rgba(0,0,0,0); }
 }
 @keyframes kyShake {
   10%, 90% { transform: translateX(-1px); }
@@ -487,7 +493,7 @@ button {
   padding: 10px 12px;
   border-radius: 9px;
   font-size: 15.5px;
-  color: #4a443d;
+  color: var(--muted);
   text-decoration: none;
 }
 .ky-sidebar-link:hover {

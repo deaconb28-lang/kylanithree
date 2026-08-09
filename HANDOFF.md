@@ -502,14 +502,39 @@ debiting and the corpus is pre-production, but it would not be harmless once bil
 
 ## Design system
 
-Tokens live in `app/globals.css` `:root`, with a `@media (prefers-color-scheme: dark)` block that
-**rebuilds** the palette rather than inverting it. Every component reads the token names, so
-changing values there moves the whole product — there is deliberately no second palette.
+**The palette is MONOCHROME as of the v0.8 pass — pure white ground, pure black ink, one grey
+ramp.** It replaced the warm cream/coral system, and the swap was done entirely in `:root`: every
+component reads the token names, so changing values there moved the whole product at once and there
+is deliberately no second palette.
+
+Three things about it are load-bearing:
+
+- **The dark block now INVERTS rather than rebuilds.** That is a deliberate reversal. The old warm
+  palette had to be rebuilt for dark because inverting a hue-based system mangles it; a monochrome
+  system has no hues to mangle, so black paper with white ink is the same design the other way up.
+  The design skill rates the E-Ink/Paper style's dark support as "inverted only" for that reason.
+- **Surfaces are not filled.** `--card` and `--paper` are the same value; a card is defined by its
+  one-pixel rule, not by being a lighter rectangle. `--card-alt` is the single recessed tone.
+- **The agent accent moved from HUE to FILL.** The whole system used to rest on "coral means Kylani
+  did something". `--ember` still exists (a hundred call sites read it) but now resolves to ink, and
+  the signal is carried by solid-vs-outline: a filled disc is the agent, a ring is not. That is
+  strictly better against the skill's priority-1 rule — never convey information by colour alone —
+  because a filled disc and a ring differ for someone who cannot see colour at all.
+
+Every token pair was computed against its own ground rather than picked by eye; the floor is 4.5:1
+and the lowest measured pair is `--faint` on `--active-bg` at 4.55:1 in both modes. `--wash` is `0`,
+which switches off the pastel radial gradients at the token level rather than editing the five
+components that draw them — a grey haze behind a headline is dirt, not atmosphere.
+
+**Third-party brand marks stay in colour and that is intentional**: the Google "G" on the sign-in
+button, the Gmail tile and the Stripe tile in Settings, and the real site favicons on lead cards.
+Those are other companies' identity, not Kylani's palette.
 
 - Colour: `--ink --paper --card --card-alt --border --border-strong --muted --muted-strong --faint
   --ember --ember-dark --ember-tint --on-ember --field-idle --green --active-bg --wash-active
   --card-veil --attention --attention-border --on-ink-muted --on-ink-accent`
-- Elevation: `--lift-1/2/3`. Motion: `--ease`. Focus: a real 2px `--ember` outline at 2px offset
+- Elevation: `--lift-1/2/3`, now neutral black — a warm shadow on a pure white ground reads as a
+  stain. Motion: `--ease`. Focus: a real 2px `--ember` outline at 2px offset
   (it was a box-shadow, which was silently invisible inside any `overflow: hidden` ancestor).
 - Type: **Fraunces** is the display face everywhere via `--font-display`; **Public Sans** is body.
   Outfit is retired. The wonk axes are set once on `body` and inherited (static fonts have no such

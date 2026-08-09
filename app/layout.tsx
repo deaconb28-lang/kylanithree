@@ -64,7 +64,7 @@ export const metadata: Metadata = {
 export const viewport: Viewport = {
   // Two, so the status bar matches the page rather than staying paper-coloured above a dark app.
   themeColor: [
-    { media: "(prefers-color-scheme: light)", color: "#efebe5" },
+    { media: "(prefers-color-scheme: light)", color: "#ffffff" },
     { media: "(prefers-color-scheme: dark)", color: "#16150f" },
   ],
   width: "device-width",

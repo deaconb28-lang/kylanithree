@@ -311,11 +311,21 @@ function OutreachPanel() {
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 260px), 1fr))", gap: 12 }}>
         {channels.map((c) => (
           <div key={c.name} style={{ display: "flex", alignItems: "flex-start", gap: 8, fontSize: 13, minWidth: 0 }}>
-            {/* Green means it is running today. Everything else is deliberately not coral: a
-                channel that cannot post yet is a fact about the product, not an agent action. */}
+            {/* FILLED means running today; HOLLOW means not yet. Shape, not shade — the palette is
+                monochrome, so two greys would be nearly the same mark, and the design skill's
+                first rule is never to convey information by colour alone. A filled disc and a ring
+                differ for someone who cannot see colour at all. */}
             <span
               aria-hidden="true"
-              style={{ width: 6, height: 6, borderRadius: 999, flexShrink: 0, marginTop: 6, background: c.ok ? "var(--green)" : "var(--border-strong)" }}
+              style={{
+                width: 7,
+                height: 7,
+                borderRadius: 999,
+                flexShrink: 0,
+                marginTop: 6,
+                background: c.ok ? "var(--ember)" : "transparent",
+                border: c.ok ? "none" : "1.5px solid var(--border-strong)",
+              }}
             />
             {/* Stacked, not inline. Side by side, "reading now — 29k posts and climbing" wrapped
                 into a five-line column beside its own label and the row stopped being scannable. */}

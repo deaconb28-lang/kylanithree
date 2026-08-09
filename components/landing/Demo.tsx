@@ -120,8 +120,10 @@ export default function Demo() {
             promise a live search this section is deliberately not running. */}
         <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "13px 18px", borderBottom: "1px solid var(--border)", background: "var(--card-alt)" }}>
           <span style={{ display: "flex", gap: 5 }} aria-hidden="true">
-            {["#E0685A", "#E5B45C", "#7FB27A"].map((c) => (
-              <span key={c} style={{ width: 9, height: 9, borderRadius: 999, background: c, opacity: 0.8 }} />
+            {/* Three neutral discs, not traffic lights: in a monochrome product the only saturated pixels
+                on the page must not be a decorative window chrome. */}
+            {["var(--border-strong)", "var(--border-strong)", "var(--border-strong)"].map((c, i) => (
+              <span key={i} style={{ width: 9, height: 9, borderRadius: 999, background: c }} />
             ))}
           </span>
           <span style={{ flex: 1, fontSize: 13.5, color: "var(--muted-strong)", fontWeight: 600 }}>{DEMO_RUN.url}</span>

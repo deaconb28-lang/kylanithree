@@ -89,7 +89,7 @@ export default function MapPage() {
           rate: rate ?? -1,
           rateLabel: rate === null ? "—" : Math.round(rate * 100) + "%",
           barPct: Math.round(Math.min(1, (rate ?? 0) / 0.45) * 100) + "%",
-          barColor: strong ? "var(--green)" : weak ? "var(--border-strong)" : "#E9E3DA",
+          barColor: strong ? "var(--green)" : weak ? "var(--border-strong)" : "var(--border)",
           dotFill: strong ? "rgba(47,122,86,.16)" : "transparent",
           dotBorder: strong ? "1.5px solid var(--green)" : weak ? "1.5px dashed var(--border-strong)" : "1.5px dotted var(--border-strong)",
           textColor: strong ? "var(--ink)" : "var(--muted)",

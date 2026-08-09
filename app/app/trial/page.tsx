@@ -228,7 +228,7 @@ function TrialInner() {
               <div style={{ width: "100%", height: 1.5, background: "var(--border-strong)" }} />
             </div>
             <div style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", gap: 12 }}>
-              <div style={{ width: 46, height: 46, borderRadius: 999, background: "var(--ember)", display: "grid", placeItems: "center", boxShadow: "0 0 0 6px #FFF1E7" }}>
+              <div style={{ width: 46, height: 46, borderRadius: 999, background: "var(--ember)", display: "grid", placeItems: "center", boxShadow: "0 0 0 6px var(--ember-tint)" }}>
                 <svg width="18" height="18" viewBox="0 0 18 18" fill="none" stroke="#fff" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M9.7 2.3L4.6 9.7h3.9l-.8 6 5.7-8h-4.2z" /></svg>
               </div>
               <span style={{ fontFamily: "var(--font-display)", fontWeight: 700, fontSize: 15.5 }}>Kylani goes to work</span>

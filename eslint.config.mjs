@@ -17,6 +17,10 @@ const eslintConfig = defineConfig([
     // compiler's own output.
     ".worker-build/**",
     ".test-build/**",
+    // Vendored third-party skills (see .claude/skills/README.md). Not this project's source, and
+    // not this project's style to enforce — its CommonJS helper scripts trip `no-require-imports`
+    // for no benefit, since nothing here ships to a browser or gets edited by hand.
+    ".claude/skills/**",
   ]),
 ]);
 
