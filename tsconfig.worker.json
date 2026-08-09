@@ -1,0 +1,13 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "noEmit": false,
+    "outDir": ".worker-build",
+    "module": "nodenext",
+    "moduleResolution": "nodenext",
+    "target": "es2022",
+    "rootDir": ".",
+    "jsx": "react-jsx"
+  },
+  "include": ["worker/**/*.ts", "lib/ingest/**/*.ts", "lib/search/intent.ts", "lib/credits/fingerprint.ts", "lib/anthropic.ts", "lib/mongodb.ts", "lib/htmlText.ts"]
+}
