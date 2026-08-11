@@ -11,30 +11,27 @@
 // then twenty-five drawn wordmarks — and the objection that finally landed applies to all three:
 // a wall of logos is a customer list, and every name on this one was invented.
 
-// The disc beside each quote is a placeholder for a face nobody has a photo of. Tokens rather than
-// pastels since the palette went monochrome — three invented hues were the last colour on the
-// landing page, and a stand-in avatar is the weakest possible reason to break a design system.
 export const TESTIMONIALS = [
   {
     quote:
       "Three calls in week one, from a product nobody had heard of. I’d been staring at an empty CRM for four months.",
     name: "Maya Oyelaran",
     role: "Founder, Berth",
-    color: "var(--card-alt)",
+    color: "#E8DDD0",
   },
   {
     quote:
       "It told me I was pitching the wrong job title. That one sentence was worth more than the year of ads.",
     name: "Ivo Halstead",
     role: "Founder, Sitewatch",
-    color: "var(--active-bg)",
+    color: "#DBD3E4",
   },
   {
     quote:
       "I approve messages on the train. Eleven minutes a week, and it’s the only part of sales I don’t dread.",
     name: "Renata Vieira",
     role: "Founder, Chapterhouse",
-    color: "var(--border)",
+    color: "#CFE0D8",
   },
 ];
 

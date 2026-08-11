@@ -365,7 +365,7 @@ export default function DashboardShell({
             )
           )}
           <div style={{ borderTop: "1px solid var(--border)", paddingTop: 12, display: "flex", alignItems: "center", gap: 10, padding: "12px 6px 0" }}>
-            <div style={{ width: 28, height: 28, borderRadius: 999, background: "var(--card-alt)", border: "1px solid var(--border)", flexShrink: 0, display: "grid", placeItems: "center", fontSize: 12, fontWeight: 700, color: "var(--muted-strong)" }}>
+            <div style={{ width: 28, height: 28, borderRadius: 999, background: "#E8EEFF", flexShrink: 0, display: "grid", placeItems: "center", fontSize: 12, fontWeight: 700, color: "#4A5D8A" }}>
               {displayName[0]?.toUpperCase()}
             </div>
             <div style={{ display: "flex", flexDirection: "column", gap: 1, minWidth: 0, flex: 1 }}>
@@ -417,7 +417,7 @@ export default function DashboardShell({
                 textDecoration: "none",
               }}
             >
-              <Icon color={isActive ? "var(--ember)" : "var(--faint)"} size={16} />
+              <Icon color={isActive ? "var(--ember)" : "#B7AFA5"} size={16} />
               <span style={{ fontSize: 11.5, fontWeight: isActive ? 600 : 400, color: isActive ? "var(--ink)" : "var(--muted)" }}>
                 {label}
               </span>

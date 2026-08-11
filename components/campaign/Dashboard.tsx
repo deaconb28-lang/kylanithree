@@ -311,10 +311,11 @@ function OutreachPanel() {
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 260px), 1fr))", gap: 12 }}>
         {channels.map((c) => (
           <div key={c.name} style={{ display: "flex", alignItems: "flex-start", gap: 8, fontSize: 13, minWidth: 0 }}>
-            {/* FILLED means running today; HOLLOW means not yet. Shape, not shade — the palette is
-                monochrome, so two greys would be nearly the same mark, and the design skill's
-                first rule is never to convey information by colour alone. A filled disc and a ring
-                differ for someone who cannot see colour at all. */}
+            {/* FILLED green means running today; a HOLLOW ring means not yet. The shape carries the
+                meaning and the colour reinforces it, rather than the colour carrying it alone —
+                the design skill's first rule, and it survives for a reader who cannot see green.
+                Never coral: a channel that cannot post yet is a fact about the product, not an
+                agent action. */}
             <span
               aria-hidden="true"
               style={{
@@ -323,7 +324,7 @@ function OutreachPanel() {
                 borderRadius: 999,
                 flexShrink: 0,
                 marginTop: 6,
-                background: c.ok ? "var(--ember)" : "transparent",
+                background: c.ok ? "var(--green)" : "transparent",
                 border: c.ok ? "none" : "1.5px solid var(--border-strong)",
               }}
             />
